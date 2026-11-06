@@ -1,0 +1,17 @@
+{
+  "name": "nso-backend-cloud",
+  "version": "1.0.0",
+  "description": "NSO (New Shopping Orbit) 24/7 Cloud API Backend",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

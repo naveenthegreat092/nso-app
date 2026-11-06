@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: nso-cloud-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run server
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
