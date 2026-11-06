@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { X, Wrench, Store, ChevronRight, CheckCircle2, Clock, XCircle, Upload, Phone, User, Briefcase, IndianRupee } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Wrench, Store, ChevronRight, CheckCircle2, Clock, XCircle, Upload, Phone, User, Briefcase, IndianRupee, Camera, FileCheck, Image as ImageIcon } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { resizeImageFile } from '../../utils/imageUpload';
 
 type AppType = 'provider' | 'seller';
 
@@ -34,6 +35,10 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
   const [idProofType, setIdProofType] = useState('Aadhaar Card');
   const [idProofNumber, setIdProofNumber] = useState('');
   const [serviceArea, setServiceArea] = useState('');
+  const [profilePhoto, setProfilePhoto] = useState('https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=200&auto=format&fit=crop&q=80');
+  const [idDocumentPhoto, setIdDocumentPhoto] = useState('');
+  const profileInputRef = useRef<HTMLInputElement>(null);
+  const idDocInputRef = useRef<HTMLInputElement>(null);
 
   // Seller form state
   const [storeName, setStoreName] = useState('');
@@ -43,7 +48,21 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
   const [sellerPhone, setSellerPhone] = useState(user.phone || '');
   const [sellerName, setSellerName] = useState(user.name || '');
   const [productCategory, setProductCategory] = useState('');
+  const [storeLogo, setStoreLogo] = useState('https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=200&auto=format&fit=crop&q=80');
+  const storeLogoRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void, msg: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const base64 = await resizeImageFile(file, 800, 800, 0.85);
+      setter(base64);
+      showToast(msg);
+    } catch {
+      showToast('Could not load photo. Please try another.');
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -140,6 +159,8 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
           serviceArea,
           idProofType,
           idProofNumber,
+          profilePhoto,
+          idDocumentPhoto,
           userId: user.id,
           status: 'pending',
           submittedAt: new Date().toISOString()
@@ -172,6 +193,7 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
           gstin,
           address: sellerAddress,
           productCategory,
+          storeLogo,
           userId: user.id,
           status: 'pending',
           submittedAt: new Date().toISOString()
@@ -273,6 +295,41 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
                 <input value={serviceArea} onChange={e => setServiceArea(e.target.value)} required placeholder="e.g. Koramangala, Bengaluru" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400" />
               </div>
 
+              {/* Specialist Profile Photo Upload */}
+              <div>
+                <label className="text-xs font-black text-slate-700 mb-1.5 block">Your Profile Photo (Face Photo) *</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="user"
+                  ref={profileInputRef}
+                  onChange={(e) => handlePhotoUpload(e, setProfilePhoto, '📸 Profile photo updated!')}
+                  className="hidden"
+                />
+                <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl p-3">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-200 overflow-hidden flex-shrink-0 border border-slate-300">
+                    {profilePhoto ? (
+                      <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-400">
+                        <User className="w-6 h-6" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <button
+                      type="button"
+                      onClick={() => profileInputRef.current?.click()}
+                      className="py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-xs font-bold flex items-center gap-1.5"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      Take Selfie / Upload Photo
+                    </button>
+                    <p className="text-[10px] text-slate-400 mt-1">Displayed to customers when you arrive</p>
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-black text-slate-700 mb-1.5 block">ID Proof Type *</label>
                 <select value={idProofType} onChange={e => setIdProofType(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-medium text-slate-900 outline-none">
@@ -286,6 +343,46 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
               <div>
                 <label className="text-xs font-black text-slate-700 mb-1.5 block">ID Proof Number *</label>
                 <input value={idProofNumber} onChange={e => setIdProofNumber(e.target.value)} required placeholder="Enter your ID number" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400" />
+              </div>
+
+              {/* ID Proof Card / Document Photo Upload */}
+              <div>
+                <label className="text-xs font-black text-slate-700 mb-1.5 block">Upload ID Proof Document Photo *</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  ref={idDocInputRef}
+                  onChange={(e) => handlePhotoUpload(e, setIdDocumentPhoto, '📄 ID proof document uploaded!')}
+                  className="hidden"
+                />
+                <div className="bg-slate-50 border border-dashed border-blue-300 rounded-2xl p-3 text-center">
+                  {idDocumentPhoto ? (
+                    <div className="space-y-2">
+                      <img src={idDocumentPhoto} alt="ID Document Preview" className="w-full h-28 object-cover rounded-xl border border-slate-200" />
+                      <button
+                        type="button"
+                        onClick={() => idDocInputRef.current?.click()}
+                        className="text-xs text-blue-600 font-bold underline"
+                      >
+                        Change ID Document Photo
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="py-2">
+                      <FileCheck className="w-8 h-8 text-blue-400 mx-auto mb-1.5" />
+                      <button
+                        type="button"
+                        onClick={() => idDocInputRef.current?.click()}
+                        className="py-2 px-3 bg-blue-600 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 shadow-xs"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        Take Photo of {idProofType}
+                      </button>
+                      <p className="text-[10px] text-slate-400 mt-1">Clear photo of original Aadhaar, PAN, or Licence</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 text-xs text-blue-700 font-medium">
@@ -319,6 +416,34 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
                 <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3">
                   <Store className="w-4 h-4 text-slate-400 flex-shrink-0" />
                   <input value={storeName} onChange={e => setStoreName(e.target.value)} required placeholder="e.g. Ravi Electronics" className="bg-transparent text-sm font-medium text-slate-900 outline-none flex-1 placeholder:text-slate-400" />
+                </div>
+              </div>
+
+              {/* Store Logo / Banner Upload */}
+              <div>
+                <label className="text-xs font-black text-slate-700 mb-1.5 block">Store Logo / Shop Front Photo</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={storeLogoRef}
+                  onChange={(e) => handlePhotoUpload(e, setStoreLogo, '🏪 Store photo updated!')}
+                  className="hidden"
+                />
+                <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl p-3">
+                  <div className="w-14 h-14 rounded-2xl bg-orange-100 overflow-hidden flex-shrink-0 border border-orange-200">
+                    <img src={storeLogo} alt="Store Logo" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1">
+                    <button
+                      type="button"
+                      onClick={() => storeLogoRef.current?.click()}
+                      className="py-2 px-3 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-bold flex items-center gap-1.5"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      Take Shop Photo / Upload Logo
+                    </button>
+                    <p className="text-[10px] text-slate-400 mt-1">Displayed on your seller storefront</p>
+                  </div>
                 </div>
               </div>
 

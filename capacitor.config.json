@@ -1,0 +1,9 @@
+{
+  "appId": "com.nso.orbit",
+  "appName": "NSO Orbit",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}

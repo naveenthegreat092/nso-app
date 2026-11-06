@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Product, OrderStatus } from '../../types';
+import { resizeImageFile } from '../../utils/imageUpload';
 import {
   Store,
   Plus,
@@ -15,7 +16,10 @@ import {
   Minus,
   ArrowRight,
   ShieldCheck,
-  DollarSign
+  DollarSign,
+  Camera,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export const SellerDashboard: React.FC = () => {
@@ -31,6 +35,23 @@ export const SellerDashboard: React.FC = () => {
   const [newCategory, setNewCategory] = useState<'Electronics' | 'Fashion' | 'Home & Living' | 'Groceries' | 'Beauty'>('Electronics');
   const [newDeliveryFee, setNewDeliveryFee] = useState('49');
   const [newImage, setNewImage] = useState('https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500&auto=format&fit=crop&q=80');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingImage(true);
+      const base64 = await resizeImageFile(file, 800, 800, 0.85);
+      setNewImage(base64);
+      showToast('📸 Product photo uploaded successfully!');
+    } catch (err) {
+      showToast('Failed to load image. Please try another.');
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
 
   const imagePresets = [
     { label: 'Audio/Earbuds', url: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500&auto=format&fit=crop&q=80' },
@@ -395,21 +416,67 @@ export const SellerDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Preset Image Chooser */}
+              {/* Photo Upload: Camera / Gallery + Presets */}
               <div>
-                <label className="text-xs font-bold text-gray-700 block mb-1">Select Preset Image</label>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {imagePresets.map((img) => (
-                    <div
-                      key={img.label}
-                      onClick={() => setNewImage(img.url)}
-                      className={`cursor-pointer rounded-xl overflow-hidden border-2 transition-all ${
-                        newImage === img.url ? 'border-emerald-600 ring-2 ring-emerald-200' : 'border-gray-200'
-                      }`}
+                <label className="text-xs font-bold text-gray-700 block mb-1">Product Photo</label>
+                
+                {/* Hidden File Input */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  ref={fileInputRef}
+                  onChange={handleImageFileChange}
+                  className="hidden"
+                />
+
+                {/* Upload Button & Live Preview Box */}
+                <div className="flex gap-2.5 items-center mb-2">
+                  <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-emerald-300 overflow-hidden bg-slate-50 flex items-center justify-center flex-shrink-0 relative">
+                    {newImage ? (
+                      <img src={newImage} alt="Product Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="w-6 h-6 text-slate-300" />
+                    )}
+                    {isUploadingImage && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-[10px] text-white font-bold">
+                        Loading...
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all shadow-xs"
                     >
-                      <img src={img.url} alt="" className="w-full h-12 object-cover" />
-                    </div>
-                  ))}
+                      <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                      Take Photo / Upload Image
+                    </button>
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      Camera or Phone Gallery (JPG, PNG auto-compressed)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Or choose quick sample image:
+                  </span>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {imagePresets.map((img) => (
+                      <div
+                        key={img.label}
+                        onClick={() => setNewImage(img.url)}
+                        className={`cursor-pointer rounded-xl overflow-hidden border-2 transition-all ${
+                          newImage === img.url ? 'border-emerald-600 ring-2 ring-emerald-200' : 'border-gray-200'
+                        }`}
+                      >
+                        <img src={img.url} alt="" className="w-full h-10 object-cover" />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 

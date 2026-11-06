@@ -46,11 +46,14 @@ interface Application {
   serviceArea?: string;
   idProofType?: string;
   idProofNumber?: string;
+  profilePhoto?: string;
+  idDocumentPhoto?: string;
   storeName?: string;
   businessType?: string;
   gstin?: string;
   address?: string;
   productCategory?: string;
+  storeLogo?: string;
   submittedAt: string;
 }
 
@@ -68,7 +71,8 @@ export const AdminDashboard: React.FC = () => {
     showToast,
     switchRole,
     approveSeller,
-    approveProviderCategory
+    approveProviderCategory,
+    clearDemoProducts
   } = useApp();
 
   // Live applications from backend
@@ -613,6 +617,32 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </form>
             </div>
+
+            {/* Catalog & Demo Products Management */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+              <div>
+                <h4 className="text-xs font-black text-slate-900">Marketplace Catalog Management</h4>
+                <p className="text-[10px] text-slate-400">Manage demo items vs real seller-uploaded inventory</p>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-red-50/60 rounded-xl border border-red-200/60">
+                <div>
+                  <p className="text-xs font-bold text-red-900">Remove Sample Products</p>
+                  <p className="text-[10px] text-red-600">Delete all demo products so only real seller products remain</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Remove all demo products? Only real seller products will remain.')) {
+                      clearDemoProducts();
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-black text-[11px] rounded-xl shadow-xs"
+                >
+                  Clear Demo Items
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -811,20 +841,40 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 {appl.type === 'provider' ? (
-                  <div className="bg-slate-50 rounded-xl p-2.5 space-y-1">
-                    <p><span className="font-bold text-slate-500">Trade:</span> {appl.tradeCategory}</p>
-                    <p><span className="font-bold text-slate-500">Experience:</span> {appl.experienceYears} years</p>
-                    <p><span className="font-bold text-slate-500">Rate:</span> ₹{appl.hourlyRate}/hr</p>
-                    <p><span className="font-bold text-slate-500">Area:</span> {appl.serviceArea}</p>
-                    <p><span className="font-bold text-slate-500">ID Proof:</span> {appl.idProofType} — {appl.idProofNumber}</p>
+                  <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      {appl.profilePhoto && (
+                        <img src={appl.profilePhoto} alt="Provider Face" className="w-12 h-12 rounded-xl object-cover border border-blue-200 flex-shrink-0" />
+                      )}
+                      <div>
+                        <p className="font-bold text-slate-800">{appl.tradeCategory} • {appl.experienceYears} Years Exp</p>
+                        <p className="text-[11px] text-slate-500">₹{appl.hourlyRate}/hr • {appl.serviceArea}</p>
+                      </div>
+                    </div>
+
+                    <div className="text-[11px] text-slate-600 bg-white p-2 rounded-lg border border-slate-200">
+                      <span className="font-bold text-slate-700">{appl.idProofType}:</span> {appl.idProofNumber}
+                      {appl.idDocumentPhoto && (
+                        <div className="mt-2">
+                          <p className="font-bold text-slate-500 text-[10px] uppercase mb-1">Uploaded ID Proof Photo:</p>
+                          <img src={appl.idDocumentPhoto} alt="ID Document Proof" className="w-full max-h-36 object-contain rounded-lg border border-slate-200 bg-slate-100" />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : (
-                  <div className="bg-slate-50 rounded-xl p-2.5 space-y-1">
-                    <p><span className="font-bold text-slate-500">Store:</span> {appl.storeName}</p>
-                    <p><span className="font-bold text-slate-500">Type:</span> {appl.businessType}</p>
-                    <p><span className="font-bold text-slate-500">Category:</span> {appl.productCategory}</p>
-                    {appl.gstin && <p><span className="font-bold text-slate-500">GSTIN:</span> {appl.gstin}</p>}
-                    <p><span className="font-bold text-slate-500">Address:</span> {appl.address}</p>
+                  <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      {appl.storeLogo && (
+                        <img src={appl.storeLogo} alt="Store Logo" className="w-12 h-12 rounded-xl object-cover border border-orange-200 flex-shrink-0" />
+                      )}
+                      <div>
+                        <p className="font-bold text-slate-800">{appl.storeName} ({appl.businessType})</p>
+                        <p className="text-[11px] text-slate-500">Category: {appl.productCategory}</p>
+                      </div>
+                    </div>
+                    {appl.gstin && <p className="text-[11px] text-slate-500"><span className="font-bold">GSTIN:</span> {appl.gstin}</p>}
+                    <p className="text-[11px] text-slate-500"><span className="font-bold">Address:</span> {appl.address}</p>
                   </div>
                 )}
 

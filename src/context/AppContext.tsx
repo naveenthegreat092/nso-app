@@ -103,6 +103,8 @@ interface AppContextType {
   approveProviderApplication: (approved: boolean) => void;
   approveProduct: (productId: string, approved: boolean, reason?: string) => void;
   addProduct: (productData: Omit<Product, 'id'>) => Product;
+  deleteProduct: (productId: string) => void;
+  clearDemoProducts: () => void;
   updateProductStock: (productId: string, stock: number) => void;
   deleteAddress: (addressId: string) => void;
   addProviderPortfolioImage: (providerId: string, item: { id: string; title: string; image: string; tag: string }) => void;
@@ -771,6 +773,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newProduct;
   };
 
+  const deleteProduct = (productId: string) => {
+    setProducts((prev) => prev.filter((p) => p.id !== productId));
+    showToast('Product removed.');
+  };
+
+  const clearDemoProducts = () => {
+    setProducts((prev) => prev.filter((p) => !p.id.startsWith('prod_earbuds') && !p.id.startsWith('prod_smartwatch') && !p.id.startsWith('prod_oil') && !p.id.startsWith('prod_linen') && !p.id.startsWith('prod_coffee') && !p.id.startsWith('prod_bottle')));
+    showToast('Sample products cleared! Only seller products will show.');
+  };
+
   const updateProductStock = (productId: string, stock: number) => {
     setProducts((prev) =>
       prev.map((p) => (p.id === productId ? { ...p, stock } : p))
@@ -898,6 +910,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         approveProviderApplication,
         approveProduct,
         addProduct,
+        deleteProduct,
+        clearDemoProducts,
         updateProductStock,
         deleteAddress,
         addProviderPortfolioImage,
