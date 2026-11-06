@@ -145,7 +145,8 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
     try {
       applyForProvider({ tradeCategory, experienceYears: parseInt(experience), hourlyRate: parseFloat(hourlyRate) });
       // Also try to save to backend
-      const API = (import.meta as any).env?.VITE_API_URL || '/api';
+      const rawEnv = (import.meta as any).env?.VITE_API_URL;
+      const API = rawEnv && rawEnv.trim() ? `${rawEnv.replace(/\/+$/, '')}/api` : '/api';
       await fetch(`${API}/applications/provider`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -181,7 +182,9 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
     setLoading(true);
     try {
       applyForSeller({ storeName, businessType, gstin, address: sellerAddress });
-      await fetch(`${(import.meta as any).env?.VITE_API_URL || '/api'}/applications/seller`, {
+      const rawEnv = (import.meta as any).env?.VITE_API_URL;
+      const API = rawEnv && rawEnv.trim() ? `${rawEnv.replace(/\/+$/, '')}/api` : '/api';
+      await fetch(`${API}/applications/seller`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -80,7 +80,8 @@ export const AdminDashboard: React.FC = () => {
   const [appLoading, setAppLoading] = useState(false);
   const [commissionStats, setCommissionStats] = useState({ productsRate: 10, servicesRate: 15, totalEarned: 0, transactions: [] as any[] });
 
-  const API = (import.meta as any).env?.VITE_API_URL || '/api';
+  const rawEnv = (import.meta as any).env?.VITE_API_URL;
+  const API = rawEnv && rawEnv.trim() ? `${rawEnv.replace(/\/+$/, '')}/api` : '/api';
 
   const fetchApplications = async () => {
     setAppLoading(true);
