@@ -9,3 +9,11 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: ADMIN_PHONE
+        value: "8310421121"
+      - key: SESSION_SECRET
+        value: "nso-bengaluru-pilot-secure-session-key-2026"
+      - key: OTP_PROVIDER
+        value: "console"
+      - key: DATABASE_URL
+        value: "postgresql://postgres.dzzinexgdvaqqbssdrib:usnd06250826%40%23_%26-%2B()%2F@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres"
