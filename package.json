@@ -8,6 +8,7 @@
     "server": "node server/server.js",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "test": "node --test server/tests/marketplace.test.js",
     "cap:sync": "cap sync"
   },
   "dependencies": {

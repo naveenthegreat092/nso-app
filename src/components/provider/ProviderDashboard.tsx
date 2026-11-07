@@ -18,17 +18,13 @@ import {
 } from 'lucide-react';
 
 export const ProviderDashboard: React.FC = () => {
-  const { bookings, updateBookingStatus, submitRevisedQuote, providers, addProviderPortfolioImage, showToast } = useApp();
+  const { bookings, updateBookingStatus, submitRevisedQuote, providers, addProviderPortfolioImage, user, showToast } = useApp();
   const [activeTab, setActiveTab] = useState<'jobs' | 'schedule' | 'portfolio' | 'categories'>('jobs');
 
   // Revised quote modal state
   const [selectedBookingForQuote, setSelectedBookingForQuote] = useState<string | null>(null);
   const [quoteAmount, setQuoteAmount] = useState('250');
   const [quoteReason, setQuoteReason] = useState('Additional internal pipeline copper pipe soldering required.');
-
-  // OTP verification state
-  const [selectedBookingForOtp, setSelectedBookingForOtp] = useState<string | null>(null);
-  const [enteredOtp, setEnteredOtp] = useState('');
 
   // Portfolio photo upload state
   const [showAddPhotoModal, setShowAddPhotoModal] = useState(false);
@@ -45,7 +41,10 @@ export const ProviderDashboard: React.FC = () => {
   ]);
 
   const providerBookings = bookings;
-  const currentProvider = providers[0];
+  const currentProviderName = user.name || 'Service Specialist';
+  const currentProviderTrade = user.providerApplication?.tradeCategory || 'Home Services';
+  const currentProviderDetail = providers.find((p) => p.id === user.id) || null;
+  const portfolioItems = currentProviderDetail?.portfolio || [];
 
   const handleOpenQuoteModal = (bookingId: string) => {
     setSelectedBookingForQuote(bookingId);
@@ -58,23 +57,15 @@ export const ProviderDashboard: React.FC = () => {
     setSelectedBookingForQuote(null);
   };
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedBookingForOtp) return;
-    if (enteredOtp.trim() === '4829' || enteredOtp.trim().length === 4) {
-      updateBookingStatus(selectedBookingForOtp, 'in_progress');
-      showToast('✅ Start OTP 4829 Verified! Job is now In-Progress.');
-      setSelectedBookingForOtp(null);
-      setEnteredOtp('');
-    } else {
-      showToast('❌ Invalid OTP! Customer must provide the 4-digit code (Hint: 4829)');
-    }
+  const handleStartJob = (bookingId: string) => {
+    updateBookingStatus(bookingId, 'in_progress');
+    showToast('✅ Job started: Status marked In-Progress.');
   };
 
   const handleAddPortfolio = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!photoTitle.trim() || !currentProvider) return;
-    addProviderPortfolioImage(currentProvider.id, {
+    if (!photoTitle.trim()) return;
+    addProviderPortfolioImage(user.id, {
       id: `port_${Date.now()}`,
       title: photoTitle,
       image: photoUrl,
@@ -103,7 +94,7 @@ export const ProviderDashboard: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-sm font-extrabold tracking-tight">Service Provider Hub</h2>
-                <p className="text-[10px] text-amber-100">{currentProvider.name} (Certified Specialist)</p>
+                <p className="text-[10px] text-amber-100">{currentProviderName} ({currentProviderTrade})</p>
               </div>
             </div>
             <span className="text-[10px] bg-amber-400/30 text-amber-100 border border-amber-300/30 px-2 py-0.5 rounded-full font-bold">
@@ -118,11 +109,11 @@ export const ProviderDashboard: React.FC = () => {
             </div>
             <div>
               <span className="text-[10px] text-amber-100 block">Rating</span>
-              <span className="text-base font-extrabold">4.9 ★</span>
+              <span className="text-base font-extrabold">5.0 ★</span>
             </div>
             <div>
-              <span className="text-[10px] text-amber-100 block">Approved Domains</span>
-              <span className="text-base font-extrabold">Plumbing (Verified)</span>
+              <span className="text-[10px] text-amber-100 block">Trade Domain</span>
+              <span className="text-base font-extrabold">{currentProviderTrade}</span>
             </div>
           </div>
         </div>
@@ -151,7 +142,7 @@ export const ProviderDashboard: React.FC = () => {
               activeTab === 'portfolio' ? 'bg-white text-amber-800 shadow-sm' : 'text-gray-500'
             }`}
           >
-            Portfolio ({currentProvider.portfolio.length})
+            Portfolio ({portfolioItems.length})
           </button>
           <button
             onClick={() => setActiveTab('categories')}
@@ -212,11 +203,11 @@ export const ProviderDashboard: React.FC = () => {
                       </span>
                       <div className="grid grid-cols-2 gap-2">
                         <button
-                          onClick={() => setSelectedBookingForOtp(b.id)}
+                          onClick={() => handleStartJob(b.id)}
                           className="py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] rounded-lg shadow-sm flex items-center justify-center gap-1"
                         >
-                          <KeyRound className="w-3.5 h-3.5" />
-                          <span>Start Job (Enter OTP)</span>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Accept &amp; Start Job</span>
                         </button>
                         <button
                           onClick={() => {
@@ -354,17 +345,23 @@ export const ProviderDashboard: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-2 pt-1">
-              {currentProvider.portfolio.map((item) => (
-                <div key={item.id} className="rounded-xl overflow-hidden border border-gray-100 bg-gray-50 group">
-                  <img src={item.image} alt={item.title} className="w-full h-24 object-cover group-hover:scale-105 transition-transform" />
-                  <div className="p-2">
-                    <span className="text-[9px] font-black text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded uppercase">
-                      {item.tag}
-                    </span>
-                    <p className="text-xs font-bold text-gray-900 mt-1 truncate">{item.title}</p>
-                  </div>
+              {portfolioItems.length === 0 ? (
+                <div className="col-span-2 text-center py-6 text-xs text-gray-400 bg-gray-50 rounded-xl border border-gray-100">
+                  No work portfolio photos uploaded yet. Tap "Add Photo" above.
                 </div>
-              ))}
+              ) : (
+                portfolioItems.map((item: any) => (
+                  <div key={item.id} className="rounded-xl overflow-hidden border border-gray-100 bg-gray-50 group">
+                    <img src={item.image} alt={item.title} className="w-full h-24 object-cover group-hover:scale-105 transition-transform" />
+                    <div className="p-2">
+                      <span className="text-[9px] font-black text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded uppercase">
+                        {item.tag}
+                      </span>
+                      <p className="text-xs font-bold text-gray-900 mt-1 truncate">{item.title}</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -398,58 +395,7 @@ export const ProviderDashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Start Job OTP Modal */}
-      {selectedBookingForOtp && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-3 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <KeyRound className="w-4 h-4" />
-                </div>
-                <h4 className="font-bold text-sm text-gray-900">Verify Start OTP</h4>
-              </div>
-              <button onClick={() => setSelectedBookingForOtp(null)} className="p-1 rounded-full text-gray-400 hover:text-gray-800">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <p className="text-xs text-gray-600 leading-relaxed">
-              Ask customer for their 4-digit verification OTP (Visible on customer tracking screen: <strong className="text-emerald-700">4829</strong>).
-            </p>
-
-            <form onSubmit={handleVerifyOtp} className="space-y-3 pt-1">
-              <div>
-                <input
-                  type="text"
-                  maxLength={4}
-                  autoFocus
-                  placeholder="Enter 4-digit OTP"
-                  value={enteredOtp}
-                  onChange={(e) => setEnteredOtp(e.target.value)}
-                  className="w-full text-center tracking-widest text-lg font-mono font-black p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedBookingForOtp(null)}
-                  className="py-2.5 bg-gray-100 text-gray-700 font-bold text-xs rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md"
-                >
-                  Confirm & Start
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Add Work Photo Modal */}
       {showAddPhotoModal && (

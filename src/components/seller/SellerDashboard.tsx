@@ -86,11 +86,11 @@ export const SellerDashboard: React.FC = () => {
       originalPrice: origPriceNum,
       discountPercentage: discount > 0 ? discount : 10,
       image: newImage,
-      rating: 4.8,
-      reviewsCount: 1,
+      rating: 5.0,
+      reviewsCount: 0,
       stock: parseInt(newStock) || 20,
-      sellerId: user.id || 'seller_apex_1',
-      sellerName: 'Apex Audio & Gadgets',
+      sellerId: user.id,
+      sellerName: user.sellerApplication?.storeName || user.name || 'Store Partner',
       deliveryEstimateDays: 2,
       regionalDeliveryFee: parseFloat(newDeliveryFee) || 0,
       variants: [{ id: 'v1', name: 'Standard Edition', inStock: true }],
@@ -116,7 +116,7 @@ export const SellerDashboard: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-sm font-extrabold tracking-tight">Seller Operations</h2>
-                <p className="text-[10px] text-emerald-100">Apex Audio & Gadgets (Verified ID)</p>
+                <p className="text-[10px] text-emerald-100">{user.sellerApplication?.storeName || user.name || 'Verified Store'} (ID: {user.id.slice(-6)})</p>
               </div>
             </div>
             <span className="text-[10px] bg-emerald-400/30 text-emerald-100 border border-emerald-300/30 px-2 py-0.5 rounded-full font-bold">

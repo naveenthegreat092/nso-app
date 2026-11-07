@@ -35,6 +35,8 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
   const [idProofType, setIdProofType] = useState('Aadhaar Card');
   const [idProofNumber, setIdProofNumber] = useState('');
   const [serviceArea, setServiceArea] = useState('');
+  const [resumeText, setResumeText] = useState('');
+  const [previousWork, setPreviousWork] = useState('');
   const [profilePhoto, setProfilePhoto] = useState('https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=200&auto=format&fit=crop&q=80');
   const [idDocumentPhoto, setIdDocumentPhoto] = useState('');
   const profileInputRef = useRef<HTMLInputElement>(null);
@@ -137,14 +139,25 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
 
   const handleProviderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!experience || !hourlyRate || !serviceArea || !idProofNumber) {
-      showToast('Please fill all required fields');
+    if (!experience || !hourlyRate || !serviceArea || !idProofNumber || !previousWork.trim()) {
+      showToast('Please fill all required fields including previous work details');
       return;
     }
     setLoading(true);
     try {
-      applyForProvider({ tradeCategory, experienceYears: parseInt(experience), hourlyRate: parseFloat(hourlyRate) });
-      // Also try to save to backend
+      applyForProvider({
+        tradeCategory,
+        experienceYears: parseInt(experience),
+        hourlyRate: parseFloat(hourlyRate),
+        serviceArea,
+        resumeText,
+        previousWork,
+        idProofType,
+        idProofNumber,
+        profilePhoto,
+        idDocumentPhoto
+      });
+      // Also save to cloud backend
       const rawEnv = (import.meta as any).env?.VITE_API_URL;
       const API = rawEnv && rawEnv.trim() ? `${rawEnv.replace(/\/+$/, '')}/api` : '/api';
       await fetch(`${API}/applications/provider`, {
@@ -158,6 +171,8 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
           experienceYears: parseInt(experience),
           hourlyRate: parseFloat(hourlyRate),
           serviceArea,
+          resumeText,
+          previousWork,
           idProofType,
           idProofNumber,
           profilePhoto,
@@ -296,6 +311,32 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
               <div>
                 <label className="text-xs font-black text-slate-700 mb-1.5 block">Service Area (City / Area) *</label>
                 <input value={serviceArea} onChange={e => setServiceArea(e.target.value)} required placeholder="e.g. Koramangala, Bengaluru" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400" />
+              </div>
+
+              {/* Resume / Background Summary */}
+              <div>
+                <label className="text-xs font-black text-slate-700 mb-1.5 block">Your Resume / Qualifications & Background *</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={resumeText}
+                  onChange={e => setResumeText(e.target.value)}
+                  placeholder="e.g. Certified technician, 5 years at HomeCraft, ITI Electrical diploma, trained in safety standards."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs font-medium text-slate-900 outline-none placeholder:text-slate-400 resize-none"
+                />
+              </div>
+
+              {/* Previous Work & Projects */}
+              <div>
+                <label className="text-xs font-black text-slate-700 mb-1.5 block">Previous Work Done & Experience *</label>
+                <textarea
+                  rows={3}
+                  required
+                  value={previousWork}
+                  onChange={e => setPreviousWork(e.target.value)}
+                  placeholder="e.g. Completed 200+ residential tap replacements, pipeline repairs, commercial apartment drainage systems."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs font-medium text-slate-900 outline-none placeholder:text-slate-400 resize-none"
+                />
               </div>
 
               {/* Specialist Profile Photo Upload */}

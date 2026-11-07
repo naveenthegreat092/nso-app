@@ -1,48 +1,54 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Role } from '../../types';
-import { promptBiometricAuth } from '../../utils/biometrics';
 import {
   X,
   ShieldCheck,
   Phone,
   ArrowRight,
-  CheckCircle2,
   Lock,
   Smartphone,
   Timer,
   RefreshCw,
-  Sparkles,
-  AlertCircle,
-  Fingerprint,
-  ScanFace
+  AlertCircle
 } from 'lucide-react';
+import { api } from '../../api/client';
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, closeAuthModal, loginUser, showToast } = useApp();
-  const [step, setStep] = useState<'welcome' | 'input' | 'otp' | 'roles'>('welcome');
-  const [phoneInput, setPhoneInput] = useState('8310421121');
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '']);
-  const [generatedOtp, setGeneratedOtp] = useState('5829');
+
+  const [step, setStep] = useState<'welcome' | 'input' | 'otp'>('welcome');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
   const [countdown, setCountdown] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
-  const [selectedRole, setSelectedRole] = useState<Role>('customer');
   const [isVerifying, setIsVerifying] = useState(false);
-
-  // Check if Firebase auth has been configured
-  const isFirebaseActive = Boolean((window as any).__NSO_FIREBASE_READY);
+  const [isSending, setIsSending] = useState(false);
 
   const inputRefs = [
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null),
     useRef<HTMLInputElement>(null)
   ];
 
+  // Reset state when modal opens/closes
+  useEffect(() => {
+    if (isAuthModalOpen) {
+      setStep('welcome');
+      setPhoneInput('');
+      setOtpDigits(['', '', '', '', '', '']);
+      setOtpError(null);
+      setCanResend(false);
+      setCountdown(30);
+    }
+  }, [isAuthModalOpen]);
+
   // Countdown timer for resend
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
     if (step === 'otp' && countdown > 0) {
       timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
     } else if (countdown === 0) {
@@ -61,23 +67,20 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
+    setIsSending(true);
     setOtpError(null);
-    setOtpDigits(['', '', '', '']);
+    setOtpDigits(['', '', '', '', '', '']);
 
-    if (isFirebaseActive && (window as any).__NSO_SEND_FIREBASE_OTP) {
-      try {
-        await (window as any).__NSO_SEND_FIREBASE_OTP(`+91${cleanNumber}`);
-        showToast(`📲 Real SMS OTP sent via Firebase to +91 ${cleanNumber}`);
-      } catch (err: any) {
-        console.warn('Firebase SMS failed, falling back to instant code:', err);
-      }
-    } else {
-      // Generate clean 4-digit demo OTP
-      const code = Math.floor(1000 + Math.random() * 9000).toString();
-      setGeneratedOtp(code);
-      showToast(`📲 SMS Sent: Your NSO login verification code is ${code}`);
+    const result = await api.sendOtp(`+91${cleanNumber}`);
+
+    setIsSending(false);
+
+    if (!result || !result.success) {
+      showToast('Failed to send OTP. Please check your number and try again.');
+      return;
     }
 
+    showToast('A verification code has been sent to your phone');
     setCountdown(30);
     setCanResend(false);
     setStep('otp');
@@ -89,21 +92,23 @@ export const AuthModal: React.FC = () => {
   };
 
   const handleOtpDigitChange = (index: number, val: string) => {
-    const char = val.slice(-1);
+    const char = val.replace(/\D/g, '').slice(-1);
     const updated = [...otpDigits];
     updated[index] = char;
     setOtpDigits(updated);
     setOtpError(null);
 
     // Auto-advance
-    if (char && index < 3) {
+    if (char && index < 5) {
       inputRefs[index + 1]?.current?.focus();
     }
 
-    // Auto-verify when 4th digit entered
-    if (char && index === 3) {
+    // Auto-verify when 6th digit entered
+    if (char && index === 5) {
       const fullCode = updated.join('');
-      verifyCode(fullCode);
+      if (fullCode.length === 6) {
+        verifyCode(fullCode);
+      }
     }
   };
 
@@ -115,68 +120,46 @@ export const AuthModal: React.FC = () => {
 
   const verifyCode = async (codeToVerify?: string) => {
     const entered = codeToVerify || otpDigits.join('');
-    if (entered.length < 4) {
-      setOtpError('Please enter all 4 digits');
+    if (entered.length < 6) {
+      setOtpError('Please enter all 6 digits');
       return;
     }
 
     setIsVerifying(true);
+    setOtpError(null);
 
-    if (isFirebaseActive && (window as any).__NSO_VERIFY_FIREBASE_OTP) {
-      try {
-        const success = await (window as any).__NSO_VERIFY_FIREBASE_OTP(entered);
-        if (success) {
-          showToast('✅ Firebase SMS Phone Verified!');
-          setIsVerifying(false);
-          setStep('roles');
-          return;
-        }
-      } catch (err: any) {
-        setOtpError('Invalid SMS code. Please try again.');
-        setIsVerifying(false);
-        return;
-      }
+    const cleanNumber = phoneInput.replace(/\D/g, '');
+    const result = await api.verifyOtp(`+91${cleanNumber}`, entered);
+
+    setIsVerifying(false);
+
+    if (!result || !result.success) {
+      setOtpError('Incorrect code. Please check and try again.');
+      return;
     }
 
-    // Demo Mode Verification (passes if matches generated OTP or standard demo 1234 / 5829)
-    setTimeout(() => {
-      setIsVerifying(false);
-      if (entered === generatedOtp || entered === '1234' || entered === '5829') {
-        showToast('✅ Mobile number verified successfully!');
-        setStep('roles');
-      } else {
-        setOtpError(`Incorrect code. Use [${generatedOtp}] for this session.`);
-      }
-    }, 400);
+    // OTP verified — fetch real user from server and set in context
+    showToast('✅ Mobile number verified successfully!');
+    await loginUser();
+    setStep('welcome');
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     if (!canResend) return;
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
-    setGeneratedOtp(code);
-    setOtpDigits(['', '', '', '']);
+    const cleanNumber = phoneInput.replace(/\D/g, '');
+    setOtpDigits(['', '', '', '', '', '']);
     setCountdown(30);
     setCanResend(false);
     setOtpError(null);
-    showToast(`📲 New SMS Code dispatched: ${code}`);
-    inputRefs[0]?.current?.focus();
-  };
 
-  const handleBiometricLogin = async () => {
-    showToast('🔍 Scanning Fingerprint / Face Recognition...');
-    const verified = await promptBiometricAuth('NSO Customer');
-    if (verified) {
-      showToast('🟢 Biometrics Verified! Logging in...');
-      loginUser(`+91 ${phoneInput.replace(/\D/g, '')}`, selectedRole);
+    const result = await api.sendOtp(`+91${cleanNumber}`);
+    if (result?.success) {
+      showToast('A new verification code has been sent to your phone');
     } else {
-      showToast('Biometric scan cancelled. Please use OTP.');
+      showToast('Failed to resend OTP. Please try again.');
+      setCanResend(true);
     }
-  };
-
-  const handleCompleteAuth = () => {
-    const formattedPhone = phoneInput.startsWith('+91') ? phoneInput : `+91 ${phoneInput.replace(/\D/g, '')}`;
-    loginUser(formattedPhone, selectedRole);
-    setStep('welcome');
+    inputRefs[0]?.current?.focus();
   };
 
   return (
@@ -190,8 +173,9 @@ export const AuthModal: React.FC = () => {
             </div>
             <div>
               <span className="font-bold text-gray-800 text-sm block leading-tight">Account Verification</span>
-              <span className="text-[10px] text-gray-400 font-semibold">
-                {isFirebaseActive ? '🟢 Live Firebase SMS OTP' : '⚡ Instant SMS Gateway'}
+              <span className="text-[10px] text-gray-400 font-semibold flex items-center gap-1">
+                <Lock className="w-3 h-3" />
+                Secure OTP Authentication
               </span>
             </div>
           </div>
@@ -211,10 +195,11 @@ export const AuthModal: React.FC = () => {
                 <ShieldCheck className="w-9 h-9 stroke-[2.2]" />
               </div>
               <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">
-                One Account. Three Roles.
+                One Account. Multiple Roles.
               </h2>
               <p className="text-xs text-gray-500 mt-2 max-w-xs mx-auto leading-relaxed">
-                Log in with your mobile number to access the consumer marketplace, personal home services, or verified seller capabilities.
+                Log in with your mobile number to access the consumer marketplace, personal home
+                services, or verified seller capabilities.
               </p>
 
               {/* Status Hint */}
@@ -224,9 +209,7 @@ export const AuthModal: React.FC = () => {
                   <span>Secure Phone OTP Authentication:</span>
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  {isFirebaseActive
-                    ? 'Firebase SMS gateway active for live device verification.'
-                    : 'Instant OTP simulation ready for instant phone login.'}
+                  Enter your mobile number to receive a one-time verification code via SMS.
                 </p>
               </div>
 
@@ -260,50 +243,47 @@ export const AuthModal: React.FC = () => {
                   maxLength={10}
                   value={phoneInput}
                   onChange={(e) => setPhoneInput(e.target.value.replace(/\D/g, ''))}
-                  placeholder="8310421121"
+                  placeholder="Enter 10-digit number"
                   required
+                  autoComplete="tel"
                   className="w-full pl-20 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-mono font-bold tracking-wider text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 transition-all"
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 transition-all active:scale-98 flex items-center justify-center gap-2"
+                disabled={isSending}
+                className="w-full py-3.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-black text-sm rounded-2xl shadow-md shadow-red-500/25 transition-all active:scale-98 flex items-center justify-center gap-2"
               >
-                <span>Send Verification OTP</span>
-                <ArrowRight className="w-4 h-4" />
+                {isSending ? (
+                  'Sending OTP...'
+                ) : (
+                  <>
+                    <span>Send Verification OTP</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
 
-              <div className="flex items-center gap-2 pt-1">
-                <div className="h-px bg-slate-200 flex-1" />
-                <span className="text-[10px] uppercase font-bold text-slate-400">OR</span>
-                <div className="h-px bg-slate-200 flex-1" />
-              </div>
-
-              <button
-                type="button"
-                onClick={handleBiometricLogin}
-                className="w-full py-3 bg-slate-50 hover:bg-slate-100 text-slate-800 font-bold text-xs rounded-2xl border border-slate-200 transition-all flex items-center justify-center gap-2 active:scale-98"
-              >
-                <Fingerprint className="w-4 h-4 text-emerald-600" />
-                <ScanFace className="w-4 h-4 text-emerald-600" />
-                <span>One-Touch Fingerprint / Face ID</span>
-              </button>
+              <p className="text-center text-[10px] text-slate-400">
+                By continuing, you agree to NSO's Terms of Service &amp; Privacy Policy
+              </p>
             </form>
           )}
 
           {step === 'otp' && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-bold text-gray-900">Enter 4-Digit Code</h3>
+                <h3 className="text-lg font-bold text-gray-900">Enter 6-Digit Code</h3>
                 <p className="text-xs text-gray-500 mt-1">
-                  We sent a code to <strong className="text-slate-900 font-mono">+91 {phoneInput}</strong>
+                  A verification code has been sent to{' '}
+                  <strong className="text-slate-900 font-mono">+91 {phoneInput}</strong>
                 </p>
               </div>
 
-              {/* 4 Box OTP Input */}
-              <div className="flex justify-center gap-2.5 py-2">
-                {[0, 1, 2, 3].map((idx) => (
+              {/* 6-Box OTP Input */}
+              <div className="flex justify-center gap-2 py-2">
+                {[0, 1, 2, 3, 4, 5].map((idx) => (
                   <input
                     key={idx}
                     ref={inputRefs[idx]}
@@ -313,7 +293,8 @@ export const AuthModal: React.FC = () => {
                     value={otpDigits[idx]}
                     onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(idx, e)}
-                    className="w-14 h-14 text-center text-2xl font-mono font-black text-slate-900 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:bg-white focus:border-red-600 focus:outline-none transition-all shadow-sm"
+                    autoComplete={idx === 0 ? 'one-time-code' : 'off'}
+                    className="w-11 h-12 text-center text-xl font-mono font-black text-slate-900 bg-slate-50 border-2 border-slate-200 rounded-xl focus:bg-white focus:border-red-600 focus:outline-none transition-all shadow-sm"
                   />
                 ))}
               </div>
@@ -325,22 +306,10 @@ export const AuthModal: React.FC = () => {
                 </div>
               )}
 
-              {/* One-Tap Auto Fill Hint */}
-              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
-                <span className="text-[11px] text-emerald-800 font-semibold block">
-                  Simulated OTP Code for this session:
+              <div className="p-2.5 bg-blue-50 border border-blue-100 rounded-xl text-center">
+                <span className="text-[11px] text-blue-700 font-medium">
+                  Didn't receive the SMS? Check your phone and wait for 30 seconds before resending.
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const digits = generatedOtp.split('');
-                    setOtpDigits(digits);
-                    verifyCode(generatedOtp);
-                  }}
-                  className="mt-1 font-mono font-black text-emerald-700 text-sm bg-white px-3 py-1 rounded-lg border border-emerald-300 shadow-sm hover:bg-emerald-100 transition-colors"
-                >
-                  {generatedOtp} <span className="text-[10px] font-sans font-bold">(Tap to Auto-Fill)</span>
-                </button>
               </div>
 
               {/* Countdown / Resend */}
@@ -367,70 +336,15 @@ export const AuthModal: React.FC = () => {
                 disabled={isVerifying}
                 className="w-full py-3.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-black text-sm rounded-2xl shadow-md transition-all active:scale-98"
               >
-                {isVerifying ? 'Verifying OTP...' : 'Verify & Continue'}
+                {isVerifying ? 'Verifying...' : 'Verify & Continue'}
               </button>
-            </div>
-          )}
-
-          {step === 'roles' && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg font-bold text-gray-900">Choose Default View</h3>
-                <p className="text-xs text-gray-500 mt-1">
-                  You can seamlessly switch between authorized views anytime from the profile menu.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2.5">
-                {[
-                  {
-                    id: 'customer' as Role,
-                    title: 'Customer Experience',
-                    desc: 'Shop physical products, book doorstep services, AI Assistant',
-                    color: 'border-blue-200 hover:bg-blue-50/50'
-                  },
-                  {
-                    id: 'seller' as Role,
-                    title: 'Product Seller',
-                    desc: 'List products, manage inventory & track customer orders',
-                    color: 'border-emerald-200 hover:bg-emerald-50/50'
-                  },
-                  {
-                    id: 'provider' as Role,
-                    title: 'Service Specialist',
-                    desc: 'Manage calendar, home visit bookings & completion quotes',
-                    color: 'border-amber-200 hover:bg-amber-50/50'
-                  },
-                  {
-                    id: 'admin' as Role,
-                    title: 'Admin Console',
-                    desc: 'Manage approvals, payments, analytics & audit trail',
-                    color: 'border-purple-200 hover:bg-purple-50/50'
-                  }
-                ].map((r) => (
-                  <div
-                    key={r.id}
-                    onClick={() => setSelectedRole(r.id)}
-                    className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-center justify-between ${
-                      selectedRole === r.id ? 'border-red-600 bg-red-50/60 shadow-sm' : r.color
-                    }`}
-                  >
-                    <div>
-                      <h4 className="font-bold text-xs text-gray-900">{r.title}</h4>
-                      <p className="text-[11px] text-gray-500 mt-0.5">{r.desc}</p>
-                    </div>
-                    {selectedRole === r.id && (
-                      <CheckCircle2 className="w-5 h-5 text-red-600 flex-shrink-0" />
-                    )}
-                  </div>
-                ))}
-              </div>
 
               <button
-                onClick={handleCompleteAuth}
-                className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-sm rounded-2xl shadow-lg shadow-red-500/25 transition-all active:scale-98"
+                type="button"
+                onClick={() => setStep('input')}
+                className="w-full py-2 text-xs text-slate-500 hover:text-slate-700 font-semibold transition-colors"
               >
-                Enter NSO
+                ← Change phone number
               </button>
             </div>
           )}

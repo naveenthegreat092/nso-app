@@ -126,20 +126,9 @@ export const AppContent: React.FC = () => {
 
   return (
     <div className="w-full min-h-screen bg-[#f8fafc] flex flex-col antialiased">
-      {/* Quick Navigation Bar with 1-click Role & Screen buttons (Hidden in production builds & mobile app) */}
-      {(import.meta as any).env?.DEV && (
-        <div className="w-full max-w-2xl px-2 mb-2">
-          <JourneyNavigator
-            currentSection={getCurrentSectionId()}
-            onSelectSection={handleSelectSection}
-            onRestartOnboarding={() => setIsOnboardingMode(true)}
-          />
-        </div>
-      )}
-
       <MobileFrame>
-        {/* Real Flowchart Gate (Brief Page 4: Splash -> Welcome -> Sign In -> Role) */}
-        {isOnboardingMode ? (
+        {/* Real Flowchart Gate (Splash -> Profile Setup -> Owner Approval Gate) */}
+        {isOnboardingMode || (!user.isLoggedIn) || (user.approvalStatus === 'pending' && user.activeRole !== 'admin') ? (
           <OnboardingFlow onComplete={() => setIsOnboardingMode(false)} />
         ) : (
           <>

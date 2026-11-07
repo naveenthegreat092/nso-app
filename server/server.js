@@ -1,835 +1,1905 @@
+/**
+ * NSO (New Shopping Orbit) — Production-Grade Secure Marketplace API
+ * Version: 2.0.0 (Persistent SQLite Database with ACID Transactions)
+ *
+ * Designed for Bengaluru pilot: real customers, sellers, service providers, and marketplace owner.
+ * Powered by native Node.js 24 (node:sqlite, node:crypto) with Express & CORS.
+ */
+
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { DatabaseSync } from 'node:sqlite';
+import crypto from 'node:crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
-const PORT = process.env.PORT || 5000;
-const DB_FILE = path.join(__dirname, 'data', 'db.json');
+// Automatically load .env from server/.env or root .env
+function loadEnvFile(envPath) {
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, 'utf8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const idx = trimmed.indexOf('=');
+      if (idx !== -1) {
+        const k = trimmed.slice(0, idx).trim();
+        const v = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+        if (!process.env[k]) process.env[k] = v;
+      }
+    }
+  }
+}
+loadEnvFile(path.join(__dirname, '.env'));
+loadEnvFile(path.join(__dirname, '..', '.env'));
 
-app.use(cors());
-app.use(express.json());
+// ─────────────────────────────────────────────────────────────────────────────
+// 1. CONFIGURATION & ENVIRONMENT
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Ensure data directory exists
+const PORT = Number(process.env.PORT) || 5000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const IS_PROD = NODE_ENV === 'production';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'nso-dev-insecure-secret-key-change-in-production';
+const ADMIN_PHONE = (process.env.ADMIN_PHONE || '').replace(/\D/g, ''); // 10 digits only
+const OTP_PROVIDER = process.env.OTP_PROVIDER || 'console'; // 'console' | 'twilio' | 'msg91'
+const SESSION_COOKIE_NAME = 'nso_session';
+const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// Razorpay configuration
+const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
+const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
+const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || '';
+
+// Data directory
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
+const DB_PATH = path.join(dataDir, 'nso_marketplace.db');
 
-// Initial Seeds
-const DEFAULT_PRODUCTS = [
-  {
-    id: 'prod_earbuds_01',
-    title: 'Orbit Sound Pro Wireless Earbuds (ANC 32dB)',
-    category: 'Electronics',
-    price: 1899,
-    originalPrice: 3999,
-    discountPercentage: 52,
-    image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500&auto=format&fit=crop&q=80',
-    rating: 4.8,
-    reviewsCount: 342,
-    stock: 45,
-    sellerId: 'sell_orbit_tech',
-    sellerName: 'Orbit Electronics Store',
-    deliveryEstimateDays: 2,
-    regionalDeliveryFee: 49,
-    variants: [
-      { id: 'v_black', name: 'Midnight Black', inStock: true },
-      { id: 'v_white', name: 'Pearl White', inStock: true }
-    ],
-    description: 'High-fidelity audio with 32dB Active Noise Cancellation, 38-hour playtime with fast-charge case, and ultra-low latency gaming mode.',
-    highlights: ['32dB Active Noise Cancellation', '38-Hour Battery Life', 'Bluetooth 5.4 Quick Pair', 'IPX5 Water Resistant'],
-    approvalStatus: 'approved'
-  },
-  {
-    id: 'prod_smartwatch_02',
-    title: 'Orbit Fit Track AMOLED Smartwatch (Bluetooth Calling)',
-    category: 'Electronics',
-    price: 2999,
-    originalPrice: 5999,
-    discountPercentage: 50,
-    image: 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=500&auto=format&fit=crop&q=80',
-    rating: 4.7,
-    reviewsCount: 189,
-    stock: 28,
-    sellerId: 'sell_orbit_tech',
-    sellerName: 'Orbit Electronics Store',
-    deliveryEstimateDays: 2,
-    regionalDeliveryFee: 0,
-    variants: [
-      { id: 'v_silicone', name: 'Obsidian Black', inStock: true },
-      { id: 'v_metal', name: 'Titanium Silver', inStock: true, priceModifier: 300 }
-    ],
-    description: '1.96" vivid AMOLED curved display with continuous heart rate monitor, blood oxygen SpO2, and crystal-clear Bluetooth calling.',
-    highlights: ['1.96" AMOLED Always-on Display', 'Clear Bluetooth Calling', '100+ Sports Tracking Modes', '7-Day Battery Life'],
-    approvalStatus: 'approved'
-  },
-  {
-    id: 'prod_oil_03',
-    title: 'Wood-Pressed Traditional Groundnut Oil (5 Litre Tin)',
-    category: 'Groceries',
-    price: 1350,
-    originalPrice: 1650,
-    discountPercentage: 18,
-    image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=500&auto=format&fit=crop&q=80',
-    rating: 4.9,
-    reviewsCount: 520,
-    stock: 60,
-    sellerId: 'sell_organic_farms',
-    sellerName: 'Karnataka Agro Collective',
-    deliveryEstimateDays: 1,
-    regionalDeliveryFee: 30,
-    variants: [{ id: 'v_5l', name: '5 Litres Tin Can', inStock: true }],
-    description: '100% pure cold-pressed unrefined groundnut oil extracted using traditional wooden ghani. Preserves natural nutrients, native aroma, and heart-healthy antioxidants.',
-    highlights: ['Traditional Wood Churned', 'Zero Chemicals & Unrefined', 'Rich in Vitamin E', 'Authentic Indian Aroma'],
-    approvalStatus: 'approved'
-  },
-  {
-    id: 'prod_linen_shirt_04',
-    title: 'Pure Organic Breathable Linen Relaxed Shirt',
-    category: 'Fashion',
-    price: 1299,
-    originalPrice: 2299,
-    discountPercentage: 43,
-    image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=500&auto=format&fit=crop&q=80',
-    rating: 4.6,
-    reviewsCount: 210,
-    stock: 35,
-    sellerId: 'sell_orbit_threads',
-    sellerName: 'Orbit Threadworks',
-    deliveryEstimateDays: 3,
-    regionalDeliveryFee: 40,
-    variants: [
-      { id: 'v_m', name: 'Size M - Olive Green', inStock: true },
-      { id: 'v_l', name: 'Size L - Olive Green', inStock: true },
-      { id: 'v_xl', name: 'Size XL - Sand Beige', inStock: true }
-    ],
-    description: '100% natural organic linen crafted for tropical all-day comfort. Pre-washed for a soft feel without color fading.',
-    highlights: ['100% Certified Linen', 'Open Breathable Weave', 'Machine Washable', 'Tailored Casual Silhouette'],
-    approvalStatus: 'approved'
-  },
-  {
-    id: 'prod_coffee_machine_05',
-    title: 'Barista 15-Bar Espresso Machine & Steam Frother',
-    category: 'Home & Living',
-    price: 4999,
-    originalPrice: 8999,
-    discountPercentage: 44,
-    image: 'https://images.unsplash.com/photo-1517668808822-9ebb02f2a0e6?w=500&auto=format&fit=crop&q=80',
-    rating: 4.9,
-    reviewsCount: 145,
-    stock: 15,
-    sellerId: 'sell_orbit_tech',
-    sellerName: 'Home Crafters India',
-    deliveryEstimateDays: 2,
-    regionalDeliveryFee: 0,
-    variants: [{ id: 'v_silver', name: 'Brushed Steel', inStock: true }],
-    description: 'Commercial-grade 15-bar Italian pressure pump delivers velvety espresso crema. Features high-pressure steam wand for cafe-style cappuccinos and lattes.',
-    highlights: ['15-Bar Italian Pump', 'Professional Steam Wand', '1.5L Removable Water Tank', 'Dual Temperature Control'],
-    approvalStatus: 'approved'
-  },
-  {
-    id: 'prod_bottle_06',
-    title: 'Vacuum Insulated Stainless Steel Flask (1000ml)',
-    category: 'Home & Living',
-    price: 749,
-    originalPrice: 1299,
-    discountPercentage: 42,
-    image: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop&q=80',
-    rating: 4.8,
-    reviewsCount: 380,
-    stock: 50,
-    sellerId: 'sell_orbit_tech',
-    sellerName: 'Home Crafters India',
-    deliveryEstimateDays: 2,
-    regionalDeliveryFee: 30,
-    variants: [
-      { id: 'v_matte_black', name: 'Matte Black', inStock: true },
-      { id: 'v_steel', name: 'Brushed Silver', inStock: true }
-    ],
-    description: 'Double-walled vacuum insulation keeps beverages cold for 24 hours and piping hot for 12 hours. 100% leak-proof lid with food-grade 304 steel.',
-    highlights: ['24-Hour Cold / 12-Hour Hot', '18/8 Food Grade Steel', '100% Leak-Proof Cap', 'BPA Free & Non-Toxic'],
-    approvalStatus: 'approved'
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. PERSISTENT DATABASE SETUP & MIGRATIONS (node:sqlite)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const db = new DatabaseSync(DB_PATH);
+
+// Optimize SQLite for high-performance concurrent reads & ACID writes
+db.exec('PRAGMA journal_mode = WAL;');
+db.exec('PRAGMA foreign_keys = ON;');
+
+// Run schema migrations
+db.exec(`
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    phone TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    email TEXT,
+    avatar TEXT,
+    active_role TEXT NOT NULL DEFAULT 'customer',
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    approval_status TEXT NOT NULL DEFAULT 'pending',
+    seller_status TEXT NOT NULL DEFAULT 'none',
+    provider_status TEXT NOT NULL DEFAULT 'none',
+    house_number TEXT,
+    street_number TEXT,
+    landmark TEXT,
+    city TEXT DEFAULT 'Bengaluru',
+    pincode TEXT DEFAULT '560001',
+    address TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    revoked INTEGER NOT NULL DEFAULT 0,
+    ip_address TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS otp_verifications (
+    phone TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS seller_applications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    applicant_name TEXT NOT NULL,
+    applicant_phone TEXT NOT NULL,
+    store_name TEXT NOT NULL,
+    business_type TEXT NOT NULL,
+    gstin TEXT,
+    address TEXT NOT NULL,
+    product_category TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    admin_notes TEXT,
+    reviewed_at TEXT,
+    submitted_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS provider_applications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    applicant_name TEXT NOT NULL,
+    applicant_phone TEXT NOT NULL,
+    trade_category TEXT NOT NULL,
+    experience_years INTEGER NOT NULL DEFAULT 0,
+    hourly_rate REAL NOT NULL DEFAULT 0,
+    service_area TEXT DEFAULT 'Bengaluru',
+    resume_text TEXT,
+    previous_work TEXT,
+    id_proof_type TEXT,
+    id_proof_number TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    issued_provider_id TEXT,
+    admin_notes TEXT,
+    reviewed_at TEXT,
+    submitted_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS products (
+    id TEXT PRIMARY KEY,
+    seller_id TEXT NOT NULL,
+    seller_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    price REAL NOT NULL,
+    original_price REAL NOT NULL,
+    discount_percentage INTEGER NOT NULL DEFAULT 0,
+    image TEXT NOT NULL,
+    stock INTEGER NOT NULL DEFAULT 0,
+    delivery_estimate_days INTEGER NOT NULL DEFAULT 2,
+    regional_delivery_fee REAL NOT NULL DEFAULT 0,
+    variants_json TEXT NOT NULL DEFAULT '[]',
+    description TEXT NOT NULL,
+    highlights_json TEXT NOT NULL DEFAULT '[]',
+    approval_status TEXT NOT NULL DEFAULT 'pending_approval',
+    admin_notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS services (
+    id TEXT PRIMARY KEY,
+    provider_id TEXT NOT NULL,
+    provider_name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    price REAL NOT NULL,
+    unit TEXT NOT NULL DEFAULT 'visit & inspection',
+    service_area TEXT NOT NULL DEFAULT 'Bengaluru',
+    modes_json TEXT NOT NULL DEFAULT '["home_visit"]',
+    available_slots_json TEXT NOT NULL DEFAULT '[]',
+    description TEXT NOT NULL,
+    cancellation_policy TEXT NOT NULL,
+    approval_status TEXT NOT NULL DEFAULT 'pending_approval',
+    admin_notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (provider_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS orders (
+    id TEXT PRIMARY KEY,
+    order_number TEXT UNIQUE NOT NULL,
+    customer_id TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    customer_phone TEXT NOT NULL,
+    items_json TEXT NOT NULL,
+    subtotal REAL NOT NULL,
+    seller_delivery_charge REAL NOT NULL,
+    platform_fee REAL NOT NULL DEFAULT 0,
+    coupon_discount REAL NOT NULL DEFAULT 0,
+    tip_amount REAL NOT NULL DEFAULT 0,
+    total REAL NOT NULL,
+    order_status TEXT NOT NULL DEFAULT 'confirmed',
+    payment_status TEXT NOT NULL DEFAULT 'pending',
+    payment_method TEXT NOT NULL,
+    payment_gateway_order_id TEXT,
+    payment_gateway_payment_id TEXT,
+    delivery_address TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS bookings (
+    id TEXT PRIMARY KEY,
+    booking_number TEXT UNIQUE NOT NULL,
+    service_id TEXT NOT NULL,
+    service_title TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    provider_name TEXT NOT NULL,
+    customer_id TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    customer_phone TEXT NOT NULL,
+    date TEXT NOT NULL,
+    time_slot TEXT NOT NULL,
+    service_mode TEXT NOT NULL DEFAULT 'home_visit',
+    customer_address TEXT NOT NULL,
+    total_price REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'confirmed',
+    payment_status TEXT NOT NULL DEFAULT 'pending',
+    cancellation_terms TEXT,
+    revised_quote_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE,
+    FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS commission_ledger (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    reference_id TEXT NOT NULL,
+    gross_amount REAL NOT NULL,
+    commission_rate REAL NOT NULL,
+    commission_amount REAL NOT NULL,
+    payout_amount REAL NOT NULL,
+    beneficiary_id TEXT NOT NULL,
+    payout_status TEXT NOT NULL DEFAULT 'pending_manual_settlement',
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS marketplace_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    actor_id TEXT,
+    actor_name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    action TEXT NOT NULL,
+    details TEXT NOT NULL,
+    ip_address TEXT,
+    timestamp TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS payment_events (
+    event_id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    payload_hash TEXT NOT NULL,
+    processed_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS special_requests (
+    id TEXT PRIMARY KEY,
+    ticket_number TEXT UNIQUE NOT NULL,
+    customer_id TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    customer_phone TEXT NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    description TEXT NOT NULL,
+    estimated_budget REAL NOT NULL,
+    target_timeline TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'submitted',
+    admin_notes TEXT,
+    admin_quotation REAL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  -- Indexes for rapid lookups and constraints
+  CREATE INDEX IF NOT EXISTS idx_products_approval ON products(approval_status);
+  CREATE INDEX IF NOT EXISTS idx_services_approval ON services(approval_status);
+  CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id);
+  CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings(customer_id);
+  CREATE INDEX IF NOT EXISTS idx_bookings_provider ON bookings(provider_id);
+  CREATE INDEX IF NOT EXISTS idx_bookings_slot ON bookings(provider_id, date, time_slot, status);
+  CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+`);
+
+// Seed default marketplace settings if not present
+const getSetting = (key, defaultVal) => {
+  const row = db.prepare('SELECT value FROM marketplace_settings WHERE key = ?').get(key);
+  return row ? row.value : defaultVal;
+};
+
+const setSetting = (key, value) => {
+  db.prepare(`
+    INSERT INTO marketplace_settings (key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(key, String(value));
+};
+
+if (!getSetting('products_commission_rate', null)) setSetting('products_commission_rate', '10');
+if (!getSetting('services_commission_rate', null)) setSetting('services_commission_rate', '15');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3. APP & MIDDLEWARE SETUP
+// ─────────────────────────────────────────────────────────────────────────────
+
+const app = express();
+
+// Security Headers (equivalent to Helmet)
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// Production CORS
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
+  : ['http://localhost:3000', 'http://localhost:5173', 'https://localhost', 'capacitor://localhost'];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || !IS_PROD || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Origin not allowed by CORS'));
+      }
+    },
+    credentials: true
+  })
+);
+
+app.use(express.json({ limit: '10mb' })); // Support base64 image uploads
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. CRYPTO HELPERS & SESSION COOKIE MANAGEMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+function signCookie(value) {
+  const hmac = crypto.createHmac('sha256', SESSION_SECRET).update(value).digest('base64url');
+  return `s:${value}.${hmac}`;
+}
+
+function verifyCookie(signed) {
+  if (!signed || !signed.startsWith('s:')) return null;
+  const raw = signed.slice(2);
+  const dot = raw.lastIndexOf('.');
+  if (dot === -1) return null;
+  const val = raw.slice(0, dot);
+  const signature = raw.slice(dot + 1);
+  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(val).digest('base64url');
+  if (crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    return val;
   }
-];
+  return null;
+}
 
-const DEFAULT_SERVICES = [
-  {
-    id: 'serv_plumbing_01',
-    title: 'Tap Leakage, Drain Clog & Pipeline Diagnostics',
-    category: 'Plumbing',
-    price: 299,
-    unit: 'inspection & minor repair',
-    providerId: 'prov_rajesh_plumb',
-    providerName: 'Rajesh Sharma (Master Plumber)',
-    providerRating: 4.9,
-    providerJobsCompleted: 312,
-    modes: ['home_visit'],
-    description: 'Complete inspection of bathroom & kitchen taps, flush valves, concealed leakage detection, and drain clearing with genuine spare parts.',
-    cancellationPolicy: 'Free cancellation up to 2 hours before scheduled slot.',
-    availableSlots: ['09:00 AM - 11:00 AM', '11:30 AM - 01:30 PM', '02:30 PM - 04:30 PM', '05:00 PM - 07:00 PM'],
-    approvedByAdmin: true,
-    approvalStatus: 'approved'
-  },
-  {
-    id: 'serv_electrical_02',
-    title: 'Switchboard, Fan & MCB Trip Troubleshooting',
-    category: 'Electrical',
-    price: 349,
-    unit: 'visit & diagnostics',
-    providerId: 'prov_suresh_elect',
-    providerName: 'Suresh Kumar (Licensed Wireman)',
-    providerRating: 4.8,
-    providerJobsCompleted: 450,
-    modes: ['home_visit'],
-    description: 'Professional diagnosis of frequent tripping, burnt switchboard sockets, inverter/UPS line connectivity, and ceiling fan noise troubleshooting.',
-    cancellationPolicy: 'Free cancellation up to 2 hours before scheduled slot.',
-    availableSlots: ['10:00 AM - 12:00 PM', '01:00 PM - 03:00 PM', '04:00 PM - 06:00 PM'],
-    approvedByAdmin: true,
-    approvalStatus: 'approved'
-  },
-  {
-    id: 'serv_cleaning_03',
-    title: 'Deep Home Sanitization & Bathroom Descaling',
-    category: 'Cleaning',
-    price: 1499,
-    unit: '2 BHK complete deep scrub',
-    providerId: 'prov_anita_clean',
-    providerName: 'Anita Devi (SparklePro Hygiene)',
-    providerRating: 4.9,
-    providerJobsCompleted: 180,
-    modes: ['home_visit'],
-    description: 'Hospital-grade mechanized scrubbing of hard-water tile stains, kitchen degreasing, germ sanitization, and mirror polishing.',
-    cancellationPolicy: 'Free cancellation up to 4 hours before scheduled slot.',
-    availableSlots: ['08:30 AM - 01:00 PM', '02:00 PM - 06:30 PM'],
-    approvedByAdmin: true,
-    approvalStatus: 'approved'
-  },
-  {
-    id: 'serv_carpentry_04',
-    title: 'Door Lock, Hinges & Custom Wardrobe Repair',
-    category: 'Carpentry',
-    price: 399,
-    unit: 'fitting & alignment',
-    providerId: 'prov_manoj_carp',
-    providerName: 'Manoj S. (Woodcraft Specialist)',
-    providerRating: 4.7,
-    providerJobsCompleted: 220,
-    modes: ['home_visit'],
-    description: 'Precision alignment of hydraulic door closers, deadbolt installation, sagging drawer channels, and termite-resistant hinge fixes.',
-    cancellationPolicy: 'Free cancellation up to 2 hours before slot.',
-    availableSlots: ['09:30 AM - 12:00 PM', '02:30 PM - 05:00 PM'],
-    approvedByAdmin: true,
-    approvalStatus: 'approved'
-  }
-];
+function parseCookies(req) {
+  const list = {};
+  const header = req.headers.cookie;
+  if (!header) return list;
+  header.split(';').forEach((cookie) => {
+    const parts = cookie.split('=');
+    const key = parts.shift()?.trim();
+    if (key) {
+      const rawVal = parts.join('=');
+      try {
+        list[key] = decodeURIComponent(rawVal);
+      } catch {
+        list[key] = rawVal;
+      }
+    }
+  });
+  return list;
+}
 
-const DEFAULT_ORDERS = [];
+// Session extraction middleware
+app.use((req, res, next) => {
+  const cookies = parseCookies(req);
+  const signedSession = cookies[SESSION_COOKIE_NAME];
+  req.session = null;
 
-const DEFAULT_BOOKINGS = [];
+  if (signedSession) {
+    const sessionId = verifyCookie(signedSession);
+    if (sessionId) {
+      const row = db.prepare(`
+        SELECT s.id, s.user_id, s.phone, s.is_admin, s.expires_at, s.revoked,
+               u.name, u.email, u.active_role, u.approval_status, u.seller_status, u.provider_status
+        FROM sessions s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.id = ? AND s.revoked = 0
+      `).get(sessionId);
 
-// Helper to read/write DB
-function loadDB() {
-  if (!fs.existsSync(DB_FILE)) {
-    const initialDB = {
-      products: DEFAULT_PRODUCTS,
-      services: DEFAULT_SERVICES,
-      orders: DEFAULT_ORDERS,
-      bookings: DEFAULT_BOOKINGS,
-      specialRequests: [],
-      applications: [],
-      users: [],
-      commission: {
-        productsRate: 10,
-        servicesRate: 15,
-        totalEarned: 0,
-        transactions: []
-      },
-      auditLogs: [
-        {
-          id: 'log_init',
-          timestamp: new Date().toISOString(),
-          actor: 'System Superadmin',
-          action: 'SYSTEM_BOOT',
-          details: 'NSO Cloud Database initialized successfully.'
+      if (row) {
+        if (Date.now() < row.expires_at) {
+          req.session = {
+            id: row.id,
+            userId: row.user_id,
+            phone: row.phone,
+            name: row.name,
+            email: row.email,
+            isAdmin: Boolean(row.is_admin),
+            activeRole: row.active_role,
+            approvalStatus: row.approval_status,
+            sellerStatus: row.seller_status,
+            providerStatus: row.provider_status
+          };
+        } else {
+          // Expired: Mark revoked
+          db.prepare('UPDATE sessions SET revoked = 1 WHERE id = ?').run(sessionId);
         }
-      ]
-    };
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialDB, null, 2));
-    return initialDB;
+      }
+    }
   }
+  next();
+});
+
+// Helper to set session cookie
+function attachSessionCookie(res, sessionId) {
+  const signed = signCookie(sessionId);
+  const isHttps = IS_PROD;
+  const cookieParts = [
+    `${SESSION_COOKIE_NAME}=${encodeURIComponent(signed)}`,
+    'Path=/',
+    'HttpOnly',
+    `Max-Age=${Math.floor(SESSION_DURATION_MS / 1000)}`,
+    isHttps ? 'Secure' : '',
+    'SameSite=Lax'
+  ].filter(Boolean);
+  res.setHeader('Set-Cookie', cookieParts.join('; '));
+}
+
+function clearSessionCookie(res) {
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. IN-MEMORY RATE LIMITING
+// ─────────────────────────────────────────────────────────────────────────────
+
+const rateLimiters = new Map();
+
+function checkRateLimit(key, limit, windowMs) {
+  const now = Date.now();
+  let record = rateLimiters.get(key);
+  if (!record || now - record.startTime > windowMs) {
+    record = { count: 1, startTime: now };
+    rateLimiters.set(key, record);
+    return true;
+  }
+  record.count += 1;
+  return record.count <= limit;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. AUDIT LOGGING HELPER
+// ─────────────────────────────────────────────────────────────────────────────
+
+function logAudit(actorId, actorName, role, action, details, ip) {
   try {
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
-  } catch (e) {
-    return { products: DEFAULT_PRODUCTS, services: DEFAULT_SERVICES, orders: [], bookings: [], specialRequests: [], auditLogs: [] };
+    const id = `log_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+    const timestamp = new Date().toISOString();
+    db.prepare(`
+      INSERT INTO audit_logs (id, actor_id, actor_name, role, action, details, ip_address, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, actorId || 'SYSTEM', actorName, role, action, details, ip || null, timestamp);
+  } catch (err) {
+    console.error('Audit log failure:', err.message);
   }
 }
 
-function saveDB(db) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. AUTHORIZATION MIDDLEWARE
+// ─────────────────────────────────────────────────────────────────────────────
+
+function requireAuth(req, res, next) {
+  if (!req.session || !req.session.userId) {
+    return res.status(401).json({ error: 'Authentication required. Please sign in with OTP.' });
+  }
+  next();
 }
 
-// ─── API ROUTES ───
+function requireAdmin(req, res, next) {
+  if (!req.session || !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Access denied: Marketplace Owner authorization required.' });
+  }
+  next();
+}
 
-// Health check with real-time database stats
+function requireSeller(req, res, next) {
+  if (!req.session || req.session.sellerStatus !== 'approved') {
+    return res.status(403).json({ error: 'Access denied: Approved seller status required.' });
+  }
+  next();
+}
+
+function requireProvider(req, res, next) {
+  if (!req.session || req.session.providerStatus !== 'approved') {
+    return res.status(403).json({ error: 'Access denied: Approved service provider status required.' });
+  }
+  next();
+}
+
+// Format user for client response
+function formatUserResponse(u) {
+  const authorizedRoles = ['customer'];
+  if (u.seller_status === 'approved') authorizedRoles.push('seller');
+  if (u.provider_status === 'approved') authorizedRoles.push('provider');
+  if (u.is_admin === 1) authorizedRoles.push('admin');
+
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email || `${u.phone}@nso.in`,
+    phone: u.phone.startsWith('+91') ? u.phone : `+91 ${u.phone}`,
+    avatar: u.avatar,
+    activeRole: u.active_role,
+    authorizedRoles,
+    approvalStatus: u.approval_status,
+    sellerStatus: u.seller_status,
+    providerStatus: u.provider_status,
+    adminVerified: Boolean(u.is_admin),
+    houseNumber: u.house_number,
+    streetNumber: u.street_number,
+    landmark: u.landmark,
+    city: u.city,
+    pincode: u.pincode,
+    address: u.address,
+    isLoggedIn: true
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. AUTH & OTP ENDPOINTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Send OTP
+app.post('/api/auth/send-otp', async (req, res) => {
+  const rawPhone = String(req.body?.phone || '');
+  const cleanPhone = rawPhone.replace(/\D/g, '').slice(-10);
+
+  if (cleanPhone.length !== 10) {
+    return res.status(400).json({ error: 'Please enter a valid 10-digit Indian mobile number.' });
+  }
+
+  const clientIp = req.ip || req.connection.remoteAddress;
+
+  // Rate limits: 3 sends per phone per 15 minutes, 10 per IP
+  if (!checkRateLimit(`otp_send_${cleanPhone}`, 3, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Too many OTP requests. Please wait 15 minutes before trying again.' });
+  }
+  if (!checkRateLimit(`otp_send_ip_${clientIp}`, 10, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Too many requests from this device. Please try again later.' });
+  }
+
+  // Check lockout
+  const existingOtp = db.prepare('SELECT * FROM otp_verifications WHERE phone = ?').get(cleanPhone);
+  const now = Date.now();
+  if (existingOtp && existingOtp.locked_until > now) {
+    const minutesLeft = Math.ceil((existingOtp.locked_until - now) / 60000);
+    return res.status(429).json({ error: `Account verification locked due to too many failed attempts. Try again in ${minutesLeft} minutes.` });
+  }
+
+  // Generate cryptographically secure 6-digit OTP
+  const code = String(crypto.randomInt(100000, 1000000));
+  const expiresAt = now + 10 * 60 * 1000; // 10 minutes
+
+  db.prepare(`
+    INSERT INTO otp_verifications (phone, code, expires_at, attempts, locked_until, created_at)
+    VALUES (?, ?, ?, 0, 0, ?)
+    ON CONFLICT(phone) DO UPDATE SET
+      code = excluded.code,
+      expires_at = excluded.expires_at,
+      attempts = 0,
+      created_at = excluded.created_at
+  `).run(cleanPhone, code, expiresAt, now);
+
+  // Dispatch OTP according to configured provider
+  if (OTP_PROVIDER === 'twilio' && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+    try {
+      const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+      const body = new URLSearchParams({
+        To: `+91${cleanPhone}`,
+        From: process.env.TWILIO_FROM_NUMBER || '',
+        Body: `Your NSO verification code is ${code}. Valid for 10 minutes. Do not share with anyone.`
+      });
+      await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+      });
+    } catch (err) {
+      console.error('Twilio SMS error:', err.message);
+    }
+  } else if (OTP_PROVIDER === 'msg91' && process.env.MSG91_AUTH_KEY) {
+    try {
+      await fetch(`https://control.msg91.com/api/v5/otp?template_id=${process.env.MSG91_TEMPLATE_ID || ''}&mobile=91${cleanPhone}&authkey=${process.env.MSG91_AUTH_KEY}&otp=${code}`, {
+        method: 'POST'
+      });
+    } catch (err) {
+      console.error('MSG91 SMS error:', err.message);
+    }
+  } else {
+    // Console / Development mode: Print to server log only
+    console.log(`\n[NSO OTP GATEWAY] >>> Verification Code for +91 ${cleanPhone}: [ ${code} ] <<<\n`);
+  }
+
+  res.json({ success: true, message: 'OTP sent successfully. Valid for 10 minutes.', expiresInSeconds: 600 });
+});
+
+// Verify OTP
+app.post('/api/auth/verify-otp', async (req, res) => {
+  const rawPhone = String(req.body?.phone || '');
+  const cleanPhone = rawPhone.replace(/\D/g, '').slice(-10);
+  const enteredOtp = String(req.body?.otp || '').trim();
+
+  if (cleanPhone.length !== 10 || enteredOtp.length !== 6) {
+    return res.status(400).json({ error: 'Please enter a valid 10-digit phone and 6-digit OTP.' });
+  }
+
+  const record = db.prepare('SELECT * FROM otp_verifications WHERE phone = ?').get(cleanPhone);
+  const now = Date.now();
+
+  if (!record) {
+    return res.status(400).json({ error: 'No OTP requested for this phone number. Please request a new code.' });
+  }
+
+  if (record.locked_until > now) {
+    const minutesLeft = Math.ceil((record.locked_until - now) / 60000);
+    return res.status(429).json({ error: `Account locked due to consecutive failed attempts. Try again in ${minutesLeft} minutes.` });
+  }
+
+  if (now > record.expires_at) {
+    db.prepare('DELETE FROM otp_verifications WHERE phone = ?').run(cleanPhone);
+    return res.status(400).json({ error: 'OTP has expired. Please request a new code.' });
+  }
+
+  // Constant-time comparison
+  const isValid = crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp));
+
+  if (!isValid) {
+    const attempts = record.attempts + 1;
+    let lockedUntil = 0;
+    if (attempts >= 3) {
+      lockedUntil = now + 15 * 60 * 1000; // 15 min lockout
+    }
+    db.prepare('UPDATE otp_verifications SET attempts = ?, locked_until = ? WHERE phone = ?').run(attempts, lockedUntil, cleanPhone);
+
+    if (lockedUntil > 0) {
+      return res.status(429).json({ error: 'Incorrect code entered 3 times. Verification locked for 15 minutes.' });
+    }
+    return res.status(400).json({ error: `Incorrect OTP. You have ${3 - attempts} attempt(s) remaining.` });
+  }
+
+  // OTP verified! Clean up OTP record
+  db.prepare('DELETE FROM otp_verifications WHERE phone = ?').run(cleanPhone);
+
+  // Check if owner phone
+  const isOwner = ADMIN_PHONE && cleanPhone === ADMIN_PHONE;
+
+  // Find or create user
+  let user = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
+  const nowIso = new Date().toISOString();
+
+  if (!user) {
+    const newId = `usr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+    db.prepare(`
+      INSERT INTO users (
+        id, phone, name, email, avatar, active_role, is_admin, approval_status,
+        seller_status, provider_status, city, pincode, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      newId,
+      cleanPhone,
+      isOwner ? 'Marketplace Owner' : `User ${cleanPhone.slice(-4)}`,
+      `${cleanPhone}@nso.in`,
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      isOwner ? 'admin' : 'customer',
+      isOwner ? 1 : 0,
+      isOwner ? 'approved' : 'pending',
+      isOwner ? 'approved' : 'none',
+      isOwner ? 'approved' : 'none',
+      'Bengaluru',
+      '560001',
+      nowIso,
+      nowIso
+    );
+    user = db.prepare('SELECT * FROM users WHERE id = ?').get(newId);
+  } else if (isOwner && !user.is_admin) {
+    // Elevate owner if configured via ADMIN_PHONE
+    db.prepare("UPDATE users SET is_admin = 1, active_role = 'admin', approval_status = 'approved', seller_status = 'approved', provider_status = 'approved' WHERE id = ?").run(user.id);
+    user = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+  }
+
+  // INVENTORY OF PREVIOUS SESSIONS: Invalidate previous active sessions for this account across devices!
+  db.prepare('UPDATE sessions SET revoked = 1 WHERE user_id = ?').run(user.id);
+
+  // Create new session
+  const sessionId = crypto.randomUUID();
+  const sessionExpiresAt = now + SESSION_DURATION_MS;
+  const clientIp = req.ip || req.connection.remoteAddress;
+
+  db.prepare(`
+    INSERT INTO sessions (id, user_id, phone, is_admin, created_at, expires_at, revoked, ip_address)
+    VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+  `).run(sessionId, user.id, cleanPhone, user.is_admin, now, sessionExpiresAt, clientIp);
+
+  attachSessionCookie(res, sessionId);
+  logAudit(user.id, user.name, user.active_role, 'USER_LOGIN_OTP', `Successful sign-in with phone +91 ${cleanPhone}`, clientIp);
+
+  res.json({ success: true, user: formatUserResponse(user) });
+});
+
+// Logout
+app.post('/api/auth/logout', requireAuth, (req, res) => {
+  if (req.session?.id) {
+    db.prepare('UPDATE sessions SET revoked = 1 WHERE id = ?').run(req.session.id);
+  }
+  clearSessionCookie(res);
+  res.json({ success: true, message: 'Logged out successfully.' });
+});
+
+// Current User Profile & Session Check
+app.get('/api/auth/me', (req, res) => {
+  if (!req.session || !req.session.userId) {
+    return res.status(401).json({ error: 'No active session.' });
+  }
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+  if (!user) {
+    return res.status(401).json({ error: 'User not found.' });
+  }
+  res.json(formatUserResponse(user));
+});
+
+// Customer Profile Registration / Update
+app.post('/api/users/register', requireAuth, (req, res) => {
+  const { name, houseNumber, streetNumber, landmark, city, pincode } = req.body || {};
+
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Full name is required.' });
+  }
+
+  const fullAddress = [houseNumber, streetNumber, landmark, city || 'Bengaluru', pincode || '560001'].filter(Boolean).join(', ');
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    UPDATE users SET
+      name = ?,
+      house_number = ?,
+      street_number = ?,
+      landmark = ?,
+      city = ?,
+      pincode = ?,
+      address = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(
+    name.trim(),
+    (houseNumber || '').trim(),
+    (streetNumber || '').trim(),
+    (landmark || '').trim(),
+    city || 'Bengaluru',
+    pincode || '560001',
+    fullAddress,
+    nowIso,
+    req.session.userId
+  );
+
+  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+  logAudit(req.session.userId, updated.name, updated.active_role, 'PROFILE_REGISTERED', `Profile details registered: ${fullAddress}`, req.ip);
+
+  res.json(formatUserResponse(updated));
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. SELLER & PROVIDER ONBOARDING (APPLICATIONS)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Submit Seller Application
+app.post('/api/applications/seller', requireAuth, (req, res) => {
+  const { storeName, businessType, gstin, address, productCategory } = req.body || {};
+
+  if (!storeName || !businessType || !address) {
+    return res.status(400).json({ error: 'Store name, business type, and address are required.' });
+  }
+
+  const id = `app_sel_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO seller_applications (
+      id, user_id, applicant_name, applicant_phone, store_name, business_type,
+      gstin, address, product_category, status, submitted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+  `).run(
+    id,
+    req.session.userId,
+    req.session.name,
+    req.session.phone,
+    storeName.trim(),
+    businessType.trim(),
+    gstin ? gstin.trim() : null,
+    address.trim(),
+    productCategory || 'General',
+    nowIso
+  );
+
+  db.prepare("UPDATE users SET seller_status = 'pending', updated_at = ? WHERE id = ?").run(nowIso, req.session.userId);
+  logAudit(req.session.userId, req.session.name, 'customer', 'SELLER_APPLICATION_SUBMITTED', `Store applied: ${storeName}`, req.ip);
+
+  res.status(201).json({ success: true, applicationId: id, message: 'Seller application submitted for owner review.' });
+});
+
+// Submit Provider Application
+app.post('/api/applications/provider', requireAuth, (req, res) => {
+  const { tradeCategory, experienceYears, hourlyRate, serviceArea, resumeText, previousWork, idProofType, idProofNumber } = req.body || {};
+
+  if (!tradeCategory || hourlyRate === undefined) {
+    return res.status(400).json({ error: 'Trade category and pricing rate are required.' });
+  }
+
+  const id = `app_prv_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO provider_applications (
+      id, user_id, applicant_name, applicant_phone, trade_category, experience_years,
+      hourly_rate, service_area, resume_text, previous_work, id_proof_type, id_proof_number,
+      status, submitted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+  `).run(
+    id,
+    req.session.userId,
+    req.session.name,
+    req.session.phone,
+    tradeCategory.trim(),
+    Number(experienceYears) || 0,
+    Number(hourlyRate) || 0,
+    serviceArea || 'Bengaluru',
+    resumeText || '',
+    previousWork || '',
+    idProofType || 'Aadhaar',
+    idProofNumber || '',
+    nowIso
+  );
+
+  db.prepare("UPDATE users SET provider_status = 'pending', updated_at = ? WHERE id = ?").run(nowIso, req.session.userId);
+  logAudit(req.session.userId, req.session.name, 'customer', 'PROVIDER_APPLICATION_SUBMITTED', `Trade applied: ${tradeCategory}`, req.ip);
+
+  res.status(201).json({ success: true, applicationId: id, message: 'Provider application submitted for owner review.' });
+});
+
+// Get Applications (Owner only)
+app.get('/api/applications', requireAdmin, (req, res) => {
+  const sellerApps = db.prepare('SELECT * FROM seller_applications ORDER BY submitted_at DESC').all();
+  const providerApps = db.prepare('SELECT * FROM provider_applications ORDER BY submitted_at DESC').all();
+
+  const combined = [
+    ...sellerApps.map((a) => ({
+      id: a.id,
+      type: 'seller',
+      userId: a.user_id,
+      applicantName: a.applicant_name,
+      applicantPhone: a.applicant_phone,
+      storeName: a.store_name,
+      businessType: a.business_type,
+      gstin: a.gstin,
+      address: a.address,
+      productCategory: a.product_category,
+      status: a.status,
+      adminNotes: a.admin_notes,
+      reviewedAt: a.reviewed_at,
+      submittedAt: a.submitted_at
+    })),
+    ...providerApps.map((a) => ({
+      id: a.id,
+      type: 'provider',
+      userId: a.user_id,
+      applicantName: a.applicant_name,
+      applicantPhone: a.applicant_phone,
+      tradeCategory: a.trade_category,
+      experienceYears: a.experience_years,
+      hourlyRate: a.hourly_rate,
+      serviceArea: a.service_area,
+      resumeText: a.resume_text,
+      previousWork: a.previous_work,
+      idProofType: a.id_proof_type,
+      idProofNumber: a.id_proof_number,
+      status: a.status,
+      issuedProviderId: a.issued_provider_id,
+      adminNotes: a.admin_notes,
+      reviewedAt: a.reviewed_at,
+      submittedAt: a.submitted_at
+    }))
+  ].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+
+  res.json(combined);
+});
+
+// Approve / Reject Application (Owner only)
+app.patch('/api/applications/:id/approve', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { approved, adminNotes } = req.body || {};
+  const status = approved ? 'approved' : 'rejected';
+  const nowIso = new Date().toISOString();
+
+  // Check seller apps
+  const sellerApp = db.prepare('SELECT * FROM seller_applications WHERE id = ?').get(id);
+  if (sellerApp) {
+    db.prepare('UPDATE seller_applications SET status = ?, admin_notes = ?, reviewed_at = ? WHERE id = ?').run(status, adminNotes || '', nowIso, id);
+    db.prepare('UPDATE users SET seller_status = ?, updated_at = ? WHERE id = ?').run(status, nowIso, sellerApp.user_id);
+    logAudit(req.session.userId, req.session.name, 'admin', 'SELLER_APPLICATION_REVIEW', `Application for ${sellerApp.storeName} marked ${status}`, req.ip);
+    return res.json({ success: true, status, type: 'seller' });
+  }
+
+  // Check provider apps
+  const providerApp = db.prepare('SELECT * FROM provider_applications WHERE id = ?').get(id);
+  if (providerApp) {
+    const issuedId = approved ? (providerApp.issued_provider_id || `NSO-PROV-${crypto.randomInt(100, 999)}`) : null;
+    db.prepare('UPDATE provider_applications SET status = ?, issued_provider_id = ?, admin_notes = ?, reviewed_at = ? WHERE id = ?').run(status, issuedId, adminNotes || '', nowIso, id);
+    db.prepare('UPDATE users SET provider_status = ?, updated_at = ? WHERE id = ?').run(status, nowIso, providerApp.user_id);
+    logAudit(req.session.userId, req.session.name, 'admin', 'PROVIDER_APPLICATION_REVIEW', `Application for ${providerApp.applicant_name} (${providerApp.trade_category}) marked ${status}`, req.ip);
+    return res.json({ success: true, status, type: 'provider', issuedProviderId: issuedId });
+  }
+
+  res.status(404).json({ error: 'Application not found.' });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 10. PRODUCT LISTINGS (SELLER & CUSTOMER)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Public Catalog: Approved, in-stock products only
+app.get('/api/products', (req, res) => {
+  const rows = db.prepare("SELECT * FROM products WHERE approval_status = 'approved' ORDER BY created_at DESC").all();
+  const products = rows.map((p) => ({
+    id: p.id,
+    title: p.title,
+    category: p.category,
+    price: p.price,
+    originalPrice: p.original_price,
+    discountPercentage: p.discount_percentage,
+    image: p.image,
+    rating: 5.0,
+    reviewsCount: 0,
+    stock: p.stock,
+    sellerId: p.seller_id,
+    sellerName: p.seller_name,
+    deliveryEstimateDays: p.delivery_estimate_days,
+    regionalDeliveryFee: p.regional_delivery_fee,
+    variants: JSON.parse(p.variants_json || '[]'),
+    description: p.description,
+    highlights: JSON.parse(p.highlights_json || '[]'),
+    approvalStatus: p.approval_status
+  }));
+  res.json(products);
+});
+
+// Seller List: Products owned by the authenticated seller
+app.get('/api/seller/products', requireSeller, (req, res) => {
+  const rows = db.prepare('SELECT * FROM products WHERE seller_id = ? ORDER BY created_at DESC').all(req.session.userId);
+  res.json(
+    rows.map((p) => ({
+      ...p,
+      originalPrice: p.original_price,
+      discountPercentage: p.discount_percentage,
+      sellerId: p.seller_id,
+      sellerName: p.seller_name,
+      deliveryEstimateDays: p.delivery_estimate_days,
+      regionalDeliveryFee: p.regional_delivery_fee,
+      variants: JSON.parse(p.variants_json || '[]'),
+      highlights: JSON.parse(p.highlights_json || '[]'),
+      approvalStatus: p.approval_status,
+      adminNotes: p.admin_notes
+    }))
+  );
+});
+
+// Create Product: Seller only — stays pending_approval until owner reviews
+app.post('/api/products', requireSeller, (req, res) => {
+  const { title, category, price, originalPrice, stock, image, description, regionalDeliveryFee, deliveryEstimateDays, variants, highlights } = req.body || {};
+
+  if (!title || price === undefined || !description) {
+    return res.status(400).json({ error: 'Title, price, and description are required.' });
+  }
+
+  const id = `prod_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+  const nowIso = new Date().toISOString();
+  const priceNum = Number(price);
+  const origPriceNum = Number(originalPrice) || priceNum;
+  const discount = Math.max(0, Math.round(((origPriceNum - priceNum) / origPriceNum) * 100));
+
+  db.prepare(`
+    INSERT INTO products (
+      id, seller_id, seller_name, title, category, price, original_price, discount_percentage,
+      image, stock, delivery_estimate_days, regional_delivery_fee, variants_json, description,
+      highlights_json, approval_status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?)
+  `).run(
+    id,
+    req.session.userId,
+    req.session.name,
+    title.trim(),
+    category || 'General',
+    priceNum,
+    origPriceNum,
+    discount,
+    image || 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500',
+    Math.max(0, Number(stock) || 0),
+    Number(deliveryEstimateDays) || 2,
+    Number(regionalDeliveryFee) || 0,
+    JSON.stringify(variants || [{ id: 'v1', name: 'Standard Edition', inStock: true }]),
+    description.trim(),
+    JSON.stringify(highlights || []),
+    nowIso,
+    nowIso
+  );
+
+  logAudit(req.session.userId, req.session.name, 'seller', 'PRODUCT_SUBMITTED', `Product "${title}" submitted for owner review`, req.ip);
+
+  res.status(201).json({ id, title, approvalStatus: 'pending_approval', message: 'Product submitted. Pending owner approval before appearing in customer catalog.' });
+});
+
+// Update Product Stock (Seller ownership enforced)
+app.patch('/api/products/:id/stock', requireSeller, (req, res) => {
+  const { id } = req.params;
+  const stock = Math.max(0, Number(req.body?.stock) || 0);
+
+  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+  if (!product) return res.status(404).json({ error: 'Product not found.' });
+
+  if (product.seller_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'You can only update stock for your own listings.' });
+  }
+
+  db.prepare('UPDATE products SET stock = ?, updated_at = ? WHERE id = ?').run(stock, new Date().toISOString(), id);
+  res.json({ id, stock });
+});
+
+// Approve / Reject Product (Owner only)
+app.patch('/api/products/:id/approve', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { approved, adminNotes } = req.body || {};
+  const status = approved ? 'approved' : 'rejected';
+  const nowIso = new Date().toISOString();
+
+  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+  if (!product) return res.status(404).json({ error: 'Product not found.' });
+
+  db.prepare('UPDATE products SET approval_status = ?, admin_notes = ?, updated_at = ? WHERE id = ?').run(status, adminNotes || '', nowIso, id);
+  logAudit(req.session.userId, req.session.name, 'admin', 'PRODUCT_APPROVAL_DECISION', `Product "${product.title}" marked ${status}`, req.ip);
+
+  res.json({ id, approvalStatus: status });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 11. SERVICE LISTINGS (PROVIDER & CUSTOMER)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Public Services: Approved services only
+app.get('/api/services', (req, res) => {
+  const rows = db.prepare("SELECT * FROM services WHERE approval_status = 'approved' ORDER BY created_at DESC").all();
+  const services = rows.map((s) => ({
+    id: s.id,
+    title: s.title,
+    category: s.category,
+    price: s.price,
+    unit: s.unit,
+    serviceArea: s.service_area,
+    providerId: s.provider_id,
+    providerName: s.provider_name,
+    providerRating: 5.0,
+    providerJobsCompleted: 0,
+    modes: JSON.parse(s.modes_json || '["home_visit"]'),
+    description: s.description,
+    cancellationPolicy: s.cancellation_policy,
+    availableSlots: JSON.parse(s.available_slots_json || '[]'),
+    approvalStatus: s.approval_status
+  }));
+  res.json(services);
+});
+
+// Provider Services List
+app.get('/api/provider/services', requireProvider, (req, res) => {
+  const rows = db.prepare('SELECT * FROM services WHERE provider_id = ? ORDER BY created_at DESC').all(req.session.userId);
+  res.json(
+    rows.map((s) => ({
+      ...s,
+      providerId: s.provider_id,
+      providerName: s.provider_name,
+      modes: JSON.parse(s.modes_json || '["home_visit"]'),
+      availableSlots: JSON.parse(s.available_slots_json || '[]')
+    }))
+  );
+});
+
+// Create Service: Provider only — stays pending_approval until owner reviews
+app.post('/api/services', requireProvider, (req, res) => {
+  const { title, category, price, unit, serviceArea, modes, description, cancellationPolicy, availableSlots } = req.body || {};
+
+  if (!title || price === undefined || !description) {
+    return res.status(400).json({ error: 'Title, price, and description are required.' });
+  }
+
+  const id = `svc_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO services (
+      id, provider_id, provider_name, title, category, price, unit, service_area,
+      modes_json, available_slots_json, description, cancellation_policy, approval_status,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?)
+  `).run(
+    id,
+    req.session.userId,
+    req.session.name,
+    title.trim(),
+    category || 'Home Services',
+    Number(price),
+    unit || 'visit & inspection',
+    serviceArea || 'Bengaluru',
+    JSON.stringify(modes || ['home_visit']),
+    JSON.stringify(availableSlots || ['09:00 AM - 11:00 AM', '11:30 AM - 01:30 PM', '02:30 PM - 04:30 PM', '05:00 PM - 07:00 PM']),
+    description.trim(),
+    cancellationPolicy || 'Free cancellation up to 2 hours before scheduled slot.',
+    nowIso,
+    nowIso
+  );
+
+  logAudit(req.session.userId, req.session.name, 'provider', 'SERVICE_SUBMITTED', `Service "${title}" submitted for owner review`, req.ip);
+
+  res.status(201).json({ id, title, approvalStatus: 'pending_approval', message: 'Service submitted. Pending owner approval before customer booking is available.' });
+});
+
+// Approve / Reject Service (Owner only)
+app.patch('/api/services/:id/approve', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { approved, adminNotes } = req.body || {};
+  const status = approved ? 'approved' : 'rejected';
+  const nowIso = new Date().toISOString();
+
+  const service = db.prepare('SELECT * FROM services WHERE id = ?').get(id);
+  if (!service) return res.status(404).json({ error: 'Service not found.' });
+
+  db.prepare('UPDATE services SET approval_status = ?, admin_notes = ?, updated_at = ? WHERE id = ?').run(status, adminNotes || '', nowIso, id);
+  logAudit(req.session.userId, req.session.name, 'admin', 'SERVICE_APPROVAL_DECISION', `Service "${service.title}" marked ${status}`, req.ip);
+
+  res.json({ id, approvalStatus: status });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 12. ORDERS & ATOMIC INVENTORY FULFILLMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Get Orders: Customer sees own; Seller sees orders for their products; Admin sees all
+app.get('/api/orders', requireAuth, (req, res) => {
+  let rows = [];
+  if (req.session.isAdmin) {
+    rows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC').all();
+  } else if (req.session.sellerStatus === 'approved') {
+    // Orders containing seller's items
+    const all = db.prepare('SELECT * FROM orders ORDER BY created_at DESC').all();
+    rows = all.filter((o) => {
+      try {
+        const items = JSON.parse(o.items_json);
+        return items.some((item) => item.sellerId === req.session.userId);
+      } catch {
+        return false;
+      }
+    });
+  } else {
+    // Customer sees own orders
+    rows = db.prepare('SELECT * FROM orders WHERE customer_id = ? ORDER BY created_at DESC').all(req.session.userId);
+  }
+
+  const orders = rows.map((o) => ({
+    id: o.id,
+    orderNumber: o.order_number,
+    customerId: o.customer_id,
+    customerName: o.customer_name,
+    customerPhone: o.customer_phone,
+    items: JSON.parse(o.items_json),
+    subtotal: o.subtotal,
+    sellerDeliveryCharge: o.seller_delivery_charge,
+    platformFee: o.platform_fee,
+    couponDiscount: o.coupon_discount,
+    tipAmount: o.tip_amount,
+    total: o.total,
+    orderStatus: o.order_status,
+    paymentStatus: o.payment_status,
+    paymentMethod: o.payment_method,
+    deliveryAddress: o.delivery_address,
+    createdAt: o.created_at
+  }));
+
+  res.json(orders);
+});
+
+// Place Order: Atomic transaction, server-side price calculation, inventory decrement
+app.post('/api/orders', requireAuth, (req, res) => {
+  const { items, deliveryAddress, paymentMethod, couponCode, tipAmount } = req.body || {};
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Order must contain at least one item.' });
+  }
+  if (!deliveryAddress || !deliveryAddress.trim()) {
+    return res.status(400).json({ error: 'Delivery address is required.' });
+  }
+
+  // BEGIN TRANSACTION
+  db.exec('BEGIN IMMEDIATE');
+
+  try {
+    let subtotal = 0;
+    let maxDeliveryFee = 0;
+    const validatedItems = [];
+
+    for (const item of items) {
+      const product = db.prepare('SELECT * FROM products WHERE id = ? AND approval_status = ?').get(item.productId, 'approved');
+      if (!product) {
+        db.exec('ROLLBACK');
+        return res.status(400).json({ error: `Product ${item.productId} is unavailable or not approved.` });
+      }
+
+      const qty = Math.max(1, Number(item.quantity) || 1);
+      if (product.stock < qty) {
+        db.exec('ROLLBACK');
+        return res.status(400).json({ error: `Insufficient stock for "${product.title}". Only ${product.stock} left in stock.` });
+      }
+
+      // Check variant modifier if specified
+      let unitPrice = product.price;
+      let variantName = undefined;
+      if (item.variantId) {
+        const variants = JSON.parse(product.variants_json || '[]');
+        const matched = variants.find((v) => v.id === item.variantId);
+        if (matched) {
+          variantName = matched.name;
+          if (matched.priceModifier) unitPrice += matched.priceModifier;
+        }
+      }
+
+      subtotal += unitPrice * qty;
+      maxDeliveryFee = Math.max(maxDeliveryFee, product.regional_delivery_fee);
+
+      validatedItems.push({
+        productId: product.id,
+        title: product.title,
+        price: unitPrice,
+        quantity: qty,
+        variant: variantName,
+        image: product.image,
+        sellerId: product.seller_id,
+        sellerName: product.seller_name
+      });
+
+      // Atomic Stock Decrement
+      db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?').run(qty, product.id);
+    }
+
+    // Coupon calculation
+    let couponDiscount = 0;
+    if (couponCode === 'NSOFIRST') couponDiscount = 150;
+    else if (couponCode === 'FESTIVE50') couponDiscount = Math.round(subtotal * 0.1);
+
+    const tip = Math.max(0, Number(tipAmount) || 0);
+    const total = Math.max(0, subtotal + maxDeliveryFee + tip - couponDiscount);
+
+    const orderId = `ord_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+    const orderNumber = `NSO-ORD-${crypto.randomInt(10000, 99999)}`;
+    const nowIso = new Date().toISOString();
+
+    db.prepare(`
+      INSERT INTO orders (
+        id, order_number, customer_id, customer_name, customer_phone, items_json,
+        subtotal, seller_delivery_charge, platform_fee, coupon_discount, tip_amount,
+        total, order_status, payment_status, payment_method, delivery_address, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'confirmed', 'pending', ?, ?, ?, ?)
+    `).run(
+      orderId,
+      orderNumber,
+      req.session.userId,
+      req.session.name,
+      req.session.phone,
+      JSON.stringify(validatedItems),
+      subtotal,
+      maxDeliveryFee,
+      couponDiscount,
+      tip,
+      total,
+      paymentMethod || 'cod',
+      deliveryAddress.trim(),
+      nowIso,
+      nowIso
+    );
+
+    db.exec('COMMIT');
+
+    logAudit(req.session.userId, req.session.name, 'customer', 'ORDER_PLACED', `Order ${orderNumber} placed for ₹${total}`, req.ip);
+
+    res.status(201).json({
+      id: orderId,
+      orderNumber,
+      customerId: req.session.userId,
+      customerName: req.session.name,
+      items: validatedItems,
+      subtotal,
+      sellerDeliveryCharge: maxDeliveryFee,
+      platformFee: 0,
+      couponDiscount,
+      tipAmount: tip,
+      total,
+      orderStatus: 'confirmed',
+      paymentStatus: 'pending',
+      paymentMethod: paymentMethod || 'cod',
+      deliveryAddress: deliveryAddress.trim(),
+      createdAt: nowIso
+    });
+  } catch (err) {
+    db.exec('ROLLBACK');
+    console.error('Order creation error:', err);
+    res.status(500).json({ error: 'Failed to place order due to a server error.' });
+  }
+});
+
+// Update Order Status: Sellers can update orders containing their items; Admin can update any
+app.patch('/api/orders/:id/status', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body || {};
+
+  const validStatuses = ['confirmed', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled', 'refund_requested'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Invalid order status transition.' });
+  }
+
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+  // Ownership verification
+  if (!req.session.isAdmin) {
+    const items = JSON.parse(order.items_json);
+    const ownsItem = items.some((item) => item.sellerId === req.session.userId);
+    if (!ownsItem) {
+      return res.status(403).json({ error: 'Access denied: You can only update orders for your own products.' });
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  db.prepare('UPDATE orders SET order_status = ?, updated_at = ? WHERE id = ?').run(status, nowIso, id);
+
+  // If order marked delivered and was COD, automatically transition payment to success and record commission
+  if (status === 'delivered' && order.payment_method === 'cod' && order.payment_status === 'pending') {
+    db.prepare("UPDATE orders SET payment_status = 'success', updated_at = ? WHERE id = ?").run(nowIso, id);
+    recordProductCommission(order.id, order.total, JSON.parse(order.items_json));
+  }
+
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'ORDER_STATUS_UPDATED', `Order ${order.order_number} marked ${status}`, req.ip);
+
+  res.json({ id, orderStatus: status });
+});
+
+// Cancel Order
+app.post('/api/orders/:id/cancel', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+  if (order.customer_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'You can only cancel your own orders.' });
+  }
+
+  if (['shipped', 'out_for_delivery', 'delivered'].includes(order.order_status)) {
+    return res.status(400).json({ error: 'Order cannot be cancelled after dispatch.' });
+  }
+
+  // Restore inventory atomically
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const items = JSON.parse(order.items_json);
+    for (const item of items) {
+      db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?').run(item.quantity, item.productId);
+    }
+    const nowIso = new Date().toISOString();
+    db.prepare("UPDATE orders SET order_status = 'cancelled', payment_status = 'refunded', updated_at = ? WHERE id = ?").run(nowIso, id);
+    db.exec('COMMIT');
+
+    logAudit(req.session.userId, req.session.name, req.session.activeRole, 'ORDER_CANCELLED', `Order ${order.order_number} cancelled`, req.ip);
+    res.json({ success: true, message: 'Order cancelled successfully.' });
+  } catch (err) {
+    db.exec('ROLLBACK');
+    res.status(500).json({ error: 'Failed to cancel order.' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 13. BOOKINGS & SERVER-ENFORCED SLOT CONFLICTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Get Bookings
+app.get('/api/bookings', requireAuth, (req, res) => {
+  let rows = [];
+  if (req.session.isAdmin) {
+    rows = db.prepare('SELECT * FROM bookings ORDER BY created_at DESC').all();
+  } else if (req.session.providerStatus === 'approved') {
+    rows = db.prepare('SELECT * FROM bookings WHERE provider_id = ? ORDER BY created_at DESC').all(req.session.userId);
+  } else {
+    rows = db.prepare('SELECT * FROM bookings WHERE customer_id = ? ORDER BY created_at DESC').all(req.session.userId);
+  }
+
+  const bookings = rows.map((b) => ({
+    id: b.id,
+    bookingNumber: b.booking_number,
+    serviceId: b.service_id,
+    serviceTitle: b.service_title,
+    providerId: b.provider_id,
+    providerName: b.provider_name,
+    customerId: b.customer_id,
+    customerName: b.customer_name,
+    customerPhone: b.customer_phone,
+    date: b.date,
+    timeSlot: b.time_slot,
+    serviceMode: b.service_mode,
+    customerAddress: b.customer_address,
+    totalPrice: b.total_price,
+    status: b.status,
+    paymentStatus: b.payment_status,
+    cancellationTerms: b.cancellation_terms,
+    revisedQuote: b.revised_quote_json ? JSON.parse(b.revised_quote_json) : undefined,
+    createdAt: b.created_at
+  }));
+
+  res.json(bookings);
+});
+
+// Create Booking: Server-enforced slot conflict prevention
+app.post('/api/bookings', requireAuth, (req, res) => {
+  const { serviceId, date, timeSlot, mode, address } = req.body || {};
+
+  if (!serviceId || !date || !timeSlot || !address) {
+    return res.status(400).json({ error: 'Service, date, time slot, and address are required.' });
+  }
+
+  const service = db.prepare('SELECT * FROM services WHERE id = ? AND approval_status = ?').get(serviceId, 'approved');
+  if (!service) {
+    return res.status(404).json({ error: 'Service not found or not approved by owner.' });
+  }
+
+  // ATOMIC SLOT CONFLICT PREVENTION
+  db.exec('BEGIN IMMEDIATE');
+
+  try {
+    const existingConflict = db.prepare(`
+      SELECT id FROM bookings
+      WHERE provider_id = ? AND date = ? AND time_slot = ? AND status NOT IN ('cancelled', 'completed')
+    `).get(service.provider_id, date, timeSlot);
+
+    if (existingConflict) {
+      db.exec('ROLLBACK');
+      return res.status(409).json({ error: 'This time slot is already booked for this specialist. Please select another slot.' });
+    }
+
+    const bookingId = `bkg_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+    const bookingNumber = `NSO-BKG-${crypto.randomInt(10000, 99999)}`;
+    const nowIso = new Date().toISOString();
+
+    db.prepare(`
+      INSERT INTO bookings (
+        id, booking_number, service_id, service_title, provider_id, provider_name,
+        customer_id, customer_name, customer_phone, date, time_slot, service_mode,
+        customer_address, total_price, status, payment_status, cancellation_terms,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', 'pending', ?, ?, ?)
+    `).run(
+      bookingId,
+      bookingNumber,
+      service.id,
+      service.title,
+      service.provider_id,
+      service.provider_name,
+      req.session.userId,
+      req.session.name,
+      req.session.phone,
+      date,
+      timeSlot,
+      mode || 'home_visit',
+      address.trim(),
+      service.price,
+      service.cancellation_policy,
+      nowIso,
+      nowIso
+    );
+
+    db.exec('COMMIT');
+
+    logAudit(req.session.userId, req.session.name, 'customer', 'BOOKING_CREATED', `Booking ${bookingNumber} confirmed for ${service.title} on ${date} (${timeSlot})`, req.ip);
+
+    res.status(201).json({
+      id: bookingId,
+      bookingNumber,
+      serviceId: service.id,
+      serviceTitle: service.title,
+      providerId: service.provider_id,
+      providerName: service.provider_name,
+      customerId: req.session.userId,
+      customerName: req.session.name,
+      date,
+      timeSlot,
+      serviceMode: mode || 'home_visit',
+      customerAddress: address.trim(),
+      totalPrice: service.price,
+      status: 'confirmed',
+      paymentStatus: 'pending',
+      cancellationTerms: service.cancellation_policy,
+      createdAt: nowIso
+    });
+  } catch (err) {
+    db.exec('ROLLBACK');
+    console.error('Booking creation error:', err);
+    res.status(500).json({ error: 'Failed to create booking due to a server error.' });
+  }
+});
+
+// Update Booking Status: Provider or Admin
+app.patch('/api/bookings/:id/status', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body || {};
+
+  const validStatuses = ['confirmed', 'in_progress', 'completed', 'cancelled', 'disputed'];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Invalid booking status transition.' });
+  }
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Access denied: You can only update bookings for your own services.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  db.prepare('UPDATE bookings SET status = ?, updated_at = ? WHERE id = ?').run(status, nowIso, id);
+
+  // If marked completed, automatically record service commission
+  if (status === 'completed') {
+    db.prepare("UPDATE bookings SET payment_status = 'success', updated_at = ? WHERE id = ?").run(nowIso, id);
+    recordServiceCommission(booking.id, booking.total_price, booking.provider_id);
+  }
+
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'BOOKING_STATUS_UPDATED', `Booking ${booking.booking_number} marked ${status}`, req.ip);
+
+  res.json({ id, status });
+});
+
+// Cancel Booking
+app.post('/api/bookings/:id/cancel', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.customer_id !== req.session.userId && booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'You can only cancel your own bookings.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  db.prepare("UPDATE bookings SET status = 'cancelled', payment_status = 'refunded', updated_at = ? WHERE id = ?").run(nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'BOOKING_CANCELLED', `Booking ${booking.booking_number} cancelled`, req.ip);
+
+  res.json({ success: true, message: 'Booking cancelled. Time slot released.' });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 14. PAYMENTS & AUDITABLE COMMISSION LEDGER
+// ─────────────────────────────────────────────────────────────────────────────
+
+function recordProductCommission(orderId, orderTotal, items) {
+  try {
+    const existing = db.prepare("SELECT id FROM commission_ledger WHERE reference_id = ? AND type = 'product'").get(orderId);
+    if (existing) return; // Idempotency check: record once only
+
+    const rate = Number(getSetting('products_commission_rate', '10'));
+    const commAmount = Math.round(orderTotal * (rate / 100));
+    const payoutAmount = Math.max(0, orderTotal - commAmount);
+    const sellerId = items[0]?.sellerId || 'unknown_seller';
+
+    const id = `comm_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+    db.prepare(`
+      INSERT INTO commission_ledger (id, type, reference_id, gross_amount, commission_rate, commission_amount, payout_amount, beneficiary_id, payout_status, created_at)
+      VALUES (?, 'product', ?, ?, ?, ?, ?, ?, 'pending_manual_settlement', ?)
+    `).run(id, orderId, orderTotal, rate, commAmount, payoutAmount, sellerId, new Date().toISOString());
+  } catch (err) {
+    console.error('Error recording product commission:', err.message);
+  }
+}
+
+function recordServiceCommission(bookingId, bookingTotal, providerId) {
+  try {
+    const existing = db.prepare("SELECT id FROM commission_ledger WHERE reference_id = ? AND type = 'service'").get(bookingId);
+    if (existing) return;
+
+    const rate = Number(getSetting('services_commission_rate', '15'));
+    const commAmount = Math.round(bookingTotal * (rate / 100));
+    const payoutAmount = Math.max(0, bookingTotal - commAmount);
+
+    const id = `comm_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+    db.prepare(`
+      INSERT INTO commission_ledger (id, type, reference_id, gross_amount, commission_rate, commission_amount, payout_amount, beneficiary_id, payout_status, created_at)
+      VALUES (?, 'service', ?, ?, ?, ?, ?, ?, 'pending_manual_settlement', ?)
+    `).run(id, bookingId, bookingTotal, rate, commAmount, payoutAmount, providerId, new Date().toISOString());
+  } catch (err) {
+    console.error('Error recording service commission:', err.message);
+  }
+}
+
+// Get Commission & Ledger (Owner only)
+app.get('/api/commission', requireAdmin, (req, res) => {
+  const productsRate = Number(getSetting('products_commission_rate', '10'));
+  const servicesRate = Number(getSetting('services_commission_rate', '15'));
+
+  const rows = db.prepare('SELECT * FROM commission_ledger ORDER BY created_at DESC').all();
+  const totalEarned = rows.reduce((sum, r) => sum + r.commission_amount, 0);
+
+  res.json({
+    productsRate,
+    servicesRate,
+    totalEarned,
+    transactions: rows.map((r) => ({
+      id: r.id,
+      type: r.type,
+      referenceId: r.reference_id,
+      grossAmount: r.gross_amount,
+      commissionRate: r.commission_rate,
+      commissionAmount: r.commission_amount,
+      payoutAmount: r.payout_amount,
+      beneficiaryId: r.beneficiary_id,
+      payoutStatus: r.payout_status,
+      createdAt: r.created_at
+    }))
+  });
+});
+
+// Update Commission Rates (Owner only)
+app.patch('/api/commission/settings', requireAdmin, (req, res) => {
+  const { productsRate, servicesRate } = req.body || {};
+
+  if (productsRate !== undefined) {
+    const r = Math.max(0, Math.min(100, Number(productsRate)));
+    setSetting('products_commission_rate', String(r));
+  }
+  if (servicesRate !== undefined) {
+    const r = Math.max(0, Math.min(100, Number(servicesRate)));
+    setSetting('services_commission_rate', String(r));
+  }
+
+  logAudit(req.session.userId, req.session.name, 'admin', 'COMMISSION_RATES_UPDATED', `Rates set to: Products ${productsRate}%, Services ${servicesRate}%`, req.ip);
+
+  res.json({
+    productsRate: Number(getSetting('products_commission_rate', '10')),
+    servicesRate: Number(getSetting('services_commission_rate', '15'))
+  });
+});
+
+// Server-side Payment Verification (Razorpay signature verification)
+app.post('/api/payments/razorpay/verify', requireAuth, (req, res) => {
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature, orderId, bookingId } = req.body || {};
+
+  if (!RAZORPAY_KEY_SECRET) {
+    return res.status(400).json({ error: 'Razorpay payment gateway secret is not configured on the server.' });
+  }
+
+  const generatedSignature = crypto
+    .createHmac('sha256', RAZORPAY_KEY_SECRET)
+    .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+    .digest('hex');
+
+  const isValid = crypto.timingSafeEqual(Buffer.from(generatedSignature), Buffer.from(razorpaySignature));
+
+  if (!isValid) {
+    return res.status(400).json({ error: 'Payment signature verification failed. Tampered response detected.' });
+  }
+
+  const nowIso = new Date().toISOString();
+
+  if (orderId) {
+    const ord = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    if (ord) {
+      db.prepare("UPDATE orders SET payment_status = 'success', payment_gateway_order_id = ?, payment_gateway_payment_id = ?, updated_at = ? WHERE id = ?")
+        .run(razorpayOrderId, razorpayPaymentId, nowIso, orderId);
+      recordProductCommission(ord.id, ord.total, JSON.parse(ord.items_json));
+    }
+  }
+
+  if (bookingId) {
+    const bkg = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
+    if (bkg) {
+      db.prepare("UPDATE bookings SET payment_status = 'success', updated_at = ? WHERE id = ?").run(nowIso, bookingId);
+      recordServiceCommission(bkg.id, bkg.total_price, bkg.provider_id);
+    }
+  }
+
+  res.json({ success: true, message: 'Payment verified and credited successfully.' });
+});
+
+// Webhook for Asynchronous Payment Events (with Idempotency & Replay Protection)
+app.post('/api/payments/webhook', (req, res) => {
+  const signature = req.headers['x-razorpay-signature'];
+  if (!RAZORPAY_WEBHOOK_SECRET || !signature) {
+    return res.status(400).json({ error: 'Webhook secret or signature missing.' });
+  }
+
+  const payloadString = JSON.stringify(req.body);
+  const expectedSignature = crypto.createHmac('sha256', RAZORPAY_WEBHOOK_SECRET).update(payloadString).digest('hex');
+
+  if (!crypto.timingSafeEqual(Buffer.from(expectedSignature), Buffer.from(signature))) {
+    return res.status(400).json({ error: 'Invalid webhook signature.' });
+  }
+
+  const eventId = req.body?.event_id || `evt_${Date.now()}`;
+  const existingEvent = db.prepare('SELECT event_id FROM payment_events WHERE event_id = ?').get(eventId);
+  if (existingEvent) {
+    return res.json({ status: 'ignored_duplicate' }); // Prevent replayed events
+  }
+
+  const hash = crypto.createHash('sha256').update(payloadString).digest('hex');
+  db.prepare('INSERT INTO payment_events (event_id, event_type, payload_hash, processed_at) VALUES (?, ?, ?, ?)').run(
+    eventId,
+    req.body?.event || 'payment_captured',
+    hash,
+    new Date().toISOString()
+  );
+
+  res.json({ status: 'ok' });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 15. AUDIT LOGS & SPECIAL REQUESTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.get('/api/audit-logs', requireAdmin, (req, res) => {
+  const rows = db.prepare('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100').all();
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      actor: r.actor_name,
+      role: r.role,
+      action: r.action,
+      details: r.details,
+      timestamp: r.timestamp
+    }))
+  );
+});
+
+// Special Requests
+app.get('/api/special-requests', requireAuth, (req, res) => {
+  let rows = [];
+  if (req.session.isAdmin) {
+    rows = db.prepare('SELECT * FROM special_requests ORDER BY created_at DESC').all();
+  } else {
+    rows = db.prepare('SELECT * FROM special_requests WHERE customer_id = ? ORDER BY created_at DESC').all(req.session.userId);
+  }
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      requestNumber: r.ticket_number,
+      customerId: r.customer_id,
+      customerName: r.customer_name,
+      title: r.title,
+      category: r.category,
+      description: r.description,
+      estimatedBudget: r.estimated_budget,
+      targetTimeline: r.target_timeline,
+      status: r.status,
+      adminNotes: r.admin_notes,
+      adminQuotation: r.admin_quotation,
+      submittedAt: r.created_at
+    }))
+  );
+});
+
+app.post('/api/special-requests', requireAuth, (req, res) => {
+  const { title, category, description, budget, timeline } = req.body || {};
+  if (!title || !description) {
+    return res.status(400).json({ error: 'Title and description are required.' });
+  }
+
+  const id = `sr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+  const ticketNumber = `SR-${crypto.randomInt(1000, 9999)}`;
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO special_requests (id, ticket_number, customer_id, customer_name, customer_phone, title, category, description, estimated_budget, target_timeline, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?)
+  `).run(
+    id,
+    ticketNumber,
+    req.session.userId,
+    req.session.name,
+    req.session.phone,
+    title.trim(),
+    category || 'Custom Request',
+    description.trim(),
+    Number(budget) || 0,
+    timeline || 'Within 1 week',
+    nowIso
+  );
+
+  res.status(201).json({ id, ticketNumber, status: 'submitted' });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 16. HEALTH CHECK
+// ─────────────────────────────────────────────────────────────────────────────
+
 app.get('/api/health', (req, res) => {
-  const db = loadDB();
+  const productsCount = db.prepare('SELECT COUNT(*) as c FROM products').get().c;
+  const approvedProductsCount = db.prepare("SELECT COUNT(*) as c FROM products WHERE approval_status = 'approved'").get().c;
+  const servicesCount = db.prepare('SELECT COUNT(*) as c FROM services').get().c;
+  const ordersCount = db.prepare('SELECT COUNT(*) as c FROM orders').get().c;
+  const bookingsCount = db.prepare('SELECT COUNT(*) as c FROM bookings').get().c;
+
   res.json({
     status: 'online',
-    app: 'NSO (New Shopping Orbit) Cloud API',
-    version: '1.0.0',
+    app: 'NSO (New Shopping Orbit) Bengaluru Pilot API',
+    version: '2.0.0',
+    database: 'SQLite (node:sqlite ACID WAL)',
     uptimeSeconds: Math.floor(process.uptime()),
     stats: {
-      productsCount: db.products?.length || 0,
-      ordersCount: db.orders?.length || 0,
-      bookingsCount: db.bookings?.length || 0,
-      specialRequestsCount: db.specialRequests?.length || 0
+      productsCount,
+      approvedProductsCount,
+      servicesCount,
+      ordersCount,
+      bookingsCount
     },
     timestamp: new Date().toISOString()
   });
 });
 
-// Products
-app.get('/api/products', (req, res) => {
-  const db = loadDB();
-  res.json(db.products);
-});
+// ─────────────────────────────────────────────────────────────────────────────
+// 17. GLOBAL ERROR HANDLER & SERVER START
+// ─────────────────────────────────────────────────────────────────────────────
 
-app.post('/api/products', (req, res) => {
-  const db = loadDB();
-  const newProduct = {
-    ...req.body,
-    id: `prod_${Date.now()}`
-  };
-  db.products.unshift(newProduct);
-  saveDB(db);
-  res.status(201).json(newProduct);
-});
-
-app.patch('/api/products/:id/stock', (req, res) => {
-  const db = loadDB();
-  const { stock } = req.body;
-  const prod = db.products.find((p) => p.id === req.params.id);
-  if (prod) {
-    prod.stock = stock;
-    saveDB(db);
-    return res.json(prod);
+app.use((err, req, res, next) => {
+  if (IS_PROD) {
+    console.error(`[ERROR] ${err.message}`);
+    res.status(err.status || 500).json({ error: err.message || 'Internal server error.' });
+  } else {
+    console.error(err);
+    res.status(err.status || 500).json({ error: err.message });
   }
-  res.status(404).json({ error: 'Product not found' });
 });
 
-// Services
-app.get('/api/services', (req, res) => {
-  const db = loadDB();
-  res.json(db.services);
+app.use((req, res) => {
+  res.status(404).json({ error: `Endpoint not found: ${req.method} ${req.path}` });
 });
 
-// Orders
-app.get('/api/orders', (req, res) => {
-  const db = loadDB();
-  res.json(db.orders);
-});
+// Export app for test suites
+export { app, db };
 
-app.post('/api/orders', (req, res) => {
-  const db = loadDB();
-  const newOrder = {
-    ...req.body,
-    id: `ord_${Date.now()}`,
-    orderNumber: `NSO-ORD-${Math.floor(10000 + Math.random() * 90000)}`,
-    createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
-  };
-  db.orders.unshift(newOrder);
-  db.auditLogs.unshift({
-    id: `log_${Date.now()}`,
-    timestamp: new Date().toISOString(),
-    actor: newOrder.customerName || 'Customer',
-    action: 'ORDER_PLACED',
-    details: `Order ${newOrder.orderNumber} placed for ₹${newOrder.total}`
+// Only listen when executed directly (not when imported in test)
+if (process.argv[1] && process.argv[1].endsWith('server.js')) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n============================================================`);
+    console.log(`🚀 NSO Secure API v2.0 running at http://0.0.0.0:${PORT}`);
+    console.log(`   Database:     SQLite WAL (${DB_PATH})`);
+    console.log(`   Environment:  ${NODE_ENV}`);
+    console.log(`   OTP Provider: ${OTP_PROVIDER}`);
+    console.log(`   Admin Phone:  ${ADMIN_PHONE ? `+91 ${ADMIN_PHONE}` : 'NOT CONFIGURED'}`);
+    console.log(`============================================================\n`);
   });
-  saveDB(db);
-  res.status(201).json(newOrder);
-});
-
-app.patch('/api/orders/:id/status', (req, res) => {
-  const db = loadDB();
-  const { status } = req.body;
-  const ord = db.orders.find((o) => o.id === req.params.id);
-  if (ord) {
-    ord.orderStatus = status;
-    saveDB(db);
-    return res.json(ord);
-  }
-  res.status(404).json({ error: 'Order not found' });
-});
-
-app.post('/api/orders/:id/cancel', (req, res) => {
-  const db = loadDB();
-  const ord = db.orders.find((o) => o.id === req.params.id);
-  if (ord) {
-    ord.orderStatus = 'cancelled';
-    ord.paymentStatus = 'refunded';
-    db.auditLogs.unshift({
-      id: `log_${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      actor: ord.customerName,
-      action: 'ORDER_CANCELLED',
-      details: `Order ${ord.orderNumber} cancelled by customer. 100% refund credited.`
-    });
-    saveDB(db);
-    return res.json(ord);
-  }
-  res.status(404).json({ error: 'Order not found' });
-});
-
-// Bookings
-app.get('/api/bookings', (req, res) => {
-  const db = loadDB();
-  res.json(db.bookings);
-});
-
-app.post('/api/bookings', (req, res) => {
-  const db = loadDB();
-  const newBooking = {
-    ...req.body,
-    id: `bk_${Date.now()}`,
-    bookingNumber: `NSO-SRV-${Math.floor(10000 + Math.random() * 90000)}`
-  };
-  db.bookings.unshift(newBooking);
-  saveDB(db);
-  res.status(201).json(newBooking);
-});
-
-app.patch('/api/bookings/:id/status', (req, res) => {
-  const db = loadDB();
-  const { status } = req.body;
-  const b = db.bookings.find((item) => item.id === req.params.id);
-  if (b) {
-    b.status = status;
-    saveDB(db);
-    return res.json(b);
-  }
-  res.status(404).json({ error: 'Booking not found' });
-});
-
-app.post('/api/bookings/:id/cancel', (req, res) => {
-  const db = loadDB();
-  const b = db.bookings.find((item) => item.id === req.params.id);
-  if (b) {
-    b.status = 'cancelled';
-    b.paymentStatus = 'refunded';
-    saveDB(db);
-    return res.json(b);
-  }
-  res.status(404).json({ error: 'Booking not found' });
-});
-
-// Special Requests
-app.get('/api/special-requests', (req, res) => {
-  const db = loadDB();
-  res.json(db.specialRequests);
-});
-
-app.post('/api/special-requests', (req, res) => {
-  const db = loadDB();
-  const newReq = {
-    ...req.body,
-    id: `spec_${Date.now()}`,
-    ticketNumber: `SR-${Math.floor(1000 + Math.random() * 9000)}`,
-    status: 'submitted',
-    createdAt: new Date().toISOString().substring(0, 10)
-  };
-  db.specialRequests.unshift(newReq);
-  saveDB(db);
-  res.status(201).json(newReq);
-});
-
-// AI Assistant Endpoint (Powered by Gemini API with Smart Catalog RAG)
-app.post('/api/ai/ask', async (req, res) => {
-  try {
-    const { prompt, history, apiKey: clientKey } = req.body;
-    const db = loadDB();
-    const apiKey = clientKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-
-    if (!prompt || typeof prompt !== 'string') {
-      return res.status(400).json({ error: 'Prompt is required' });
-    }
-
-    const availableProducts = db.products.map(p => ({
-      id: p.id,
-      title: p.title,
-      category: p.category,
-      price: p.price,
-      rating: p.rating,
-      description: p.description
-    }));
-
-    const availableServices = db.services.map(s => ({
-      id: s.id,
-      title: s.title,
-      category: s.category,
-      price: s.price,
-      providerName: s.providerName,
-      description: s.description
-    }));
-
-    // If Gemini API Key is available, call live Google Gemini API
-    if (apiKey) {
-      try {
-        const systemPrompt = `You are NSO AI, an expert e-commerce and local services assistant for NewShopping Orbit.
-You have direct access to our live inventory. Recommend only items from this catalog:
-PRODUCTS: ${JSON.stringify(availableProducts)}
-SERVICES: ${JSON.stringify(availableServices)}
-
-Output strictly valid JSON with this exact schema:
-{
-  "text": "friendly, helpful response explaining your recommendations and rationale",
-  "comparison": {
-    "type": "product" or "service",
-    "items": [
-      {
-        "id": "exact catalog id",
-        "title": "item title",
-        "price": number,
-        "rating": number,
-        "badge": "e.g. Best Value, Top Pick, Instant Match",
-        "matchReason": "short explanation why it matches"
-      }
-    ]
-  },
-  "recommendedItem": {
-    "id": "top item catalog id",
-    "title": "item title",
-    "price": number,
-    "type": "product" or "service",
-    "reason": "why this is the #1 pick"
-  },
-  "bundleDeal": null or {
-    "title": "bundle title",
-    "totalPrice": number,
-    "savings": number,
-    "itemIds": ["prod_id_1", "prod_id_2"],
-    "items": [{"id": "...", "title": "...", "price": number}]
-  }
-}`;
-
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-        const geminiRes = await fetch(geminiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: 'user',
-                parts: [{ text: `${systemPrompt}\n\nUser Question: "${prompt}"` }]
-              }
-            ],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              temperature: 0.3
-            }
-          })
-        });
-
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json();
-          const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (rawText) {
-            const parsed = JSON.parse(rawText);
-            return res.json({ source: 'gemini-live', ...parsed });
-          }
-        } else {
-          console.warn('Gemini API call returned non-200, falling back to smart semantic catalog matcher');
-        }
-      } catch (err) {
-        console.error('Gemini error, using fallback:', err.message);
-      }
-    }
-
-    // Smart Catalog Semantic RAG Fallback (Instant, Zero Latency)
-    const lower = prompt.toLowerCase();
-    const isService = lower.includes('plumb') || lower.includes('repair') || lower.includes('clean') || lower.includes('electric') || lower.includes('salon') || lower.includes('service') || lower.includes('leak');
-    const isBundle = lower.includes('bundle') || lower.includes('combo') || lower.includes('wfh') || lower.includes('pack');
-
-    if (isBundle) {
-      const p1 = db.products[0];
-      const p2 = db.products[1] || db.products[0];
-      const savings = 350;
-      const total = p1.price + p2.price - savings;
-      return res.json({
-        source: 'smart-catalog-rag',
-        text: `Here is a curated Smart Productivity Bundle tailored to "${prompt}", combining top-rated gear with an exclusive ₹${savings} discount:`,
-        bundleDeal: {
-          title: 'NSO Executive Productivity Bundle',
-          totalPrice: total,
-          savings,
-          itemIds: [p1.id, p2.id],
-          items: [
-            { id: p1.id, title: p1.title, price: p1.price },
-            { id: p2.id, title: p2.title, price: p2.price }
-          ]
-        },
-        recommendedItem: {
-          id: p1.id,
-          title: p1.title,
-          price: p1.price,
-          type: 'product',
-          reason: 'Flagship product with active noise cancellation and verified customer satisfaction.'
-        }
-      });
-    }
-
-    if (isService) {
-      const matched = db.services.find(s => lower.includes(s.category.toLowerCase()) || lower.includes(s.title.toLowerCase())) || db.services[0];
-      return res.json({
-        source: 'smart-catalog-rag',
-        text: `I scanned our verified technicians network. Here is the highest-rated on-time specialist for your request:`,
-        comparison: {
-          type: 'service',
-          items: [
-            {
-              id: matched.id,
-              title: matched.title,
-              price: matched.price,
-              rating: matched.providerRating,
-              badge: 'Verified & Background-Checked',
-              matchReason: `${matched.providerJobsCompleted}+ completed jobs, 4.9★ rating with zero overlap conflicts.`
-            }
-          ]
-        },
-        recommendedItem: {
-          id: matched.id,
-          title: matched.title,
-          price: matched.price,
-          type: 'service',
-          reason: `Certified specialist ${matched.providerName} available for instant slot booking today.`
-        }
-      });
-    }
-
-    // Default: Product Matcher
-    const matchedProd = db.products.find(p => lower.includes(p.category.toLowerCase()) || lower.includes(p.title.toLowerCase()) || lower.includes(p.description.toLowerCase())) || db.products[0];
-    return res.json({
-      source: 'smart-catalog-rag',
-      text: `Based on verified seller reliability and real-time inventory, here is the top recommendation matching "${prompt}":`,
-      comparison: {
-        type: 'product',
-        items: [
-          {
-            id: matchedProd.id,
-            title: matchedProd.title,
-            price: matchedProd.price,
-            rating: matchedProd.rating,
-            badge: `${matchedProd.discountPercentage}% OFF Deal`,
-            matchReason: `${matchedProd.description.substring(0, 75)}... Fast regional delivery.`
-          }
-        ]
-      },
-      recommendedItem: {
-        id: matchedProd.id,
-        title: matchedProd.title,
-        price: matchedProd.price,
-        type: 'product',
-        reason: `${matchedProd.title} has a top rating of ${matchedProd.rating}★ with manufacturer warranty.`
-      }
-    });
-  } catch (err) {
-    console.error('AI route error:', err);
-    res.status(500).json({ error: 'AI processing error' });
-  }
-});
-
-// ─── USER REGISTRATION (cloud-persisted) ───
-app.get('/api/users', (req, res) => {
-  const db = loadDB();
-  res.json(db.users || []);
-});
-
-app.post('/api/users/register', (req, res) => {
-  const db = loadDB();
-  if (!db.users) db.users = [];
-  const existing = db.users.find(u => u.phone === req.body.phone);
-  if (existing) return res.json(existing);
-  const newUser = {
-    ...req.body,
-    id: `usr_${Date.now()}`,
-    providerStatus: 'none',
-    sellerStatus: 'none',
-    createdAt: new Date().toISOString()
-  };
-  db.users.unshift(newUser);
-  db.auditLogs.unshift({ id: `log_${Date.now()}`, timestamp: new Date().toISOString(), actor: newUser.name || newUser.phone, action: 'USER_REGISTERED', details: `New customer registered: ${newUser.phone}` });
-  saveDB(db);
-  res.status(201).json(newUser);
-});
-
-app.patch('/api/users/:id', (req, res) => {
-  const db = loadDB();
-  if (!db.users) db.users = [];
-  const idx = db.users.findIndex(u => u.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ error: 'User not found' });
-  db.users[idx] = { ...db.users[idx], ...req.body };
-  saveDB(db);
-  res.json(db.users[idx]);
-});
-
-// ─── PROVIDER / SELLER APPLICATIONS ───
-app.get('/api/applications', (req, res) => {
-  const db = loadDB();
-  res.json(db.applications || []);
-});
-
-app.post('/api/applications/provider', (req, res) => {
-  const db = loadDB();
-  if (!db.applications) db.applications = [];
-  const app_ = {
-    ...req.body,
-    id: `app_${Date.now()}`,
-    type: 'provider',
-    status: 'pending',
-    submittedAt: new Date().toISOString()
-  };
-  db.applications.unshift(app_);
-  db.auditLogs.unshift({ id: `log_${Date.now()}`, timestamp: new Date().toISOString(), actor: req.body.applicantName || 'Unknown', action: 'PROVIDER_APPLICATION', details: `Provider application submitted: ${req.body.tradeCategory}` });
-  saveDB(db);
-  res.status(201).json(app_);
-});
-
-app.post('/api/applications/seller', (req, res) => {
-  const db = loadDB();
-  if (!db.applications) db.applications = [];
-  const app_ = {
-    ...req.body,
-    id: `app_${Date.now()}`,
-    type: 'seller',
-    status: 'pending',
-    submittedAt: new Date().toISOString()
-  };
-  db.applications.unshift(app_);
-  db.auditLogs.unshift({ id: `log_${Date.now()}`, timestamp: new Date().toISOString(), actor: req.body.applicantName || 'Unknown', action: 'SELLER_APPLICATION', details: `Seller application submitted: ${req.body.storeName}` });
-  saveDB(db);
-  res.status(201).json(app_);
-});
-
-app.patch('/api/applications/:id/approve', (req, res) => {
-  const db = loadDB();
-  if (!db.applications) db.applications = [];
-  const appl = db.applications.find(a => a.id === req.params.id);
-  if (!appl) return res.status(404).json({ error: 'Application not found' });
-  appl.status = req.body.approved ? 'approved' : 'rejected';
-  appl.reviewedAt = new Date().toISOString();
-  appl.adminNotes = req.body.adminNotes || '';
-  // Also update user record if exists
-  if (!db.users) db.users = [];
-  const user = db.users.find(u => u.phone === appl.applicantPhone);
-  if (user) {
-    if (appl.type === 'provider') user.providerStatus = appl.status;
-    if (appl.type === 'seller') user.sellerStatus = appl.status;
-  }
-  db.auditLogs.unshift({ id: `log_${Date.now()}`, timestamp: new Date().toISOString(), actor: 'Admin', action: appl.status === 'approved' ? 'APPLICATION_APPROVED' : 'APPLICATION_REJECTED', details: `${appl.type} application ${appl.status}: ${appl.applicantName}` });
-  saveDB(db);
-  res.json(appl);
-});
-
-// ─── SERVICES POSTED BY PROVIDERS (need Admin approval) ───
-app.post('/api/services', (req, res) => {
-  const db = loadDB();
-  const newService = {
-    ...req.body,
-    id: `svc_${Date.now()}`,
-    approvalStatus: 'pending_approval',
-    createdAt: new Date().toISOString()
-  };
-  db.services.unshift(newService);
-  db.auditLogs.unshift({ id: `log_${Date.now()}`, timestamp: new Date().toISOString(), actor: req.body.providerName || 'Provider', action: 'SERVICE_SUBMITTED', details: `Service submitted for approval: ${req.body.title}` });
-  saveDB(db);
-  res.status(201).json(newService);
-});
-
-app.patch('/api/services/:id/approve', (req, res) => {
-  const db = loadDB();
-  const svc = db.services.find(s => s.id === req.params.id);
-  if (!svc) return res.status(404).json({ error: 'Service not found' });
-  svc.approvalStatus = req.body.approved ? 'approved' : 'rejected';
-  saveDB(db);
-  res.json(svc);
-});
-
-// ─── PRODUCTS POSTED BY SELLERS (need Admin approval) ───
-app.patch('/api/products/:id/approve', (req, res) => {
-  const db = loadDB();
-  const prod = db.products.find(p => p.id === req.params.id);
-  if (!prod) return res.status(404).json({ error: 'Product not found' });
-  prod.approvalStatus = req.body.approved ? 'approved' : 'rejected';
-  saveDB(db);
-  res.json(prod);
-});
-
-// ─── COMMISSION SETTINGS ───
-app.get('/api/commission', (req, res) => {
-  const db = loadDB();
-  res.json(db.commission || { productsRate: 10, servicesRate: 15, totalEarned: 0, transactions: [] });
-});
-
-app.patch('/api/commission/settings', (req, res) => {
-  const db = loadDB();
-  if (!db.commission) db.commission = { productsRate: 10, servicesRate: 15, totalEarned: 0, transactions: [] };
-  db.commission.productsRate = req.body.productsRate ?? db.commission.productsRate;
-  db.commission.servicesRate = req.body.servicesRate ?? db.commission.servicesRate;
-  saveDB(db);
-  res.json(db.commission);
-});
-
-// ─── PAYMENT STATUS UPDATE ───
-app.patch('/api/orders/:id/payment', (req, res) => {
-  const db = loadDB();
-  const ord = db.orders.find(o => o.id === req.params.id);
-  if (!ord) return res.status(404).json({ error: 'Order not found' });
-  ord.paymentStatus = req.body.paymentStatus;
-  if (req.body.paymentStatus === 'paid') {
-    // Record commission
-    if (!db.commission) db.commission = { productsRate: 10, servicesRate: 15, totalEarned: 0, transactions: [] };
-    const commission = Math.round(ord.total * (db.commission.productsRate / 100));
-    db.commission.totalEarned += commission;
-    db.commission.transactions.unshift({ id: `comm_${Date.now()}`, type: 'product', orderId: ord.id, orderTotal: ord.total, commissionRate: db.commission.productsRate, commissionAmount: commission, createdAt: new Date().toISOString() });
-  }
-  saveDB(db);
-  res.json(ord);
-});
-
-app.patch('/api/bookings/:id/payment', (req, res) => {
-  const db = loadDB();
-  const b = db.bookings.find(x => x.id === req.params.id);
-  if (!b) return res.status(404).json({ error: 'Booking not found' });
-  b.paymentStatus = req.body.paymentStatus;
-  if (req.body.paymentStatus === 'paid') {
-    if (!db.commission) db.commission = { productsRate: 10, servicesRate: 15, totalEarned: 0, transactions: [] };
-    const commission = Math.round((b.finalAmount || b.amount || 0) * (db.commission.servicesRate / 100));
-    db.commission.totalEarned += commission;
-    db.commission.transactions.unshift({ id: `comm_${Date.now()}`, type: 'service', bookingId: b.id, bookingTotal: b.finalAmount || b.amount, commissionRate: db.commission.servicesRate, commissionAmount: commission, createdAt: new Date().toISOString() });
-  }
-  saveDB(db);
-  res.json(b);
-});
-
-// Audit Logs
-app.get('/api/audit-logs', (req, res) => {
-  const db = loadDB();
-  res.json(db.auditLogs);
-});
-
-// Reset
-app.post('/api/reset', (req, res) => {
-  if (fs.existsSync(DB_FILE)) {
-    fs.unlinkSync(DB_FILE);
-  }
-  const db = loadDB();
-  res.json({ message: 'Database reset to factory defaults', db });
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 NSO Cloud Backend Server running at http://0.0.0.0:${PORT}`);
-});
+}

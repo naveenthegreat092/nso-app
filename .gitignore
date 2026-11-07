@@ -9,3 +9,6 @@ android/build
 .env
 .env.local
 server/data/db.json
+server/data/*.db*
+*.zip
+output/

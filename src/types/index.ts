@@ -8,12 +8,20 @@ export interface UserProfile {
   avatar?: string;
   activeRole: Role;
   authorizedRoles: Role[];
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
+  houseNumber?: string;
+  streetNumber?: string;
+  landmark?: string;
+  city?: string;
+  pincode?: string;
   sellerStatus: 'none' | 'pending' | 'approved' | 'rejected';
   sellerApplication?: {
     storeName: string;
     businessType: string;
     gstin?: string;
     address: string;
+    productCategory?: string;
+    storeLogo?: string;
     submittedAt: string;
   };
   providerStatus: 'none' | 'pending' | 'approved' | 'rejected';
@@ -21,6 +29,14 @@ export interface UserProfile {
     tradeCategory: string;
     experienceYears: number;
     hourlyRate: number;
+    serviceArea?: string;
+    resumeText?: string;
+    previousWork?: string;
+    idProofType?: string;
+    idProofNumber?: string;
+    profilePhoto?: string;
+    idDocumentPhoto?: string;
+    issuedProviderId?: string;
     submittedAt: string;
   };
   adminVerified: boolean;
@@ -123,6 +139,7 @@ export interface Service {
   cancellationPolicy: string;
   availableSlots: string[];
   approvedByAdmin: boolean;
+  approvalStatus?: 'approved' | 'pending_approval' | 'rejected';
 }
 
 export interface CartItem {

@@ -44,6 +44,9 @@ interface Application {
   experienceYears?: number;
   hourlyRate?: number;
   serviceArea?: string;
+  resumeText?: string;
+  previousWork?: string;
+  issuedProviderId?: string;
   idProofType?: string;
   idProofNumber?: string;
   profilePhoto?: string;
@@ -72,7 +75,11 @@ export const AdminDashboard: React.FC = () => {
     switchRole,
     approveSeller,
     approveProviderCategory,
-    clearDemoProducts
+    clearDemoProducts,
+    registeredUsers,
+    approveUserRegistration,
+    approveProviderWithId,
+    user
   } = useApp();
 
   // Live applications from backend
@@ -102,6 +109,10 @@ export const AdminDashboard: React.FC = () => {
   useEffect(() => { fetchApplications(); fetchCommission(); }, []);
 
   const handleApproveApplication = async (appId: string, approved: boolean) => {
+    const targetAppl = applications.find(a => a.id === appId);
+    if (targetAppl?.type === 'provider') {
+      approveProviderWithId(appId, approved, targetAppl);
+    }
     try {
       const res = await fetch(`${API}/applications/${appId}/approve`, {
         method: 'PATCH',
@@ -111,10 +122,11 @@ export const AdminDashboard: React.FC = () => {
       if (res.ok) {
         const updated = await res.json();
         setApplications(prev => prev.map(a => a.id === appId ? updated : a));
-        showToast(approved ? '✅ Application Approved! Portal unlocked for user.' : '❌ Application Rejected.');
+        showToast(approved ? `✅ Approved! Provider ID Issued.` : '❌ Application Rejected.');
+        return;
       }
     } catch {
-      showToast(approved ? '✅ Application Approved!' : '❌ Application Rejected.');
+      showToast(approved ? '✅ Approved locally!' : '❌ Rejected.');
       setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: approved ? 'approved' : 'rejected' } : a));
     }
   };
@@ -131,105 +143,10 @@ export const AdminDashboard: React.FC = () => {
     } catch { showToast('Commission rate updated locally.'); }
   };
 
-  // Superadmin Security Gateway State
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(() => {
-    return sessionStorage.getItem('nso_admin_session_unlocked') === 'true';
-  });
-  const [adminPhone, setAdminPhone] = useState<string>(() => {
-    return localStorage.getItem('nso_admin_phone') || '8310421121';
-  });
-  const [adminPin, setAdminPin] = useState<string>(() => {
-    return localStorage.getItem('nso_admin_pin') || '0218';
-  });
-  const [adminUpiId, setAdminUpiId] = useState<string>(() => {
-    return localStorage.getItem('nso_admin_upi') || '8310421121@upi';
-  });
-
-  // Login Form Inputs
-  const [inputPhone, setInputPhone] = useState('8310421121');
-  const [inputPin, setInputPin] = useState('');
-  const [loginError, setLoginError] = useState<string | null>(null);
-
-  // Settings Edit State
-  const [newUpiInput, setNewUpiInput] = useState(adminUpiId);
-  const [newPinInput, setNewPinInput] = useState('');
-
   const [activeTab, setActiveTab] = useState<
     'analytics' | 'payments' | 'special_requests' | 'quotes' | 'approvals' | 'audit' | 'settings'
   >('analytics');
   const [adminQuoteInput, setAdminQuoteInput] = useState<{ [id: string]: string }>({});
-
-  const [isBiometricScanning, setIsBiometricScanning] = useState(false);
-
-  const handleBiometricUnlock = async () => {
-    setIsBiometricScanning(true);
-    setLoginError(null);
-    showToast('🔍 Scanning Fingerprint / Face Recognition...');
-
-    try {
-      const verified = await promptBiometricAuth('NSO Superadmin');
-      setIsBiometricScanning(false);
-
-      if (verified) {
-        setIsUnlocked(true);
-        sessionStorage.setItem('nso_admin_session_unlocked', 'true');
-        showToast('🟢 Biometric Identity Verified! Welcome Owner.');
-      } else {
-        setLoginError('Biometric verification cancelled or unrecognized. Use Master PIN.');
-        showToast('Biometric scan cancelled. Please enter PIN.');
-      }
-    } catch {
-      setIsBiometricScanning(false);
-      setLoginError('Biometric device sensor error. Please use PIN.');
-    }
-  };
-
-  const handleUnlock = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanPhone = inputPhone.trim().replace(/\D/g, '');
-    const targetCleanPhone = adminPhone.trim().replace(/\D/g, '');
-
-    if (cleanPhone === targetCleanPhone && inputPin.trim() === adminPin.trim()) {
-      setIsUnlocked(true);
-      sessionStorage.setItem('nso_admin_session_unlocked', 'true');
-      setLoginError(null);
-      showToast('🛡️ Superadmin Identity Verified! Welcome Owner.');
-    } else {
-      setLoginError('❌ Access Denied: Invalid Admin Mobile or Master PIN.');
-      showToast('Access Denied: Invalid Admin Credentials.');
-    }
-  };
-
-  const handleLock = () => {
-    setIsUnlocked(false);
-    sessionStorage.removeItem('nso_admin_session_unlocked');
-    setInputPin('');
-    showToast('🔒 Admin Console Locked.');
-  };
-
-  const handleSaveUpi = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleaned = newUpiInput.trim();
-    if (!cleaned || !cleaned.includes('@')) {
-      showToast('Please enter a valid UPI ID (e.g. 8310421121@upi or 8310421121@okaxis)');
-      return;
-    }
-    setAdminUpiId(cleaned);
-    localStorage.setItem('nso_admin_upi', cleaned);
-    showToast(`✅ Primary Payment UPI set to: ${cleaned}`);
-  };
-
-  const handleSavePin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPinInput.trim().length < 4) {
-      showToast('PIN must be at least 4 digits');
-      return;
-    }
-    setAdminPin(newPinInput.trim());
-    localStorage.setItem('nso_admin_pin', newPinInput.trim());
-    setNewPinInput('');
-    showToast('✅ Master Admin PIN successfully updated!');
-  };
 
   const pendingSpecialRequests = specialRequests.filter((r) => r.status === 'submitted' || r.status === 'under_review');
   const pendingRevisedQuotes = bookings.filter((b) => b.revisedQuote?.status === 'pending_admin');
@@ -249,100 +166,25 @@ export const AdminDashboard: React.FC = () => {
     showToast('Special request declined.');
   };
 
-  // ── SUPERADMIN GATEWAY LOCK SCREEN ──
-  if (!isUnlocked) {
+  // Restricted Access Screen for non-admins
+  if (user.activeRole !== 'admin' || !user.adminVerified) {
     return (
-      <div className="p-4 flex flex-col items-center justify-center min-h-[580px] animate-in fade-in duration-300">
-        <div className="w-full max-w-sm bg-gradient-to-b from-slate-900 to-slate-950 border border-purple-500/30 rounded-3xl p-6 text-white shadow-2xl space-y-5 text-center relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/10 rounded-full blur-2xl pointer-events-none" />
-
-          {/* Icon */}
-          <div className="w-16 h-16 rounded-3xl bg-purple-600/20 border border-purple-500/40 text-purple-400 flex items-center justify-center mx-auto shadow-lg shadow-purple-600/20">
-            <Lock className="w-8 h-8 stroke-[2.2]" />
-          </div>
-
-          <div>
-            <span className="text-[10px] uppercase font-black tracking-widest text-purple-400 bg-purple-950/80 px-2.5 py-0.5 rounded-full border border-purple-500/30">
-              RESTRICTED SYSTEM
-            </span>
-            <h3 className="text-lg font-black text-white mt-1.5 tracking-tight">Superadmin Security Gate</h3>
-            <p className="text-xs text-slate-400 mt-1">Authorized Owner Authentication Required</p>
-          </div>
-
-          {loginError && (
-            <div className="p-2.5 bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-bold rounded-xl text-left">
-              {loginError}
-            </div>
-          )}
-
-          {/* Biometric Quick Unlock (Fingerprint & Face Recognition) */}
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={handleBiometricUnlock}
-              disabled={isBiometricScanning}
-              className="w-full py-3.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:brightness-110 disabled:opacity-60 text-white font-black text-xs rounded-2xl shadow-lg shadow-emerald-600/30 transition-all flex items-center justify-center gap-2.5 active:scale-98 border border-emerald-400/30"
-            >
-              <Fingerprint className="w-5 h-5 animate-pulse text-emerald-200" />
-              <ScanFace className="w-5 h-5 text-emerald-200" />
-              <span>
-                {isBiometricScanning ? 'Scanning Sensor...' : 'Unlock with Fingerprint / Face ID'}
-              </span>
-            </button>
-            <p className="text-[10px] text-slate-400 font-semibold">
-              Tap above to scan your phone's fingerprint sensor or Face Recognition
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 my-2">
-            <div className="h-px bg-slate-800 flex-1" />
-            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">OR USE MASTER PIN</span>
-            <div className="h-px bg-slate-800 flex-1" />
-          </div>
-
-          <form onSubmit={handleUnlock} className="space-y-3.5 text-left">
-            <div>
-              <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                Admin Mobile / ID
-              </label>
-              <input
-                type="text"
-                value={inputPhone}
-                onChange={(e) => setInputPhone(e.target.value)}
-                placeholder="8310421121"
-                className="w-full px-3.5 py-2.5 bg-slate-800/90 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="text-[10px] font-black uppercase text-slate-400 block mb-1">
-                Master Security PIN
-              </label>
-              <input
-                type="password"
-                value={inputPin}
-                onChange={(e) => setInputPin(e.target.value)}
-                placeholder="Enter Master PIN"
-                className="w-full px-3.5 py-2.5 bg-slate-800/90 border border-slate-700 rounded-xl text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-xs rounded-xl shadow-lg shadow-purple-600/30 transition-all flex items-center justify-center gap-2 active:scale-98"
-            >
-              <Unlock className="w-4 h-4" />
-              <span>Verify PIN & Unlock</span>
-            </button>
-          </form>
-
-          <button
-            onClick={() => switchRole('customer')}
-            className="text-[11px] text-slate-400 hover:text-white underline pt-1 block mx-auto transition-colors"
-          >
-            Cancel and Return to Shopping
-          </button>
+      <div className="p-6 flex flex-col items-center justify-center min-h-[500px] text-center space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-inner">
+          <ShieldAlert className="w-8 h-8" />
         </div>
+        <div>
+          <h3 className="text-lg font-black text-gray-900">Owner Access Required</h3>
+          <p className="text-xs text-gray-500 max-w-xs mx-auto mt-1 leading-relaxed">
+            The Admin Console is reserved exclusively for the marketplace owner, verified securely on the backend server.
+          </p>
+        </div>
+        <button
+          onClick={() => switchRole('customer')}
+          className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-md active:scale-95 transition-all"
+        >
+          Return to Customer Mode
+        </button>
       </div>
     );
   }
@@ -360,7 +202,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-sm font-extrabold tracking-tight">Admin Control Panel</h2>
-                <p className="text-[10px] text-purple-200">Owner: {adminPhone}</p>
+                <p className="text-[10px] text-purple-200">Owner: {user.phone}</p>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
@@ -371,9 +213,9 @@ export const AdminDashboard: React.FC = () => {
                 <span>← Store</span>
               </button>
               <button
-                onClick={handleLock}
+                onClick={() => switchRole('customer')}
                 className="p-1 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
-                title="Lock Console"
+                title="Exit Admin Panel"
               >
                 <LogOut className="w-3.5 h-3.5" />
               </button>
@@ -540,83 +382,32 @@ export const AdminDashboard: React.FC = () => {
             showToast={showToast}
           />
         )}
-        {/* Settings Tab: UPI & Security */}
+        {/* Settings Tab: Server & Security */}
         {activeTab === 'settings' && (
           <div className="space-y-4">
-            {/* Direct UPI Payment Engine */}
+            {/* Backend Server Configuration */}
             <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                    <QrCode className="w-4 h-4" />
+                  <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                    <ShieldAlert className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-black text-slate-900">Direct Customer UPI Payment</h4>
-                    <p className="text-[10px] text-slate-400">All customer payments land directly here</p>
+                    <h4 className="text-xs font-black text-slate-900">Backend Server &amp; Database</h4>
+                    <p className="text-[10px] text-slate-400">Production API &amp; SQLite WAL Persistence</p>
                   </div>
                 </div>
                 <span className="text-[9px] bg-emerald-100 text-emerald-800 font-black px-2 py-0.5 rounded-full">
-                  ACTIVE
+                  ONLINE
                 </span>
               </div>
 
-              <form onSubmit={handleSaveUpi} className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-600 block">
-                  Your Primary UPI ID (GPay / PhonePe / Paytm / Bank):
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newUpiInput}
-                    onChange={(e) => setNewUpiInput(e.target.value)}
-                    placeholder="8310421121@upi"
-                    className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
-                  >
-                    Save UPI
-                  </button>
-                </div>
-                <p className="text-[10px] text-slate-400">
-                  Current: <span className="font-mono font-bold text-emerald-700">{adminUpiId}</span>
-                </p>
-              </form>
-            </div>
-
-            {/* Change Master Admin PIN */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-                  <Key className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="text-xs font-black text-slate-900">Superadmin Security Credentials</h4>
-                  <p className="text-[10px] text-slate-400">Authorized Phone: {adminPhone}</p>
-                </div>
+              <div className="p-3 bg-slate-50 rounded-xl space-y-1.5 text-xs text-slate-600">
+                <p><span className="font-bold text-slate-800">API Endpoint:</span> <span className="font-mono text-purple-700">{API}</span></p>
+                <p><span className="font-bold text-slate-800">Owner Mobile:</span> <span className="font-mono text-slate-700">{user.phone}</span></p>
+                <p><span className="font-bold text-slate-800">Database Engine:</span> <span className="text-emerald-700 font-bold">SQLite ACID WAL</span> (server/data/nso_marketplace.db)</p>
+                <p><span className="font-bold text-slate-800">Session Security:</span> HMAC-SHA256 Signed Cookies with Multi-Device Invalidation</p>
               </div>
-
-              <form onSubmit={handleSavePin} className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-600 block">
-                  Set New Master PIN / Password:
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={newPinInput}
-                    onChange={(e) => setNewPinInput(e.target.value)}
-                    placeholder="Enter new 4+ digit PIN"
-                    className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
-                  >
-                    Update PIN
-                  </button>
-                </div>
-              </form>
             </div>
 
             {/* Catalog & Demo Products Management */}
@@ -809,6 +600,67 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
+            {/* Customer Registrations Approval Section */}
+            <div className="bg-slate-50 rounded-2xl border border-slate-200 p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-red-600" />
+                  Customer Profile & Address Approvals ({registeredUsers.filter(u => u.approvalStatus === 'pending').length} Pending)
+                </span>
+              </div>
+
+              {registeredUsers.length === 0 ? (
+                <p className="text-xs text-slate-400 py-2 text-center font-medium">No customer registrations yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {registeredUsers.map(u => (
+                    <div key={u.id || u.phone} className="bg-white rounded-xl p-3 border border-slate-200 shadow-xs space-y-1.5">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h5 className="font-black text-slate-900 text-xs">{u.name}</h5>
+                          <p className="text-[11px] text-slate-500 font-semibold">{u.phone}</p>
+                        </div>
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                          u.approvalStatus === 'approved' ? 'bg-green-100 text-green-700' :
+                          u.approvalStatus === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {u.approvalStatus ? u.approvalStatus.toUpperCase() : 'PENDING'}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-lg space-y-0.5">
+                        <p><span className="font-bold">House / Flat:</span> {u.houseNumber || 'N/A'}</p>
+                        <p><span className="font-bold">Street:</span> {u.streetNumber || 'N/A'}</p>
+                        <p><span className="font-bold">Landmark:</span> {u.landmark || 'N/A'}</p>
+                        <p><span className="font-bold">Location:</span> {u.city || 'Bengaluru'} - {u.pincode || '560001'}</p>
+                      </div>
+                      {u.approvalStatus !== 'approved' && (
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button
+                            onClick={() => approveUserRegistration(u.id, true)}
+                            className="py-1.5 bg-green-600 text-white rounded-xl font-black text-[11px] shadow-xs flex items-center justify-center gap-1"
+                          >
+                            <CheckCircle2 className="w-3 h-3" /> Approve Customer
+                          </button>
+                          <button
+                            onClick={() => approveUserRegistration(u.id, false)}
+                            className="py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1"
+                          >
+                            <XCircle className="w-3 h-3" /> Reject
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 pb-1">
+              <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider block">
+                Provider & Seller Applications ({applications.length})
+              </span>
+            </div>
+
             {appLoading && (
               <div className="text-center py-8 text-slate-400 text-xs font-medium">Loading applications...</div>
             )}
@@ -862,6 +714,26 @@ export const AdminDashboard: React.FC = () => {
                         </div>
                       )}
                     </div>
+
+                    {appl.resumeText && (
+                      <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                        <p className="font-bold text-slate-700 text-[11px] mb-0.5">📄 Resume & Background:</p>
+                        <p className="text-[11px] text-slate-600 leading-relaxed whitespace-pre-line">{appl.resumeText}</p>
+                      </div>
+                    )}
+
+                    {appl.previousWork && (
+                      <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                        <p className="font-bold text-slate-700 text-[11px] mb-0.5">🛠️ Previous Work & Projects Done:</p>
+                        <p className="text-[11px] text-slate-600 leading-relaxed whitespace-pre-line">{appl.previousWork}</p>
+                      </div>
+                    )}
+
+                    {appl.issuedProviderId && (
+                      <div className="bg-green-50 p-2 rounded-lg border border-green-200 text-green-800 font-black text-[11px]">
+                        Official Provider ID: {appl.issuedProviderId}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="bg-slate-50 rounded-xl p-3 space-y-2">

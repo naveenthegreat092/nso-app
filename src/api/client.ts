@@ -1,4 +1,4 @@
-import { Product, Order, Booking, SpecialRequest } from '../types';
+import { Product, Order, Booking, SpecialRequest, UserProfile } from '../types';
 
 // Dynamic API Base URL:
 // In Web dev: Uses '/api' (proxied by Vite to port 5000)
@@ -13,11 +13,14 @@ const getApiBase = (): string => {
 
 const API_BASE = getApiBase();
 
+/** Default fetch options — always include session cookies */
+const defaultOpts: RequestInit = { credentials: 'include' };
+
 export const api = {
   // Health
   checkHealth: async () => {
     try {
-      const res = await fetch(`${API_BASE}/health`);
+      const res = await fetch(`${API_BASE}/health`, defaultOpts);
       return await res.json();
     } catch (e) {
       console.warn('Backend offline, using local fallback');
@@ -25,10 +28,113 @@ export const api = {
     }
   },
 
-  // Products
+  // ── Auth ────────────────────────────────────────────────────────────────────
+
+  /**
+   * POST /api/auth/send-otp
+   * Asks the server to send a 6-digit OTP to the given phone number.
+   */
+  sendOtp: async (phone: string): Promise<{ success: boolean; message: string } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/send-otp`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone })
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * POST /api/auth/verify-otp
+   * Verifies the OTP the user entered.  On success the server sets an
+   * httpOnly session cookie and returns the authenticated UserProfile.
+   */
+  verifyOtp: async (
+    phone: string,
+    otp: string
+  ): Promise<{ success: boolean; user?: UserProfile } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp })
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * GET /api/auth/me
+   * Returns the currently authenticated user based on the session cookie.
+   * Returns null if unauthenticated or backend is offline.
+   */
+  getMe: async (): Promise<UserProfile | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, defaultOpts);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * POST /api/auth/logout
+   * Clears the server-side session.
+   */
+  logout: async (): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/logout`, {
+        ...defaultOpts,
+        method: 'POST'
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * POST /api/users/register
+   * Submits a full customer profile (name, address, etc.) for the first time.
+   */
+  registerProfile: async (data: {
+    name: string;
+    phone: string;
+    houseNumber: string;
+    streetNumber: string;
+    landmark: string;
+    city: string;
+    pincode: string;
+  }): Promise<UserProfile | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/users/register`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  // ── Products ────────────────────────────────────────────────────────────────
+
   getProducts: async (): Promise<Product[] | null> => {
     try {
-      const res = await fetch(`${API_BASE}/products`);
+      const res = await fetch(`${API_BASE}/products`, defaultOpts);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -39,6 +145,7 @@ export const api = {
   createProduct: async (productData: Omit<Product, 'id'>): Promise<Product | null> => {
     try {
       const res = await fetch(`${API_BASE}/products`, {
+        ...defaultOpts,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(productData)
@@ -53,6 +160,7 @@ export const api = {
   updateProductStock: async (productId: string, stock: number) => {
     try {
       await fetch(`${API_BASE}/products/${productId}/stock`, {
+        ...defaultOpts,
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stock })
@@ -62,10 +170,11 @@ export const api = {
     }
   },
 
-  // Orders
+  // ── Orders ──────────────────────────────────────────────────────────────────
+
   getOrders: async (): Promise<Order[] | null> => {
     try {
-      const res = await fetch(`${API_BASE}/orders`);
+      const res = await fetch(`${API_BASE}/orders`, defaultOpts);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -73,9 +182,10 @@ export const api = {
     }
   },
 
-  createOrder: async (orderData: Partial<Order>): Promise<Order | null> => {
+  createOrder: async (orderData: any): Promise<Order | null> => {
     try {
       const res = await fetch(`${API_BASE}/orders`, {
+        ...defaultOpts,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderData)
@@ -89,7 +199,10 @@ export const api = {
 
   cancelOrder: async (orderId: string): Promise<boolean> => {
     try {
-      const res = await fetch(`${API_BASE}/orders/${orderId}/cancel`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/orders/${orderId}/cancel`, {
+        ...defaultOpts,
+        method: 'POST'
+      });
       return res.ok;
     } catch {
       return false;
@@ -99,6 +212,7 @@ export const api = {
   updateOrderStatus: async (orderId: string, status: string): Promise<boolean> => {
     try {
       const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
+        ...defaultOpts,
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
@@ -109,10 +223,11 @@ export const api = {
     }
   },
 
-  // Bookings
+  // ── Bookings ────────────────────────────────────────────────────────────────
+
   getBookings: async (): Promise<Booking[] | null> => {
     try {
-      const res = await fetch(`${API_BASE}/bookings`);
+      const res = await fetch(`${API_BASE}/bookings`, defaultOpts);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -123,10 +238,12 @@ export const api = {
   createBooking: async (bookingData: Partial<Booking>): Promise<Booking | null> => {
     try {
       const res = await fetch(`${API_BASE}/bookings`, {
+        ...defaultOpts,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bookingData)
       });
+      if (res.status === 409) return null; // slot conflict — handled by caller
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -136,7 +253,10 @@ export const api = {
 
   cancelBooking: async (bookingId: string): Promise<boolean> => {
     try {
-      const res = await fetch(`${API_BASE}/bookings/${bookingId}/cancel`, { method: 'POST' });
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/cancel`, {
+        ...defaultOpts,
+        method: 'POST'
+      });
       return res.ok;
     } catch {
       return false;
@@ -146,6 +266,7 @@ export const api = {
   updateBookingStatus: async (bookingId: string, status: string): Promise<boolean> => {
     try {
       const res = await fetch(`${API_BASE}/bookings/${bookingId}/status`, {
+        ...defaultOpts,
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status })
@@ -156,16 +277,74 @@ export const api = {
     }
   },
 
-  // Reset
+  // ── Reset ───────────────────────────────────────────────────────────────────
+
   resetDatabase: async () => {
     try {
-      await fetch(`${API_BASE}/reset`, { method: 'POST' });
+      await fetch(`${API_BASE}/reset`, { ...defaultOpts, method: 'POST' });
     } catch (e) {
       console.error(e);
     }
   },
 
-  // AI Assistant — tries backend first, then falls back to direct Gemini API
+  // ── Special Requests ────────────────────────────────────────────────────────
+
+  getSpecialRequests: async (): Promise<SpecialRequest[] | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/special-requests`, defaultOpts);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  // ── Users (admin) ───────────────────────────────────────────────────────────
+
+  getUsers: async (): Promise<UserProfile[] | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/users`, defaultOpts);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  approveUser: async (userId: string, approved: boolean): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/users/${userId}/approve`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved })
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  approveApplication: async (
+    appId: string,
+    approved: boolean,
+    extra?: Record<string, unknown>
+  ): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/applications/${appId}/approve`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved, ...extra })
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  // ── AI Assistant ─────────────────────────────────────────────────────────────
+
   askAI: async (prompt: string, apiKey?: string) => {
     // --- Try direct Gemini API call first if apiKey is provided ---
     if (apiKey && apiKey.trim().startsWith('AIza')) {
@@ -207,6 +386,7 @@ export const api = {
     // --- Try backend server ---
     try {
       const res = await fetch(`${API_BASE}/ai/ask`, {
+        ...defaultOpts,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, apiKey })

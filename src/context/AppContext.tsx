@@ -14,7 +14,6 @@ import {
   SavedAddress
 } from '../types';
 import {
-  INITIAL_USER,
   INITIAL_ADDRESSES,
   MOCK_PROVIDERS,
   MOCK_PRODUCTS,
@@ -26,6 +25,20 @@ import {
 } from '../data/mockData';
 import { Language, translations, SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { api } from '../api/client';
+
+/** Unauthenticated user shape — no hardcoded credentials or roles */
+const UNAUTHENTICATED_USER: UserProfile = {
+  id: '',
+  name: '',
+  email: '',
+  phone: '',
+  activeRole: 'customer',
+  authorizedRoles: ['customer'],
+  sellerStatus: 'none',
+  providerStatus: 'none',
+  adminVerified: false,
+  isLoggedIn: false
+};
 
 interface AppContextType {
   user: UserProfile;
@@ -79,14 +92,19 @@ interface AppContextType {
   selectAddress: (addr: SavedAddress) => void;
   submitReview: (rating: number, comment: string, tags: string[]) => void;
   switchRole: (role: Role) => boolean;
-  loginUser: (emailOrPhone: string, role?: Role) => void;
-  logoutUser: () => void;
+  /**
+   * loginUser() — called after the server has verified the OTP.
+   * It calls GET /api/auth/me to retrieve the real user and sets state.
+   * No role or phone argument accepted from the client.
+   */
+  loginUser: () => Promise<void>;
+  logoutUser: () => Promise<void>;
   addToCart: (product: Product, quantity?: number, variantId?: string) => void;
   removeFromCart: (productId: string) => void;
   updateCartQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
-  createOrder: (deliveryAddress: string, paymentMethod: string, couponCode?: string, tip?: number) => Order | null;
-  createBooking: (serviceId: string, date: string, timeSlot: string, mode: 'home_visit' | 'provider_location', address: string) => Booking | null;
+  createOrder: (deliveryAddress: string, paymentMethod: string, couponCode?: string, tip?: number) => Promise<Order | null>;
+  createBooking: (serviceId: string, date: string, timeSlot: string, mode: 'home_visit' | 'provider_location', address: string) => Promise<Booking | null>;
   updateOrderStatus: (orderId: string, status: Order['orderStatus']) => void;
   updateOrderPaymentStatus: (orderId: string, status: Order['paymentStatus']) => void;
   updateBookingStatus: (bookingId: string, status: Booking['status']) => void;
@@ -97,11 +115,35 @@ interface AppContextType {
   updateSpecialRequest: (requestId: string, status: SpecialRequest['status'], adminNotes?: string, adminQuotation?: number) => void;
   approveSeller: (sellerId: string, approved: boolean) => void;
   approveProviderCategory: (providerId: string, categoryId: string, approved: boolean) => void;
-  applyForSeller: (app: { storeName: string; businessType: string; gstin?: string; address: string }) => void;
-  applyForProvider: (app: { tradeCategory: string; experienceYears: number; hourlyRate: number }) => void;
+  applyForSeller: (app: { storeName: string; businessType: string; gstin?: string; address: string; productCategory?: string; storeLogo?: string }) => void;
+  applyForProvider: (app: {
+    tradeCategory: string;
+    experienceYears: number;
+    hourlyRate: number;
+    serviceArea?: string;
+    resumeText?: string;
+    previousWork?: string;
+    idProofType?: string;
+    idProofNumber?: string;
+    profilePhoto?: string;
+    idDocumentPhoto?: string;
+  }) => void;
   approveSellerApplication: (approved: boolean) => void;
   approveProviderApplication: (approved: boolean) => void;
   approveProduct: (productId: string, approved: boolean, reason?: string) => void;
+  registeredUsers: UserProfile[];
+  registerCustomerProfile: (data: {
+    name: string;
+    phone: string;
+    houseNumber: string;
+    streetNumber: string;
+    landmark: string;
+    city: string;
+    pincode: string;
+  }) => void;
+  approveUserRegistration: (userId: string, approved: boolean) => void;
+  approveProviderWithId: (appId: string, approved: boolean, providerData?: any) => void;
+  checkMyApprovalStatus: () => Promise<boolean>;
   addProduct: (productData: Omit<Product, 'id'>) => Product;
   deleteProduct: (productId: string) => void;
   clearDemoProducts: () => void;
@@ -115,97 +157,33 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem('nso_user');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return {
-          ...parsed,
-          isLoggedIn: true,
-          authorizedRoles: ['customer', 'seller', 'provider', 'admin'],
-          adminVerified: true,
-          sellerStatus: 'approved',
-          providerStatus: 'approved'
-        };
-      } catch {
-        return INITIAL_USER;
-      }
-    }
-    return INITIAL_USER;
-  });
+  // ── Auth: start unauthenticated — session restored by checkSession() on mount ──
+  const [user, setUser] = useState<UserProfile>(UNAUTHENTICATED_USER);
 
-  const [addresses, setAddresses] = useState<SavedAddress[]>(() => {
-    const saved = localStorage.getItem('nso_addresses');
-    return saved ? JSON.parse(saved) : INITIAL_ADDRESSES;
-  });
+  const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
 
-  const [selectedAddress, setSelectedAddress] = useState<SavedAddress>(() => {
-    return addresses.find((a) => a.isDefault) || addresses[0];
-  });
+  const [addresses, setAddresses] = useState<SavedAddress[]>(INITIAL_ADDRESSES);
 
-  const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('nso_products');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch {}
-    }
-    return MOCK_PRODUCTS;
-  });
+  const [selectedAddress, setSelectedAddress] = useState<SavedAddress>(
+    () => INITIAL_ADDRESSES.find((a) => a.isDefault) || INITIAL_ADDRESSES[0]
+  );
 
-  const [services, setServices] = useState<Service[]>(() => {
-    const saved = localStorage.getItem('nso_services');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch {}
-    }
-    return MOCK_SERVICES;
-  });
-
-  const [providers, setProviders] = useState<ProviderDetail[]>(() => {
-    const saved = localStorage.getItem('nso_providers');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch {}
-    }
-    return MOCK_PROVIDERS;
-  });
+  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
+  const [services, setServices] = useState<Service[]>(MOCK_SERVICES);
+  const [providers, setProviders] = useState<ProviderDetail[]>(MOCK_PROVIDERS);
 
   const [cart, setCart] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem('nso_cart');
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('nso_orders');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
-  });
+  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
+  const [bookings, setBookings] = useState<Booking[]>(INITIAL_BOOKINGS);
+  const [specialRequests, setSpecialRequests] = useState<SpecialRequest[]>(INITIAL_SPECIAL_REQUESTS);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
 
-  const [bookings, setBookings] = useState<Booking[]>(() => {
-    const saved = localStorage.getItem('nso_bookings');
-    return saved ? JSON.parse(saved) : INITIAL_BOOKINGS;
-  });
-
-  const [specialRequests, setSpecialRequests] = useState<SpecialRequest[]>(() => {
-    const saved = localStorage.getItem('nso_special_requests');
-    return saved ? JSON.parse(saved) : INITIAL_SPECIAL_REQUESTS;
-  });
-
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
-    const saved = localStorage.getItem('nso_audit_logs');
-    return saved ? JSON.parse(saved) : INITIAL_AUDIT_LOGS;
-  });
-
-  const [wishlist, setWishlist] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('nso_wishlist');
-    return saved ? JSON.parse(saved) : [MOCK_PRODUCTS[0]];
-  });
+  // Wishlist: start empty — no pre-populated items
+  const [wishlist, setWishlist] = useState<Product[]>([]);
 
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
   const [language, setLanguageState] = useState<Language>(() => {
@@ -234,20 +212,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
-  // Sync to localStorage
-  useEffect(() => { localStorage.setItem('nso_user', JSON.stringify(user)); }, [user]);
-  useEffect(() => { localStorage.setItem('nso_addresses', JSON.stringify(addresses)); }, [addresses]);
-  useEffect(() => { localStorage.setItem('nso_products', JSON.stringify(products)); }, [products]);
-  useEffect(() => { localStorage.setItem('nso_services', JSON.stringify(services)); }, [services]);
-  useEffect(() => { localStorage.setItem('nso_providers', JSON.stringify(providers)); }, [providers]);
+  // ── Persist cart to localStorage ──────────────────────────────────────────
   useEffect(() => { localStorage.setItem('nso_cart', JSON.stringify(cart)); }, [cart]);
-  useEffect(() => { localStorage.setItem('nso_orders', JSON.stringify(orders)); }, [orders]);
-  useEffect(() => { localStorage.setItem('nso_bookings', JSON.stringify(bookings)); }, [bookings]);
-  useEffect(() => { localStorage.setItem('nso_special_requests', JSON.stringify(specialRequests)); }, [specialRequests]);
-  useEffect(() => { localStorage.setItem('nso_audit_logs', JSON.stringify(auditLogs)); }, [auditLogs]);
-  useEffect(() => { localStorage.setItem('nso_wishlist', JSON.stringify(wishlist)); }, [wishlist]);
 
-  // Sync with Cloud Backend on mount
+  // ── Restore session from server on mount ─────────────────────────────────
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const serverUser = await api.getMe();
+        if (serverUser && serverUser.id) {
+          setUser({ ...serverUser, isLoggedIn: true });
+        }
+      } catch {
+        // Backend offline or no session — remain unauthenticated, don't crash
+      }
+    };
+    checkSession();
+  }, []);
+
+  // ── Sync cloud data on mount ──────────────────────────────────────────────
   useEffect(() => {
     const syncCloudData = async () => {
       const cloudProducts = await api.getProducts();
@@ -262,6 +245,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     syncCloudData();
   }, []);
 
+  // ── Sync registered users from API ───────────────────────────────────────
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const cloudUsers = await api.getUsers();
+      if (Array.isArray(cloudUsers) && cloudUsers.length > 0) {
+        setRegisteredUsers(cloudUsers);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   const showToast = (msg: string) => {
     setNotification(msg);
     setTimeout(() => {
@@ -273,7 +267,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const log: AuditLog = {
       id: `log_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      actor: user.name,
+      actor: user.name || 'System',
       role: targetRole,
       action,
       details
@@ -285,7 +279,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const prov =
       providers.find((p) => p.id === providerIdOrName || p.name.toLowerCase().includes(providerIdOrName.toLowerCase())) ||
       providers[0];
-    setSelectedProviderDetail(prov);
+    setSelectedProviderDetail(prov || null);
   };
 
   const closeProviderProfile = () => setSelectedProviderDetail(null);
@@ -331,7 +325,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Order cancelled. Full refund initiated.`);
   };
 
-  const cancelBooking = (bookingId: string, reason = 'Customer cancelled slot') => {
+  const cancelBooking = (bookingId: string, _reason = 'Customer cancelled slot') => {
     setBookings((prev) =>
       prev.map((b) => (b.id === bookingId ? { ...b, status: 'cancelled', paymentStatus: 'refunded' } : b))
     );
@@ -348,7 +342,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const submitReview = (rating: number, comment: string, tags: string[]) => {
+  const submitReview = (rating: number, comment: string, _tags: string[]) => {
     if (!reviewModalData) return;
 
     if (reviewModalData.type === 'service') {
@@ -364,6 +358,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const switchRole = (newRole: Role): boolean => {
+    // Only allow switching to roles the server has granted
+    if (!user.authorizedRoles.includes(newRole)) {
+      if (newRole === 'seller') showToast('Seller dashboard locked: Requires Admin verification.');
+      else if (newRole === 'provider') showToast('Provider hub locked: Category verification required.');
+      else if (newRole === 'admin') showToast('Admin access denied: Security authorization required.');
+      else showToast(`Role "${newRole}" not authorized for your account.`);
+      return false;
+    }
+
     if (newRole === 'seller' && user.sellerStatus !== 'approved') {
       showToast('Seller dashboard locked: Requires Admin verification.');
       return false;
@@ -383,41 +386,188 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  const loginUser = (emailOrPhone: string, role: Role = 'customer', userName?: string) => {
-    const isAdmin = emailOrPhone.toLowerCase().includes('admin') || role === 'admin';
-    const newUser: UserProfile = {
-      id: `usr_${Date.now()}`,
-      name: userName || (emailOrPhone.includes('@') ? emailOrPhone.split('@')[0] : 'Naveen U.'),
-      email: emailOrPhone.includes('@') ? emailOrPhone : 'user@nso.in',
-      phone: emailOrPhone.includes('@') ? '+91 98765 43210' : emailOrPhone,
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      activeRole: isAdmin ? 'admin' : 'customer',
-      authorizedRoles: isAdmin ? ['customer', 'admin'] : ['customer'],
-      sellerStatus: 'none',
-      providerStatus: 'none',
-      adminVerified: isAdmin,
-      address: selectedAddress.fullAddress,
-      isLoggedIn: true
-    };
-    setUser(newUser);
-    setIsAuthModalOpen(false);
-    addAuditLog('USER_LOGIN', `User signed in with ${emailOrPhone}`, newUser.activeRole);
-    showToast(`Welcome ${newUser.name}! Signed in successfully.`);
+  /**
+   * loginUser — called after a successful OTP verification.
+   * Fetches the real user object from the server (GET /api/auth/me).
+   * No phone or role argument accepted from the client.
+   */
+  const loginUser = async (): Promise<void> => {
+    try {
+      const serverUser = await api.getMe();
+      if (serverUser && serverUser.id) {
+        const authUser: UserProfile = { ...serverUser, isLoggedIn: true };
+        setUser(authUser);
+        setIsAuthModalOpen(false);
+        addAuditLog('USER_LOGIN', `User signed in: ${serverUser.phone || serverUser.email}`, serverUser.activeRole);
+        showToast(`Welcome ${serverUser.name || 'back'}!`);
+      } else {
+        showToast('Authentication error. Please try again.');
+      }
+    } catch {
+      showToast('Could not connect to server. Please check your connection and try again.');
+    }
   };
 
-  const logoutUser = () => {
-    setUser({
-      ...INITIAL_USER,
-      isLoggedIn: false
-    });
+  /**
+   * logoutUser — calls POST /api/auth/logout on the server then clears local state.
+   */
+  const logoutUser = async (): Promise<void> => {
+    addAuditLog('USER_LOGOUT', 'User logged out', user.activeRole);
+    await api.logout();
+    setUser(UNAUTHENTICATED_USER);
     setCart([]);
+    setWishlist([]);
     setActiveTab('home');
     setIsAuthModalOpen(true);
-    addAuditLog('USER_LOGOUT', 'User logged out', user.activeRole);
     showToast('Signed out successfully.');
   };
 
-  const applyForSeller = (appData: { storeName: string; businessType: string; gstin?: string; address: string }) => {
+  const registerCustomerProfile = (data: {
+    name: string;
+    phone: string;
+    houseNumber: string;
+    streetNumber: string;
+    landmark: string;
+    city: string;
+    pincode: string;
+  }) => {
+    const fullAddress = `${data.houseNumber}, ${data.streetNumber}, ${data.landmark}, ${data.city} - ${data.pincode}`;
+    const cleanPhone = data.phone.startsWith('+91') ? data.phone : `+91 ${data.phone.replace(/\D/g, '')}`;
+
+    // Role and approval status come from the server — build a minimal pending user
+    const newUser: UserProfile = {
+      id: `usr_${Date.now()}`,
+      name: data.name,
+      email: `${data.phone.replace(/\D/g, '')}@nso.in`,
+      phone: cleanPhone,
+      activeRole: 'customer',
+      authorizedRoles: ['customer'],
+      approvalStatus: 'pending',
+      houseNumber: data.houseNumber,
+      streetNumber: data.streetNumber,
+      landmark: data.landmark,
+      city: data.city,
+      pincode: data.pincode,
+      sellerStatus: 'none',
+      providerStatus: 'none',
+      adminVerified: false,
+      address: fullAddress,
+      isLoggedIn: true
+    };
+
+    const newAddr: SavedAddress = {
+      id: `addr_${Date.now()}`,
+      label: 'Home',
+      title: `${data.landmark || 'Home'} Residence`,
+      fullAddress,
+      landmark: data.landmark,
+      isDefault: true
+    };
+
+    setAddresses([newAddr]);
+    setSelectedAddress(newAddr);
+    setUser(newUser);
+
+    setRegisteredUsers((prev) => [newUser, ...prev.filter((u) => u.phone !== newUser.phone)]);
+
+    // Cloud sync — fire and forget
+    api.registerProfile(data).catch(() => {});
+
+    addAuditLog('USER_REGISTERED', `Customer ${newUser.name} (${newUser.phone}) submitted profile for Admin approval: ${fullAddress}`);
+    showToast('📋 Profile submitted! Awaiting Owner Approval.');
+  };
+
+  const approveUserRegistration = (userId: string, approved: boolean) => {
+    setRegisteredUsers((prev) =>
+      prev.map((u) =>
+        u.id === userId ? { ...u, approvalStatus: approved ? ('approved' as const) : ('rejected' as const) } : u
+      )
+    );
+
+    if (user.id === userId) {
+      setUser((prev) => ({ ...prev, approvalStatus: approved ? ('approved' as const) : ('rejected' as const) }));
+    }
+
+    api.approveUser(userId, approved).catch(() => {});
+
+    addAuditLog('USER_KYC_DECISION', `Owner ${approved ? 'APPROVED' : 'REJECTED'} customer registration ${userId}`);
+    showToast(`Customer account ${approved ? 'APPROVED & Unlocked!' : 'REJECTED'}`);
+  };
+
+  const approveProviderWithId = (appId: string, approved: boolean, providerData?: any) => {
+    const issuedId = `NSO-PROV-${Math.floor(100 + Math.random() * 900)}`;
+
+    if (providerData?.userId === user.id || (!providerData && user.providerStatus === 'pending')) {
+      setUser((prev) => ({
+        ...prev,
+        providerStatus: approved ? 'approved' : 'rejected',
+        authorizedRoles: approved && !prev.authorizedRoles.includes('provider')
+          ? [...prev.authorizedRoles, 'provider']
+          : prev.authorizedRoles,
+        providerApplication: prev.providerApplication
+          ? {
+              ...prev.providerApplication,
+              issuedProviderId: approved ? issuedId : undefined
+            }
+          : undefined
+      }));
+    }
+
+    if (approved) {
+      const applicantName = providerData?.applicantName || user.name || 'Master Provider';
+      const tradeCategory = providerData?.tradeCategory || user.providerApplication?.tradeCategory || 'Home Services';
+      const hourlyRate = providerData?.hourlyRate || user.providerApplication?.hourlyRate || 299;
+      const previousWork = providerData?.previousWork || user.providerApplication?.previousWork || 'Verified experienced specialist approved by NSO Admin.';
+
+      const newService: Service = {
+        id: `serv_${Date.now()}`,
+        title: `${tradeCategory} Specialist Service`,
+        category: tradeCategory as any,
+        price: hourlyRate,
+        unit: 'visit & inspection',
+        providerId: issuedId,
+        providerName: `${applicantName} (${issuedId})`,
+        providerRating: 5.0,
+        providerJobsCompleted: 0,
+        modes: ['home_visit'],
+        description: previousWork,
+        cancellationPolicy: 'Free cancellation up to 2 hours before scheduled slot.',
+        availableSlots: ['09:00 AM - 11:00 AM', '11:30 AM - 01:30 PM', '02:30 PM - 04:30 PM', '05:00 PM - 07:00 PM'],
+        approvedByAdmin: true,
+        approvalStatus: 'approved'
+      };
+
+      setServices((prev) => [newService, ...prev]);
+      addAuditLog('PROVIDER_APPROVED', `Admin approved Provider ${applicantName} with ID ${issuedId}. Live service listed.`);
+      showToast(`✅ Provider Approved! ID Issued: ${issuedId}`);
+    } else {
+      showToast('Provider application rejected.');
+    }
+
+    api.approveApplication(appId, approved, { issuedProviderId: issuedId }).catch(() => {});
+  };
+
+  const checkMyApprovalStatus = async (): Promise<boolean> => {
+    try {
+      const serverUser = await api.getMe();
+      if (serverUser && serverUser.approvalStatus === 'approved') {
+        setUser((prev) => ({ ...prev, approvalStatus: 'approved' }));
+        showToast('🎉 Your account has been approved by Owner! Welcome to NSO.');
+        return true;
+      }
+    } catch {}
+
+    // Fallback: check local list
+    const me = registeredUsers.find((u) => u.phone === user.phone || u.id === user.id);
+    if (me && me.approvalStatus === 'approved') {
+      setUser((prev) => ({ ...prev, approvalStatus: 'approved' }));
+      showToast('🎉 Your account has been approved by Owner! Welcome to NSO.');
+      return true;
+    }
+    return false;
+  };
+
+  const applyForSeller = (appData: { storeName: string; businessType: string; gstin?: string; address: string; productCategory?: string; storeLogo?: string }) => {
     setUser((prev) => ({
       ...prev,
       sellerStatus: 'pending',
@@ -430,7 +580,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Seller Application Submitted! Awaiting Admin verification.');
   };
 
-  const applyForProvider = (appData: { tradeCategory: string; experienceYears: number; hourlyRate: number }) => {
+  const applyForProvider = (appData: {
+    tradeCategory: string;
+    experienceYears: number;
+    hourlyRate: number;
+    serviceArea?: string;
+    resumeText?: string;
+    previousWork?: string;
+    idProofType?: string;
+    idProofNumber?: string;
+    profilePhoto?: string;
+    idDocumentPhoto?: string;
+  }) => {
     setUser((prev) => ({
       ...prev,
       providerStatus: 'pending',
@@ -439,8 +600,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submittedAt: new Date().toISOString().substring(0, 10)
       }
     }));
-    addAuditLog('PROVIDER_APPLICATION_SUBMITTED', `Specialist application for "${appData.tradeCategory}" submitted for Admin verification.`);
-    showToast('Provider Application Submitted! Awaiting Admin verification.');
+    addAuditLog('PROVIDER_APPLICATION_SUBMITTED', `Specialist application with resume & work submitted for "${appData.tradeCategory}".`);
+    showToast('Provider Application & Portfolio Submitted! Awaiting Admin verification.');
   };
 
   const approveSellerApplication = (approved: boolean) => {
@@ -516,14 +677,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const clearCart = () => setCart([]);
 
-  const createOrder = (
+  /**
+   * createOrder — POSTs to /api/orders with items + deliveryAddress + paymentMethod.
+   * The server calculates the actual total from DB prices.
+   * Falls back to client-side calculation if the server is offline.
+   */
+  const createOrder = async (
     deliveryAddress: string,
     paymentMethod: string,
     couponCode?: string,
     tip = 0
-  ): Order | null => {
+  ): Promise<Order | null> => {
     if (cart.length === 0) return null;
 
+    const payload = {
+      items: cart.map((item) => ({
+        productId: item.product.id,
+        quantity: item.quantity,
+        variantId: item.selectedVariant?.id
+      })),
+      deliveryAddress,
+      paymentMethod,
+      couponCode,
+      tipAmount: tip
+    };
+
+    const serverOrder = await api.createOrder(payload);
+
+    if (serverOrder) {
+      setOrders((prev) => [serverOrder, ...prev]);
+      clearCart();
+      addAuditLog('ORDER_CREATED', `Order ${serverOrder.orderNumber} confirmed for ₹${serverOrder.total}`);
+      showToast(`Order Confirmed! Ref: ${serverOrder.orderNumber}`);
+      return serverOrder;
+    }
+
+    // ── Offline fallback: client-side calculation ──────────────────────────
     const subtotal = cart.reduce(
       (acc, item) => acc + (item.product.price + (item.selectedVariant?.priceModifier || 0)) * item.quantity,
       0
@@ -533,14 +722,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const couponDiscount = couponCode === 'NSOFIRST' ? 150 : couponCode === 'FESTIVE50' ? Math.round(subtotal * 0.1) : 0;
     const total = Math.max(0, subtotal + sellerDeliveryCharge + platformFee + tip - couponDiscount);
 
-    const newOrder: Order = {
+    const fallbackOrder: Order = {
       id: `ord_${Date.now()}`,
       orderNumber: `NSO-ORD-${Math.floor(10000 + Math.random() * 90000)}`,
       customerId: user.id,
       customerName: user.name,
       items: cart.map((item) => ({
         productId: item.product.id,
-        title: `${item.product.title} ${item.selectedVariant ? `(${item.selectedVariant.name})` : ''}`,
+        title: `${item.product.title}${item.selectedVariant ? ` (${item.selectedVariant.name})` : ''}`,
         price: item.product.price + (item.selectedVariant?.priceModifier || 0),
         quantity: item.quantity,
         variant: item.selectedVariant?.name,
@@ -560,25 +749,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deliveryAddress
     };
 
-    setOrders((prev) => [newOrder, ...prev]);
-    api.createOrder(newOrder);
+    setOrders((prev) => [fallbackOrder, ...prev]);
     clearCart();
-    addAuditLog('ORDER_CREATED', `Order ${newOrder.orderNumber} confirmed for ₹${total}`);
-    showToast(`Order Confirmed! Ref: ${newOrder.orderNumber}`);
-    return newOrder;
+    addAuditLog('ORDER_CREATED_OFFLINE', `Order ${fallbackOrder.orderNumber} placed offline for ₹${total}`);
+    showToast(`Order Confirmed (offline)! Ref: ${fallbackOrder.orderNumber}`);
+    return fallbackOrder;
   };
 
-  const createBooking = (
+  /**
+   * createBooking — POSTs to /api/bookings.
+   * If server returns 409 (slot conflict), shows appropriate message.
+   * Falls back to local conflict check if server is offline.
+   */
+  const createBooking = async (
     serviceId: string,
     date: string,
     timeSlot: string,
     mode: 'home_visit' | 'provider_location',
     address: string
-  ): Booking | null => {
+  ): Promise<Booking | null> => {
     const service = services.find((s) => s.id === serviceId);
     if (!service) return null;
 
-    // Scheduling Rule: For personal attention, block overlapping bookings for the same provider
+    const payload = {
+      serviceId,
+      date,
+      timeSlot,
+      mode,
+      address,
+      customerId: user.id,
+      customerName: user.name
+    };
+
+    // Try server first
+    try {
+      const res = await fetch(`/api/bookings`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.status === 409) {
+        showToast('This time slot is no longer available. Please choose another.');
+        return null;
+      }
+
+      if (res.ok) {
+        const serverBooking: Booking = await res.json();
+        setBookings((prev) => [serverBooking, ...prev]);
+        addAuditLog('BOOKING_CREATED', `Booking ${serverBooking.bookingNumber} confirmed for ${service.title}`);
+        showToast(`Service Booked! Ref: ${serverBooking.bookingNumber}`);
+        return serverBooking;
+      }
+    } catch {
+      // Server offline — fall through to local fallback
+    }
+
+    // ── Offline fallback: local slot conflict check ─────────────────────────
     const hasConflict = bookings.some(
       (b) =>
         b.providerId === service.providerId &&
@@ -592,7 +820,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return null;
     }
 
-    const newBooking: Booking = {
+    const fallbackBooking: Booking = {
       id: `book_${Date.now()}`,
       bookingNumber: `NSO-BKG-${Math.floor(10000 + Math.random() * 90000)}`,
       serviceId: service.id,
@@ -613,11 +841,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       technicianEtaMinutes: 14
     };
 
-    setBookings((prev) => [newBooking, ...prev]);
-    api.createBooking(newBooking);
-    addAuditLog('BOOKING_CREATED', `Booking ${newBooking.bookingNumber} confirmed for ${service.title}`);
-    showToast(`Service Booked! Ref: ${newBooking.bookingNumber}`);
-    return newBooking;
+    setBookings((prev) => [fallbackBooking, ...prev]);
+    addAuditLog('BOOKING_CREATED_OFFLINE', `Booking ${fallbackBooking.bookingNumber} confirmed for ${service.title}`);
+    showToast(`Service Booked (offline)! Ref: ${fallbackBooking.bookingNumber}`);
+    return fallbackBooking;
   };
 
   const updateOrderStatus = (orderId: string, status: Order['orderStatus']) => {
@@ -778,8 +1005,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Product removed.');
   };
 
+  /**
+   * clearDemoProducts — admin-only. Removes products with known demo ID prefixes.
+   */
   const clearDemoProducts = () => {
-    setProducts((prev) => prev.filter((p) => !p.id.startsWith('prod_earbuds') && !p.id.startsWith('prod_smartwatch') && !p.id.startsWith('prod_oil') && !p.id.startsWith('prod_linen') && !p.id.startsWith('prod_coffee') && !p.id.startsWith('prod_bottle')));
+    if (user.activeRole !== 'admin') {
+      showToast('Admin access required.');
+      return;
+    }
+    setProducts((prev) =>
+      prev.filter(
+        (p) =>
+          !p.id.startsWith('prod_earbuds') &&
+          !p.id.startsWith('prod_smartwatch') &&
+          !p.id.startsWith('prod_oil') &&
+          !p.id.startsWith('prod_linen') &&
+          !p.id.startsWith('prod_coffee') &&
+          !p.id.startsWith('prod_bottle')
+      )
+    );
     showToast('Sample products cleared! Only seller products will show.');
   };
 
@@ -816,9 +1060,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Work photo added to portfolio!');
   };
 
+  /**
+   * resetAllDemoData — admin-only. Resets all local state to empty defaults.
+   */
   const resetAllDemoData = () => {
-    localStorage.clear();
-    setUser(INITIAL_USER);
+    if (user.activeRole !== 'admin') {
+      showToast('Admin access required.');
+      return;
+    }
+    localStorage.removeItem('nso_cart');
+    localStorage.removeItem('nso_language');
+    setUser(UNAUTHENTICATED_USER);
     setAddresses(INITIAL_ADDRESSES);
     setSelectedAddress(INITIAL_ADDRESSES[0]);
     setProducts(MOCK_PRODUCTS);
@@ -829,9 +1081,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBookings(INITIAL_BOOKINGS);
     setSpecialRequests(INITIAL_SPECIAL_REQUESTS);
     setAuditLogs(INITIAL_AUDIT_LOGS);
-    setWishlist([MOCK_PRODUCTS[0]]);
+    setWishlist([]);
     api.resetDatabase();
-    showToast('Demo environment reset to initial defaults.');
+    showToast('Environment reset to initial defaults.');
   };
 
   return (
@@ -909,6 +1161,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         approveSellerApplication,
         approveProviderApplication,
         approveProduct,
+        registeredUsers,
+        registerCustomerProfile,
+        approveUserRegistration,
+        approveProviderWithId,
+        checkMyApprovalStatus,
         addProduct,
         deleteProduct,
         clearDemoProducts,
