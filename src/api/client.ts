@@ -34,7 +34,7 @@ export const api = {
    * POST /api/auth/send-otp
    * Asks the server to send a 6-digit OTP to the given phone number.
    */
-  sendOtp: async (phone: string): Promise<{ success: boolean; message: string } | null> => {
+  sendOtp: async (phone: string): Promise<{ success: boolean; message: string; debugOtp?: string } | null> => {
     try {
       const res = await fetch(`${API_BASE}/auth/send-otp`, {
         ...defaultOpts,

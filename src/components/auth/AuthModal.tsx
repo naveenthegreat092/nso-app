@@ -80,7 +80,12 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
-    showToast('A verification code has been sent to your phone');
+    if (result.debugOtp) {
+      showToast(`Verification code: ${result.debugOtp}`);
+      setOtpDigits(result.debugOtp.split(''));
+    } else {
+      showToast('A verification code has been sent to your phone');
+    }
     setCountdown(30);
     setCanResend(false);
     setStep('otp');

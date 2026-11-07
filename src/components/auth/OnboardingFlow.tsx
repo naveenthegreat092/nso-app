@@ -76,8 +76,13 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
       return;
     }
 
-    showToast(`Verification code sent to +91 ${clean}`);
-    setOtp('');
+    if (res.debugOtp) {
+      showToast(`Verification code: ${res.debugOtp}`);
+      setOtp(res.debugOtp);
+    } else {
+      showToast(`Verification code sent to +91 ${clean}`);
+      setOtp('');
+    }
     setOtpError(null);
     setStep('otp');
   };
