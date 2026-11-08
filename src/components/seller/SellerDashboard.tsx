@@ -19,11 +19,12 @@ import {
   DollarSign,
   Camera,
   Upload,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Trash2
 } from 'lucide-react';
 
 export const SellerDashboard: React.FC = () => {
-  const { products, orders, updateOrderStatus, addProduct, updateProductStock, user, showToast } = useApp();
+  const { products, orders, updateOrderStatus, addProduct, deleteProduct, updateProductStock, user, showToast } = useApp();
   const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'earnings'>('orders');
 
   // New product form modal state
@@ -292,22 +293,33 @@ export const SellerDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Stock Stepper */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button
-                      onClick={() => updateProductStock(p.id, Math.max(0, p.stock - 1))}
-                      className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-bold"
-                    >
-                      -
-                    </button>
-                    <span className="text-[11px] font-black w-7 text-center">{p.stock}</span>
-                    <button
-                      onClick={() => updateProductStock(p.id, p.stock + 1)}
-                      className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-bold"
-                    >
-                      +
-                    </button>
-                  </div>
+                    {/* Stock Stepper & Delete */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => updateProductStock(p.id, Math.max(0, p.stock - 1))}
+                        className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-bold"
+                      >
+                        -
+                      </button>
+                      <span className="text-[11px] font-black w-7 text-center">{p.stock}</span>
+                      <button
+                        onClick={() => updateProductStock(p.id, p.stock + 1)}
+                        className="w-6 h-6 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-bold"
+                      >
+                        +
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Remove listing "${p.title}"?`)) {
+                            deleteProduct(p.id);
+                          }
+                        }}
+                        className="w-6 h-6 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors ml-1"
+                        title="Remove Listing"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                 </div>
               ))}
             </div>

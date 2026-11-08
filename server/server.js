@@ -709,9 +709,6 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   // OTP verified! Clean up OTP record
   db.prepare('DELETE FROM otp_verifications WHERE phone = ?').run(cleanPhone);
 
-  // Check if owner phone
-  const isOwner = ADMIN_PHONE && cleanPhone === ADMIN_PHONE;
-
   // Find or create user
   let user = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
   const nowIso = new Date().toISOString();

@@ -1056,6 +1056,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteProduct = (productId: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== productId));
+    api.deleteProduct(productId);
+    addAuditLog('PRODUCT_DELETED', `Listing ${productId} removed from catalog`);
     showToast('Product removed.');
   };
 

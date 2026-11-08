@@ -176,6 +176,17 @@ export const api = {
     }
   },
 
+  deleteProduct: async (productId: string) => {
+    try {
+      await fetch(`${API_BASE}/products/${productId}`, {
+        ...defaultOpts,
+        method: 'DELETE'
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  },
+
   // ── Orders ──────────────────────────────────────────────────────────────────
 
   getOrders: async (): Promise<Order[] | null> => {
