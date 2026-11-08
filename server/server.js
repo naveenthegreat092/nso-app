@@ -319,6 +319,8 @@ try { db.exec('ALTER TABLE bookings ADD COLUMN problem_description TEXT;'); } ca
 try { db.exec('ALTER TABLE bookings ADD COLUMN problem_photo TEXT;'); } catch (_) {}
 try { db.exec("ALTER TABLE bookings ADD COLUMN request_type TEXT DEFAULT 'repair';"); } catch (_) {}
 try { db.exec("ALTER TABLE bookings ADD COLUMN payment_method TEXT DEFAULT 'online';"); } catch (_) {}
+try { db.exec('ALTER TABLE provider_applications ADD COLUMN profile_photo TEXT;'); } catch (_) {}
+try { db.exec('ALTER TABLE provider_applications ADD COLUMN id_document_photo TEXT;'); } catch (_) {}
 
 // Seed default marketplace settings if not present
 const getSetting = (key, defaultVal) => {
@@ -824,6 +826,27 @@ app.post('/api/users/register', requireAuth, (req, res) => {
   res.json(formatUserResponse(updated));
 });
 
+// Get All Users / Customer Registrations (Owner only)
+app.get('/api/users', requireAdmin, (req, res) => {
+  const users = db.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
+  res.json(users.map(formatUserResponse));
+});
+
+// Approve / Reject User Registration (Owner only)
+app.patch('/api/users/:id/approve', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { approved } = req.body || {};
+  const status = approved ? 'approved' : 'rejected';
+  const nowIso = new Date().toISOString();
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  db.prepare('UPDATE users SET approval_status = ?, updated_at = ? WHERE id = ?').run(status, nowIso, id);
+  logAudit(req.session.userId, req.session.name, 'admin', 'USER_APPROVAL_DECISION', `User ${user.name} (${user.phone}) registration marked ${status}`, req.ip);
+  res.json({ success: true, status, id });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 9. SELLER & PROVIDER ONBOARDING (APPLICATIONS)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -938,6 +961,8 @@ app.get('/api/applications', requireAdmin, (req, res) => {
       previousWork: a.previous_work,
       idProofType: a.id_proof_type,
       idProofNumber: a.id_proof_number,
+      profilePhoto: a.profile_photo,
+      idDocumentPhoto: a.id_document_photo,
       status: a.status,
       issuedProviderId: a.issued_provider_id,
       adminNotes: a.admin_notes,

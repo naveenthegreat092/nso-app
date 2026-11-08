@@ -21,7 +21,8 @@ import {
   INITIAL_ORDERS,
   INITIAL_BOOKINGS,
   INITIAL_SPECIAL_REQUESTS,
-  INITIAL_AUDIT_LOGS
+  INITIAL_AUDIT_LOGS,
+  INITIAL_REGISTERED_USERS
 } from '../data/mockData';
 import { Language, translations, SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { api } from '../api/client';
@@ -171,7 +172,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ── Auth: start unauthenticated — session restored by checkSession() on mount ──
   const [user, setUser] = useState<UserProfile>(UNAUTHENTICATED_USER);
 
-  const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>([]);
+  const [registeredUsers, setRegisteredUsers] = useState<UserProfile[]>(INITIAL_REGISTERED_USERS);
 
   const [addresses, setAddresses] = useState<SavedAddress[]>(INITIAL_ADDRESSES);
 
