@@ -127,8 +127,8 @@ export const AppContent: React.FC = () => {
   return (
     <div className="w-full min-h-screen bg-[#f8fafc] flex flex-col antialiased">
       <MobileFrame>
-        {/* Real Flowchart Gate (Splash -> Profile Setup -> Owner Approval Gate) */}
-        {isOnboardingMode || (!user.isLoggedIn) || (user.approvalStatus === 'pending' && user.activeRole !== 'admin') ? (
+        {/* Real Flowchart Gate (Splash -> Login & Role Choice) */}
+        {isOnboardingMode || !user.isLoggedIn ? (
           <OnboardingFlow onComplete={() => setIsOnboardingMode(false)} />
         ) : (
           <>

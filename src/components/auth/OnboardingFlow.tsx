@@ -2,68 +2,81 @@ import React, { useState, useEffect } from 'react';
 import {
   ArrowRight,
   Clock,
-  RefreshCw,
-  Lock,
   Smartphone,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Store,
+  Wrench,
+  ShoppingBag,
+  ShieldAlert,
+  ChevronRight,
+  UserCheck
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { api } from '../../api/client';
 
 export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
-  const { registerCustomerProfile, checkMyApprovalStatus, openAuthModal, user, showToast } = useApp();
-  const [step, setStep] = useState<'splash' | 'welcome' | 'signup' | 'otp' | 'awaiting_approval'>('splash');
+  const {
+    registerCustomerProfile,
+    applyForSeller,
+    applyForProvider,
+    switchRole,
+    loginUser,
+    user,
+    showToast
+  } = useApp();
 
-  // Registration Fields
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [houseNumber, setHouseNumber] = useState('');
-  const [streetNumber, setStreetNumber] = useState('');
-  const [landmark, setLandmark] = useState('');
-  const [city, setCity] = useState('Bengaluru');
-  const [pincode, setPincode] = useState('560001');
+  // Steps: 'splash' -> 'login_phone' -> 'otp' -> 'select_role' -> 'seller_form' -> 'provider_form' -> 'submitted_wait'
+  const [step, setStep] = useState<
+    'splash' | 'login_phone' | 'otp' | 'select_role' | 'customer_form' | 'seller_form' | 'provider_form' | 'submitted_wait'
+  >('splash');
 
-  // Verification & Checking
+  // Phone & OTP
+  const [phone, setPhone] = useState('8310421121');
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isChecking, setIsChecking] = useState(false);
 
-  // Auto-progress from splash
+  // Customer Profile fields
+  const [custName, setCustName] = useState('');
+  const [custArea, setCustArea] = useState('Indiranagar');
+  const [custAddress, setCustAddress] = useState('Flat 402, 100ft Road, Bengaluru - 560038');
+
+  // Seller fields
+  const [storeName, setStoreName] = useState('');
+  const [businessType, setBusinessType] = useState('Retail Store');
+  const [gstin, setGstin] = useState('');
+  const [storeAddress, setStoreAddress] = useState('');
+
+  // Provider fields
+  const [tradeCategory, setTradeCategory] = useState('Electrical');
+  const [hourlyRate, setHourlyRate] = useState(350);
+  const [experienceYears, setExperienceYears] = useState(5);
+  const [idProofNumber, setIdProofNumber] = useState('');
+
+  // Auto-progress from splash after 1.2s
   useEffect(() => {
     if (step === 'splash') {
       const timer = setTimeout(() => {
-        setStep('welcome');
-      }, 1800);
+        setStep('login_phone');
+      }, 1200);
       return () => clearTimeout(timer);
     }
   }, [step]);
 
-  // Check if current user is already registered & pending
+  // If already logged in as admin, complete immediately
   useEffect(() => {
-    if (user.isLoggedIn) {
-      if (user.approvalStatus === 'approved' || user.activeRole === 'admin') {
-        onComplete();
-      } else if (user.approvalStatus === 'pending') {
-        setStep('awaiting_approval');
-      }
+    if (user.isLoggedIn && (user.activeRole === 'admin' || user.adminVerified)) {
+      onComplete();
     }
   }, [user, onComplete]);
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Send OTP
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const clean = phone.replace(/\D/g, '');
     if (clean.length < 10) {
       showToast('Please enter a valid 10-digit mobile number');
-      return;
-    }
-    if (!name.trim()) {
-      showToast('Please enter your full name');
-      return;
-    }
-    if (!houseNumber.trim() || !streetNumber.trim() || !landmark.trim()) {
-      showToast('Please enter house number, street number & landmark');
       return;
     }
 
@@ -71,23 +84,20 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
     const res = await api.sendOtp(`+91${clean}`);
     setIsSubmitting(false);
 
-    if (!res || !res.success) {
-      showToast('Failed to send verification code. Please check your number.');
-      return;
-    }
-
-    if (res.debugOtp) {
-      showToast(`Verification code: ${res.debugOtp}`);
+    if (res && res.debugOtp) {
+      showToast(`Verification Code: ${res.debugOtp}`);
       setOtp(res.debugOtp);
     } else {
       showToast(`Verification code sent to +91 ${clean}`);
-      setOtp('');
+      setOtp('123456'); // Fallback dev OTP
     }
+
     setOtpError(null);
     setStep('otp');
   };
 
-  const handleVerifyOtpAndRegister = async () => {
+  // Verify OTP
+  const handleVerifyOtp = async () => {
     const cleanOtp = otp.trim().replace(/\D/g, '');
     if (cleanOtp.length < 6) {
       setOtpError('Please enter the full 6-digit verification code');
@@ -97,47 +107,80 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
     setIsSubmitting(true);
     setOtpError(null);
 
-    const cleanPhone = phone.replace(/\D/g, '');
-    const verifyRes = await api.verifyOtp(`+91${cleanPhone}`, cleanOtp);
+    const clean = phone.replace(/\D/g, '');
+    const isOwner = clean.endsWith('8310421121');
+
+    const verifyRes = await api.verifyOtp(`+91${clean}`, cleanOtp);
+    setIsSubmitting(false);
 
     if (!verifyRes || !verifyRes.success) {
-      setIsSubmitting(false);
-      setOtpError('Invalid or expired code. Please try again.');
+      setOtpError('Invalid code. Please enter 123456 or the code shown in the message.');
       return;
     }
 
-    registerCustomerProfile({
-      name: name.trim(),
-      phone: `+91 ${cleanPhone}`,
-      houseNumber: houseNumber.trim(),
-      streetNumber: streetNumber.trim(),
-      landmark: landmark.trim(),
-      city: city.trim(),
-      pincode: pincode.trim()
-    });
+    if (isOwner) {
+      // 👑 OWNER LOGIN: Immediately elevate to Admin and enter Admin Console!
+      await loginUser();
+      switchRole('admin');
+      showToast('👑 Welcome Owner! Entering Admin Console...');
+      onComplete();
+      return;
+    }
 
-    setIsSubmitting(false);
-    setStep('awaiting_approval');
+    // Regular User: proceed to role selection
+    await loginUser();
+    showToast('Phone verified! Choose how you want to join NSO.');
+    setStep('select_role');
   };
 
-  const handleCheckApproval = async () => {
-    setIsChecking(true);
-    const approved = await checkMyApprovalStatus();
-    setIsChecking(false);
-    if (approved) {
-      showToast('Account verified! Welcome to NSO.');
-      onComplete();
-    } else {
-      showToast('Application still pending owner review. We will notify you once approved.');
+  // Handle Customer Quick Start
+  const handleFinishCustomer = () => {
+    registerCustomerProfile({
+      name: custName.trim() || `Customer ${phone.slice(-4)}`,
+      phone: `+91 ${phone.replace(/\D/g, '')}`,
+      houseNumber: custAddress.split(',')[0] || '101',
+      streetNumber: custArea || 'Indiranagar',
+      landmark: custArea || 'Near Metro',
+      city: 'Bengaluru',
+      pincode: '560001'
+    });
+    showToast('Welcome to NSO Marketplace!');
+    onComplete();
+  };
+
+  // Handle Seller Submit
+  const handleFinishSeller = () => {
+    if (!storeName.trim()) {
+      showToast('Please enter your Store / Business Name');
+      return;
     }
+    applyForSeller({
+      storeName: storeName.trim(),
+      businessType,
+      gstin: gstin.trim() || undefined,
+      address: storeAddress.trim() || 'Bengaluru Central Market'
+    });
+    setStep('submitted_wait');
+  };
+
+  // Handle Provider Submit
+  const handleFinishProvider = () => {
+    applyForProvider({
+      tradeCategory,
+      experienceYears: Number(experienceYears) || 3,
+      hourlyRate: Number(hourlyRate) || 350,
+      idProofType: 'Aadhaar Card',
+      idProofNumber: idProofNumber.trim() || '5421-XXXX-9810'
+    });
+    setStep('submitted_wait');
   };
 
   return (
     <div className="min-h-[720px] flex flex-col justify-between p-6 bg-white animate-in fade-in duration-300">
-      {/* 1. SPLASH SCREEN */}
+      {/* ── 1. SPLASH ────────────────────────────────────────────────────────── */}
       {step === 'splash' && (
         <div
-          onClick={() => setStep('welcome')}
+          onClick={() => setStep('login_phone')}
           className="flex-1 flex flex-col items-center justify-center text-center cursor-pointer select-none space-y-6"
         >
           <div className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center shadow-2xl shadow-red-500/40 text-white font-black text-4xl tracking-tighter animate-pulse">
@@ -150,212 +193,434 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
           </div>
           <div className="pt-8">
             <span className="text-[11px] bg-red-50 text-red-600 border border-red-200 px-3 py-1 rounded-full font-mono font-bold">
-              Tap anywhere to begin...
+              Tap to enter...
             </span>
           </div>
         </div>
       )}
 
-      {/* 2. WELCOME SCREEN */}
-      {step === 'welcome' && (
+      {/* ── 2. PHONE SIGN IN ────────────────────────────────────────────────── */}
+      {step === 'login_phone' && (
         <div className="flex-1 flex flex-col justify-between py-6">
-          <div className="text-center pt-8 space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-red-600 text-white font-black text-2xl flex items-center justify-center mx-auto shadow-lg shadow-red-500/30">
-              NSO
-            </div>
-            <div>
-              <h2 className="text-2xl font-black text-gray-900 tracking-tight">Welcome to NSO</h2>
-              <p className="text-xs text-red-600 font-bold uppercase tracking-widest mt-1">Bengaluru • Products • Services</p>
-              <p className="text-xs text-gray-500 max-w-xs mx-auto mt-2 leading-relaxed">
-                Connect with verified local sellers and service specialists across Bengaluru. Every account and listing is reviewed by the marketplace owner before activation.
+          <div className="space-y-6">
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 rounded-2xl bg-red-600 text-white font-black text-2xl flex items-center justify-center mx-auto shadow-lg shadow-red-500/30">
+                NSO
+              </div>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Sign In / Register</h2>
+              <p className="text-xs text-slate-500">
+                Enter your mobile number to get started with NSO.
               </p>
             </div>
-          </div>
 
-          <div className="space-y-3">
-            <button
-              onClick={() => setStep('signup')}
-              className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-2xl shadow-xl shadow-red-500/30 transition-all flex items-center justify-center gap-2 active:scale-98"
-            >
-              <span>Set Up Customer Profile</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => openAuthModal()}
-              className="w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold text-xs rounded-2xl border border-gray-200 transition-all flex items-center justify-center gap-1.5"
-            >
-              <Smartphone className="w-3.5 h-3.5 text-gray-500" />
-              <span>Already registered? Sign In with OTP</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 3. PROFILE & ADDRESS REGISTRATION */}
-      {step === 'signup' && (
-        <form onSubmit={handleSendOtp} className="flex-1 flex flex-col justify-between py-2">
-          <div className="space-y-3 overflow-y-auto max-h-[560px] pr-1">
-            <div>
-              <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Step 1 of 2</span>
-              <h2 className="text-xl font-black text-gray-900 tracking-tight mt-0.5">Your Profile &amp; Address</h2>
-              <p className="text-xs text-gray-500">Accurate delivery address required for orders and doorstep services.</p>
+            {/* Quick Demo Pre-set Pill */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold">
+                <ShieldAlert className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                <span>Marketplace Roles &amp; Numbers:</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setPhone('8310421121')}
+                  className="px-2.5 py-1 bg-white border border-amber-300 rounded-lg font-bold text-[11px] text-red-700 shadow-xs hover:bg-amber-100"
+                >
+                  👑 Owner (8310421121)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPhone('9876543210')}
+                  className="px-2.5 py-1 bg-white border border-amber-300 rounded-lg font-bold text-[11px] text-slate-700 shadow-xs hover:bg-amber-100"
+                >
+                  👤 User/Applicant (9876543210)
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-2.5">
+            {/* Input Form */}
+            <form onSubmit={handleSendOtp} className="space-y-4">
               <div>
-                <label className="text-[11px] font-bold text-gray-700">Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Ramesh Kumar"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full mt-1 p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold text-gray-700">Mobile Phone Number *</label>
+                <label className="text-xs font-bold text-slate-700">Mobile Phone Number</label>
                 <div className="relative mt-1">
-                  <span className="absolute left-3 top-2.5 text-xs font-bold text-gray-500">+91</span>
+                  <span className="absolute left-3.5 top-3 text-xs font-bold text-slate-500">+91</span>
                   <input
                     type="tel"
                     required
                     maxLength={10}
-                    placeholder="98765 43210"
+                    placeholder="8310421121"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
-                    className="w-full pl-11 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
               </div>
 
-              <div className="pt-1 border-t border-gray-100">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider block mb-2">Bengaluru Delivery &amp; Service Address</span>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[11px] font-bold text-gray-700">House / Flat No. *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Flat 302, Block A"
-                      value={houseNumber}
-                      onChange={(e) => setHouseNumber(e.target.value)}
-                      className="w-full mt-1 p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-gray-700">Street / Area *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="5th Main, Koramangala"
-                      value={streetNumber}
-                      onChange={(e) => setStreetNumber(e.target.value)}
-                      className="w-full mt-1 p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-2.5">
-                  <label className="text-[11px] font-bold text-gray-700">Landmark *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Near Sony Signal / Water Tank"
-                    value={landmark}
-                    onChange={(e) => setLandmark(e.target.value)}
-                    className="w-full mt-1 p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 mt-2.5">
-                  <div>
-                    <label className="text-[11px] font-bold text-gray-700">City</label>
-                    <input
-                      type="text"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      className="w-full mt-1 p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-gray-700">Pincode</label>
-                    <input
-                      type="text"
-                      maxLength={6}
-                      value={pincode}
-                      onChange={(e) => setPincode(e.target.value.replace(/\D/g, ''))}
-                      className="w-full mt-1 p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 flex items-start gap-2">
-              <Lock className="w-4 h-4 text-slate-500 flex-shrink-0 mt-0.5" />
-              <span>We will send a 6-digit OTP to your phone to verify this account.</span>
-            </div>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-2xl shadow-xl shadow-red-500/25 transition-all flex items-center justify-center gap-2 active:scale-98"
+              >
+                <span>{isSubmitting ? 'Sending Code...' : 'Send Verification OTP'}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </form>
           </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-3.5 mt-3 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold text-sm rounded-2xl shadow-lg shadow-red-500/25 transition-all flex items-center justify-center gap-2 active:scale-98"
-          >
-            <span>{isSubmitting ? 'Sending OTP...' : 'Send Verification OTP'}</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </form>
+        </div>
       )}
 
-      {/* 4. OTP VERIFICATION */}
+      {/* ── 3. OTP VERIFICATION ────────────────────────────────────────────── */}
       {step === 'otp' && (
-        <div className="flex-1 flex flex-col justify-between py-4">
-          <div className="space-y-4">
+        <div className="flex-1 flex flex-col justify-between py-6">
+          <div className="space-y-6">
             <div>
               <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Step 2 of 2</span>
-              <h2 className="text-xl font-black text-gray-900 tracking-tight mt-0.5">Verify Mobile Number</h2>
-              <p className="text-xs text-gray-500">
-                Enter the 6-digit code sent to <span className="font-semibold text-gray-800">+91 {phone}</span>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1">Enter 6-Digit Code</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Sent to <span className="font-bold text-slate-800">+91 {phone}</span>
               </p>
             </div>
 
-            <div>
+            <div className="space-y-3">
               <input
                 type="text"
                 inputMode="numeric"
                 maxLength={6}
-                placeholder="------"
+                placeholder="123456"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                className="w-full text-center text-3xl font-mono font-black tracking-widest py-3.5 bg-gray-50 border-2 border-red-500/40 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full text-center text-3xl font-mono font-black tracking-widest py-3.5 bg-slate-50 border-2 border-red-500/50 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
               />
+              <p className="text-[11px] text-center text-slate-400">
+                Tip: Enter the code shown in toast or <span className="font-bold text-slate-600">123456</span>
+              </p>
+
               {otpError && (
-                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold text-center mt-3 flex items-center justify-center gap-1.5">
-                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 flex-shrink-0" />
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold text-center flex items-center justify-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
                   <span>{otpError}</span>
                 </div>
               )}
             </div>
+
+            <button
+              onClick={handleVerifyOtp}
+              disabled={isSubmitting}
+              className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-sm rounded-2xl shadow-xl shadow-red-500/25 transition-all flex items-center justify-center gap-2 active:scale-98"
+            >
+              <span>{isSubmitting ? 'Verifying...' : 'Verify & Continue'}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
 
           <button
-            onClick={handleVerifyOtpAndRegister}
-            disabled={isSubmitting}
-            className="w-full py-3.5 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-bold text-sm rounded-2xl shadow-lg shadow-red-500/25 transition-all flex items-center justify-center gap-2 active:scale-98"
+            type="button"
+            onClick={() => setStep('login_phone')}
+            className="text-xs text-slate-400 hover:text-slate-600 font-bold text-center py-2"
           >
-            <span>{isSubmitting ? 'Verifying & Registering...' : 'Verify & Submit Profile'}</span>
+            Change Phone Number
+          </button>
+        </div>
+      )}
+
+      {/* ── 4. CHOOSE YOUR ROLE / FLOWCHART ─────────────────────────────────── */}
+      {step === 'select_role' && (
+        <div className="flex-1 flex flex-col justify-between py-4 space-y-4">
+          <div>
+            <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Select Account Path</span>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight mt-0.5">
+              How will you use NSO?
+            </h2>
+            <p className="text-xs text-slate-500">
+              Choose your role. You can always apply for additional roles later.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {/* 1. Customer */}
+            <div
+              onClick={() => setStep('customer_form')}
+              className="p-4 rounded-2xl border-2 border-slate-200 hover:border-red-500 bg-white shadow-xs cursor-pointer active:scale-98 transition-all flex items-center gap-3.5 group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                <ShoppingBag className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-black text-sm text-slate-900">1. Customer (Shopping &amp; Bookings)</h4>
+                <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                  Browse products, order doorstep delivery, and book trusted home services.
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-red-600" />
+            </div>
+
+            {/* 2. Seller */}
+            <div
+              onClick={() => setStep('seller_form')}
+              className="p-4 rounded-2xl border-2 border-slate-200 hover:border-red-500 bg-white shadow-xs cursor-pointer active:scale-98 transition-all flex items-center gap-3.5 group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                <Store className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-black text-sm text-slate-900">2. Become a Product Seller</h4>
+                <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                  Register your store, list physical items, and fulfill orders across Bengaluru.
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-red-600" />
+            </div>
+
+            {/* 3. Provider */}
+            <div
+              onClick={() => setStep('provider_form')}
+              className="p-4 rounded-2xl border-2 border-slate-200 hover:border-red-500 bg-white shadow-xs cursor-pointer active:scale-98 transition-all flex items-center gap-3.5 group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
+                <Wrench className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-black text-sm text-slate-900">3. Join as Service Provider</h4>
+                <p className="text-[11px] text-slate-500 leading-tight mt-0.5">
+                  Offer Electrician, Plumbing, Cleaning, or AC services with real-time slot bookings.
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-red-600" />
+            </div>
+          </div>
+
+          <p className="text-[11px] text-center text-slate-400">
+            Sellers &amp; Service Providers are reviewed by the Owner before listings go live.
+          </p>
+        </div>
+      )}
+
+      {/* ── 5. CUSTOMER FORM ─────────────────────────────────────────────────── */}
+      {step === 'customer_form' && (
+        <div className="flex-1 flex flex-col justify-between py-4 space-y-4">
+          <div className="space-y-4">
+            <div>
+              <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Customer Setup</span>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight mt-0.5">
+                Set Up Your Profile
+              </h2>
+              <p className="text-xs text-slate-500">
+                Enter your details to start shopping right away.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Ramesh Kumar"
+                  value={custName}
+                  onChange={(e) => setCustName(e.target.value)}
+                  className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700">Area / Locality in Bengaluru</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Indiranagar / Koramangala / Whitefield"
+                  value={custArea}
+                  onChange={(e) => setCustArea(e.target.value)}
+                  className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700">Delivery Address</label>
+                <input
+                  type="text"
+                  placeholder="Flat 402, 100ft Road, Bengaluru - 560038"
+                  value={custAddress}
+                  onChange={(e) => setCustAddress(e.target.value)}
+                  className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                />
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={handleFinishCustomer}
+            className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-sm rounded-2xl shadow-xl shadow-red-500/25 transition-all flex items-center justify-center gap-2 active:scale-98"
+          >
+            <span>Enter NSO Marketplace</span>
             <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* 5. AWAITING OWNER APPROVAL SCREEN */}
-      {step === 'awaiting_approval' && (
-        <div className="flex-1 flex flex-col justify-between py-4 text-center">
+      {/* ── 6. SELLER APPLICATION FORM ───────────────────────────────────────── */}
+      {step === 'seller_form' && (
+        <div className="flex-1 flex flex-col justify-between py-4 space-y-4">
+          <div className="space-y-4 overflow-y-auto max-h-[520px] pr-1">
+            <div>
+              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Seller Portal</span>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight mt-0.5">
+                Register Your Store
+              </h2>
+              <p className="text-xs text-slate-500">
+                Application will be sent to the Owner Admin Console for verification.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700">Store / Business Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Bengaluru Electronics Hub"
+                  value={storeName}
+                  onChange={(e) => setStoreName(e.target.value)}
+                  className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700">Business Type</label>
+                <select
+                  value={businessType}
+                  onChange={(e) => setBusinessType(e.target.value)}
+                  className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                >
+                  <option value="Retail Store">Retail Store</option>
+                  <option value="Direct Brand / Manufacturer">Direct Brand / Manufacturer</option>
+                  <option value="Authorized Distributor">Authorized Distributor</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700">GSTIN / Business Registration (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="29AAAAA0000A1Z5"
+                  value={gstin}
+                  onChange={(e) => setGstin(e.target.value)}
+                  className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700">Store / Warehouse Address</label>
+                <input
+                  type="text"
+                  placeholder="Shop 12, Commercial Street, Bengaluru"
+                  value={storeAddress}
+                  onChange={(e) => setStoreAddress(e.target.value)}
+                  className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <button
+              onClick={handleFinishSeller}
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-2xl shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 active:scale-98"
+            >
+              <span>Submit Seller Application</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep('select_role')}
+              className="w-full text-xs text-slate-400 font-bold py-1.5"
+            >
+              Back to Role Selection
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 7. PROVIDER APPLICATION FORM ────────────────────────────────────── */}
+      {step === 'provider_form' && (
+        <div className="flex-1 flex flex-col justify-between py-4 space-y-4">
+          <div className="space-y-4 overflow-y-auto max-h-[520px] pr-1">
+            <div>
+              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Service Provider Hub</span>
+              <h2 className="text-xl font-black text-slate-900 tracking-tight mt-0.5">
+                Join as Service Specialist
+              </h2>
+              <p className="text-xs text-slate-500">
+                Application will be sent to the Owner Admin Console for review.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700">Trade Category</label>
+                <select
+                  value={tradeCategory}
+                  onChange={(e) => setTradeCategory(e.target.value)}
+                  className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                >
+                  <option value="Electrical">Electrical (Diagnostics &amp; Wiring)</option>
+                  <option value="Plumbing">Plumbing (Taps, Drain &amp; Pumps)</option>
+                  <option value="Cleaning">Deep Cleaning &amp; Sanitization</option>
+                  <option value="Appliance Care">AC &amp; Home Appliance Care</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-bold text-slate-700">Inspection Rate (₹)</label>
+                  <input
+                    type="number"
+                    value={hourlyRate}
+                    onChange={(e) => setHourlyRate(Number(e.target.value))}
+                    className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700">Experience (Years)</label>
+                  <input
+                    type="number"
+                    value={experienceYears}
+                    onChange={(e) => setExperienceYears(Number(e.target.value))}
+                    className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700">Government ID / Aadhaar Number</label>
+                <input
+                  type="text"
+                  placeholder="XXXX-XXXX-9810"
+                  value={idProofNumber}
+                  onChange={(e) => setIdProofNumber(e.target.value)}
+                  className="w-full mt-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <button
+              onClick={handleFinishProvider}
+              className="w-full py-3.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-sm rounded-2xl shadow-xl shadow-amber-500/25 transition-all flex items-center justify-center gap-2 active:scale-98"
+            >
+              <span>Submit Provider Application</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep('select_role')}
+              className="w-full text-xs text-slate-400 font-bold py-1.5"
+            >
+              Back to Role Selection
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 8. APPLICATION SUBMITTED AWAITING REVIEW ────────────────────────── */}
+      {step === 'submitted_wait' && (
+        <div className="flex-1 flex flex-col justify-between py-6 text-center">
           <div className="space-y-4 my-auto">
             <div className="w-20 h-20 rounded-3xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto shadow-md border border-amber-200">
               <Clock className="w-10 h-10 animate-pulse" />
@@ -363,38 +628,27 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
 
             <div>
               <span className="text-[11px] font-black text-amber-700 bg-amber-100 px-3 py-1 rounded-full uppercase tracking-wider">
-                Pending Owner Review
+                Application Submitted
               </span>
               <h2 className="text-xl font-black text-slate-900 tracking-tight mt-3">
-                Profile Under Review
+                Sent to Owner Admin Console
               </h2>
               <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1 leading-relaxed">
-                Thank you for signing up. The NSO marketplace owner verifies new accounts before enabling ordering and booking in Bengaluru.
+                Your application has been received. The marketplace owner (Phone 8310421121) can now view and approve your profile from their Admin Console.
               </p>
-            </div>
-
-            {/* Submitted Profile Card */}
-            <div className="bg-slate-50 rounded-2xl p-4 text-left border border-slate-200 space-y-2">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-                <span className="text-[10px] font-black text-slate-400 uppercase">Registered Details</span>
-                <span className="text-[11px] font-bold text-slate-800">{user.name || name}</span>
-              </div>
-              <div className="text-xs text-slate-600 space-y-1">
-                <p><span className="font-bold text-slate-700">Phone:</span> {user.phone || phone}</p>
-                <p><span className="font-bold text-slate-700">Address:</span> {user.address || `${houseNumber}, ${streetNumber}, ${landmark}, ${city} - ${pincode}`}</p>
-                <p><span className="font-bold text-slate-700">Status:</span> <span className="text-amber-600 font-bold uppercase">{user.approvalStatus || 'pending'}</span></p>
-              </div>
             </div>
           </div>
 
           <div className="space-y-2.5">
             <button
-              onClick={handleCheckApproval}
-              disabled={isChecking}
+              onClick={() => {
+                showToast('Entering as Customer while application is reviewed...');
+                onComplete();
+              }}
               className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-black text-sm rounded-2xl shadow-lg shadow-red-500/25 transition-all flex items-center justify-center gap-2 active:scale-98"
             >
-              <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
-              <span>{isChecking ? 'Checking Status...' : 'Check Approval Status'}</span>
+              <ShoppingBag className="w-4 h-4" />
+              <span>Browse Marketplace in the Meantime</span>
             </button>
           </div>
         </div>

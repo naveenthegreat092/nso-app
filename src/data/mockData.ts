@@ -16,7 +16,7 @@ export const INITIAL_USER: UserProfile = {
   email: 'owner@nso.in',
   phone: '+91 8310421121',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  activeRole: 'customer',
+  activeRole: 'admin',
   authorizedRoles: ['customer', 'seller', 'provider', 'admin'],
   approvalStatus: 'approved',
   sellerStatus: 'approved',
