@@ -60,58 +60,6 @@ interface Application {
   submittedAt: string;
 }
 
-const SEED_APPLICATIONS: Application[] = [
-  {
-    id: 'app_sel_seed_1',
-    type: 'seller',
-    status: 'pending',
-    applicantName: 'Vikram Mehta',
-    applicantPhone: '+91 9845098765',
-    storeName: 'Bengaluru Electronics & Gadgets Hub',
-    businessType: 'Retail & Wholesale Electronics',
-    gstin: '29ABCDE1234F1Z5',
-    address: '#88, Brigade Road, Ashok Nagar, Bengaluru - 560025',
-    productCategory: 'Electronics & Home Appliances',
-    submittedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
-  },
-  {
-    id: 'app_prv_seed_1',
-    type: 'provider',
-    status: 'pending',
-    applicantName: 'Rajesh Sharma',
-    applicantPhone: '+91 9900112244',
-    tradeCategory: 'Electrical',
-    experienceYears: 7,
-    hourlyRate: 350,
-    serviceArea: 'Indiranagar, Domlur, Koramangala',
-    resumeText: 'Certified Wireman with 7+ years of experience in residential wiring, inverter installation, and DB box servicing.',
-    previousWork: 'Specialist in full house wiring, 3-phase load calculation, and emergency short circuit repair.',
-    idProofType: 'Aadhaar Card',
-    idProofNumber: 'XXXX-XXXX-4589',
-    profilePhoto: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
-    idDocumentPhoto: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=80',
-    submittedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
-  },
-  {
-    id: 'app_prv_seed_2',
-    type: 'provider',
-    status: 'pending',
-    applicantName: 'Mohammed Farooq',
-    applicantPhone: '+91 9886001122',
-    tradeCategory: 'Plumbing',
-    experienceYears: 5,
-    hourlyRate: 299,
-    serviceArea: 'Whitefield, Marathahalli, Bellandur',
-    resumeText: 'Expert plumber handling leak detection, pressure pump installation, sanitary fittings, and water heater connection.',
-    previousWork: 'Repaired 400+ residential pipelines across East Bengaluru.',
-    idProofType: 'Voter ID',
-    idProofNumber: 'KA-04-XXXX912',
-    profilePhoto: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-    idDocumentPhoto: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=80',
-    submittedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
-  }
-];
-
 export const AdminDashboard: React.FC = () => {
   const {
     specialRequests,
@@ -134,8 +82,8 @@ export const AdminDashboard: React.FC = () => {
     user
   } = useApp();
 
-  // Live applications from backend
-  const [applications, setApplications] = useState<Application[]>(SEED_APPLICATIONS);
+  // Live applications from backend only (no fake demo applications)
+  const [applications, setApplications] = useState<Application[]>([]);
   const [appLoading, setAppLoading] = useState(false);
   const [commissionStats, setCommissionStats] = useState({ productsRate: 10, servicesRate: 15, totalEarned: 0, transactions: [] as any[] });
 
