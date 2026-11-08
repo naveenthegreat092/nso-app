@@ -58,7 +58,6 @@ export const AppContent: React.FC = () => {
     addresses,
     selectedAddress,
     selectAddress,
-    notification,
     isWishlistOpen,
     openWishlist,
     closeWishlist
@@ -323,14 +322,6 @@ export const AppContent: React.FC = () => {
         />
       )}
 
-      {/* ── Toast Notification Banner ── */}
-      {notification && (
-        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-[200] pointer-events-none">
-          <div className="bg-gray-900/95 text-white text-xs font-semibold px-4 py-2.5 rounded-2xl shadow-2xl backdrop-blur-sm max-w-[260px] text-center leading-snug animate-fade-in-up">
-            {notification}
-          </div>
-        </div>
-      )}
       </MobileFrame>
     </div>
   );

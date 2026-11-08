@@ -39,6 +39,28 @@ export const OrdersScreen: React.FC = () => {
   const [subTab, setSubTab] = useState<'products' | 'services'>('products');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
+  const [confirmCancelType, setConfirmCancelType] = useState<'order' | 'booking'>('order');
+
+  const handleCancelOrder = (id: string) => {
+    setConfirmCancelType('order');
+    setConfirmCancelId(id);
+  };
+
+  const handleCancelBooking = (id: string) => {
+    setConfirmCancelType('booking');
+    setConfirmCancelId(id);
+  };
+
+  const handleConfirmCancel = () => {
+    if (!confirmCancelId) return;
+    if (confirmCancelType === 'order') {
+      cancelOrder(confirmCancelId, 'Cancelled by customer');
+    } else {
+      cancelBooking(confirmCancelId, 'Cancelled by customer');
+    }
+    setConfirmCancelId(null);
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
@@ -65,6 +87,42 @@ export const OrdersScreen: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-8">
+      {/* Inline Cancel Confirmation Dialog */}
+      {confirmCancelId && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in"
+          onClick={() => setConfirmCancelId(null)}
+        >
+          <div
+            className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4 animate-bounce-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-14 h-14 rounded-2xl bg-rose-100 flex items-center justify-center mx-auto">
+              <Ban className="w-7 h-7 text-rose-600" />
+            </div>
+            <div className="text-center">
+              <h3 className="font-black text-base text-slate-900">Cancel {confirmCancelType === 'order' ? 'Order' : 'Booking'}?</h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                A full refund will be instantly issued to your original payment source.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setConfirmCancelId(null)}
+                className="py-3 rounded-2xl border-2 border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 transition-all"
+              >
+                Keep It
+              </button>
+              <button
+                onClick={handleConfirmCancel}
+                className="py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-sm transition-all active:scale-98"
+              >
+                Yes, Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="px-4 pt-3">
         <h2 className="text-lg font-black text-gray-900 tracking-tight">Orders & Bookings</h2>
@@ -221,9 +279,7 @@ export const OrdersScreen: React.FC = () => {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (window.confirm(`Are you sure you want to cancel order ${order.orderNumber}? Instant refund will be issued.`)) {
-                                    cancelOrder(order.id, 'Cancelled by customer');
-                                  }
+                                  handleCancelOrder(order.id);
                                 }}
                                 className="flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg active:scale-95 transition-all"
                                 title="Cancel order with full refund"
@@ -378,10 +434,8 @@ export const OrdersScreen: React.FC = () => {
                       {booking.status === 'confirmed' && (
                         <button
                           onClick={() => {
-                            if (window.confirm(`Are you sure you want to cancel booking for ${booking.serviceTitle}? Instant refund will be credited.`)) {
-                              cancelBooking(booking.id, 'Cancelled by customer');
-                            }
-                          }}
+                              handleCancelBooking(booking.id);
+                            }}
                           className="flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg active:scale-95 transition-all"
                           title="Cancel booking"
                         >

@@ -21,13 +21,14 @@ export const ServiceBookingModal: React.FC<{
   onClose: () => void;
 }> = ({ service, onClose }) => {
   const { createBooking, bookings, user, openProviderProfile, openChat } = useApp();
-  const [selectedDate, setSelectedDate] = useState('2026-11-04');
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().substring(0, 10));
   const [selectedSlot, setSelectedSlot] = useState(service.availableSlots[0]);
   const [serviceMode, setServiceMode] = useState<'home_visit' | 'provider_location'>('home_visit');
   const [address, setAddress] = useState(
     user.address || 'Flat 402, Orbit Towers, Indiranagar, Bengaluru - 560038'
   );
   const [isConfirmed, setIsConfirmed] = useState<any>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Check if slot has a personal conflict
   const isConflict = bookings.some(
@@ -38,10 +39,15 @@ export const ServiceBookingModal: React.FC<{
       b.status !== 'cancelled'
   );
 
-  const handleBook = () => {
-    const booking = createBooking(service.id, selectedDate, selectedSlot, serviceMode, address);
-    if (booking) {
-      setIsConfirmed(booking);
+  const handleBook = async () => {
+    setIsSubmitting(true);
+    try {
+      const booking = await createBooking(service.id, selectedDate, selectedSlot, serviceMode, address);
+      if (booking) {
+        setIsConfirmed(booking);
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -290,17 +296,17 @@ export const ServiceBookingModal: React.FC<{
 
         {/* Footer with Explicit Approval CTA */}
         {!isConfirmed && (
-          <div className="p-4 border-t border-slate-150 bg-white">
+          <div className="p-4 border-t border-slate-100 bg-white">
             <button
-              disabled={isConflict}
+              disabled={isConflict || isSubmitting}
               onClick={handleBook}
-              className="w-full py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-black text-sm rounded-2xl shadow-xl shadow-red-500/25 transition-transform active:scale-98 flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-black text-sm rounded-2xl shadow-xl shadow-red-500/25 transition-transform active:scale-[0.98] flex items-center justify-center gap-2"
             >
               <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
-              <span>Confirm & Book Slot for ₹{service.price}</span>
+              <span>{isSubmitting ? 'Reserving Slot…' : `Confirm & Book Slot for ₹${service.price}`}</span>
             </button>
             <p className="text-[10px] text-slate-400 text-center mt-1.5 font-medium">
-              Guardrail: Customer explicitly approves slot and price before booking creation.
+              Verified specialist arrives at your designated time slot.
             </p>
           </div>
         )}

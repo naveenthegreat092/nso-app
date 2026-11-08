@@ -28,7 +28,15 @@ export const ProductDetailModal: React.FC<{
   onOpenCheckoutDirect: (product: Product, quantity: number, variant?: ProductVariant) => void;
   onAskAI?: (prompt: string) => void;
 }> = ({ product, onClose, onOpenCheckoutDirect, onAskAI }) => {
-  const { addToCart, showToast, setActiveTab, wishlist, toggleWishlist } = useApp();
+  const {
+    addToCart,
+    showToast,
+    setActiveTab,
+    wishlist,
+    toggleWishlist,
+    selectedAddress,
+    openAddressModal
+  } = useApp();
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant>(product.variants[0]);
   const [quantity, setQuantity] = useState(1);
   const isLiked = wishlist.some((p) => p.id === product.id);
@@ -133,16 +141,19 @@ export const ProductDetailModal: React.FC<{
             <p className="text-[10px] text-slate-500 font-medium mt-0.5">Inclusive of all taxes & regional warranties</p>
           </div>
 
-          {/* Delivery speed box (Amazon / Blinkit signature) */}
+          {/* Delivery speed box */}
           <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2 font-bold text-slate-800">
-                <MapPin className="w-4 h-4 text-red-600" />
-                <span>Deliver to Indiranagar, 560038</span>
+              <div className="flex items-center gap-2 font-bold text-slate-800 min-w-0">
+                <MapPin className="w-4 h-4 text-red-600 flex-shrink-0" />
+                <span className="truncate">Deliver to {selectedAddress.title}</span>
               </div>
-              <span className="text-[10px] text-red-600 font-extrabold hover:underline cursor-pointer">
+              <button
+                onClick={openAddressModal}
+                className="text-[10px] text-red-600 font-extrabold hover:underline flex-shrink-0 ml-2"
+              >
                 Change
-              </span>
+              </button>
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-600 pl-6">
               <Truck className="w-4 h-4 text-emerald-600 flex-shrink-0" />

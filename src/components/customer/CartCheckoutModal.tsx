@@ -17,7 +17,8 @@ import {
   ChevronRight,
   Info,
   Tag,
-  Zap
+  Zap,
+  ShoppingBag
 } from 'lucide-react';
 
 export const CartCheckoutModal: React.FC<{
@@ -79,18 +80,21 @@ export const CartCheckoutModal: React.FC<{
     showToast('Coupon removed');
   };
 
-  const handleConfirmOrder = () => {
+  const handleConfirmOrder = async () => {
     setIsProcessing(true);
-    setTimeout(() => {
-      const order = createOrder(
+    try {
+      const order = await createOrder(
         deliveryAddress,
         paymentMethod === 'upi' ? 'Direct UPI' : paymentMethod === 'card' ? 'Credit/Debit Card' : 'Net Banking',
         appliedCoupon || undefined,
         tipAmount
       );
-      setIsProcessing(false);
       setCheckoutComplete(order);
-    }, 1200);
+    } catch {
+      showToast('Failed to place order. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleFinish = () => {
@@ -163,8 +167,8 @@ export const CartCheckoutModal: React.FC<{
           </div>
         ) : cart.length === 0 ? (
           <div className="p-10 text-center space-y-3">
-            <div className="w-16 h-16 bg-slate-100 rounded-3xl flex items-center justify-center mx-auto text-slate-400">
-              <X className="w-8 h-8" />
+            <div className="w-16 h-16 bg-red-50 rounded-3xl flex items-center justify-center mx-auto text-red-500">
+              <ShoppingBag className="w-8 h-8 stroke-[1.8]" />
             </div>
             <h4 className="font-black text-base text-slate-800">Your bag is empty</h4>
             <p className="text-xs text-slate-400 max-w-xs mx-auto">

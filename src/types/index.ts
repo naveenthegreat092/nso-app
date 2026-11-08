@@ -212,6 +212,9 @@ export interface Booking {
   createdAt: string;
   revisedQuote?: RevisedQuote;
   completionNotes?: string;
+  problemDescription?: string;
+  problemPhoto?: string;
+  requestType?: 'site_visit' | 'repair' | 'inspection';
   rating?: number;
   reviewComment?: string;
   technicianEtaMinutes?: number;

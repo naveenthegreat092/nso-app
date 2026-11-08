@@ -64,7 +64,7 @@ export const ExploreScreen: React.FC<{
     (filterType !== 'products' ? filteredServices.length : 0);
 
   return (
-    <div className="space-y-4 pb-24 px-4 pt-3">
+    <div className="space-y-4 pb-24 px-4 pt-3 animate-fade-in-up">
       {/* Search Input Bar */}
       <div className="relative">
         <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />

@@ -7,6 +7,12 @@ export default {
   theme: {
     extend: {
       colors: {
+        slate: {
+          150: '#e9eef5',
+        },
+        gray: {
+          150: '#e9eef5',
+        },
         nso: {
           50: '#fff1f2',
           100: '#ffe4e6',
@@ -35,6 +41,9 @@ export default {
       },
       screens: {
         'xs': '360px',
+      },
+      scale: {
+        '98': '0.98',
       },
       animation: {
         'pulse-subtle': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

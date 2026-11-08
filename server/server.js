@@ -44,7 +44,7 @@ const PORT = Number(process.env.PORT) || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'nso-dev-insecure-secret-key-change-in-production';
-const ADMIN_PHONE = (process.env.ADMIN_PHONE || '').replace(/\D/g, ''); // 10 digits only
+const ADMIN_PHONE = (process.env.ADMIN_PHONE || process.env.OWNER_PHONE || '').replace(/\D/g, '').slice(-10); // 10 digits only
 const OTP_PROVIDER = process.env.OTP_PROVIDER || 'console'; // 'console' | 'twilio' | 'msg91'
 const SESSION_COOKIE_NAME = 'nso_session';
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -313,6 +313,12 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_bookings_slot ON bookings(provider_id, date, time_slot, status);
   CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 `);
+
+// Safe migrations for table extensions
+try { db.exec('ALTER TABLE bookings ADD COLUMN problem_description TEXT;'); } catch (_) {}
+try { db.exec('ALTER TABLE bookings ADD COLUMN problem_photo TEXT;'); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN request_type TEXT DEFAULT 'repair';"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN payment_method TEXT DEFAULT 'online';"); } catch (_) {}
 
 // Seed default marketplace settings if not present
 const getSetting = (key, defaultVal) => {
@@ -635,15 +641,19 @@ app.post('/api/auth/send-otp', async (req, res) => {
       console.error('MSG91 SMS error:', err.message);
     }
   } else {
-    // Console / Development mode: Print to server log only
-    console.log(`\n[NSO OTP GATEWAY] >>> Verification Code for +91 ${cleanPhone}: [ ${code} ] <<<\n`);
+    // Console / Development mode: Print to server log only if not production
+    if (!IS_PROD) {
+      console.log(`\n[NSO OTP GATEWAY] >>> Verification Code for +91 ${cleanPhone}: [ ${code} ] <<<\n`);
+    }
   }
 
   res.json({
     success: true,
-    message: 'OTP sent successfully. Valid for 10 minutes.',
+    message: !IS_PROD && OTP_PROVIDER === 'console'
+      ? 'Development mode: Code printed to console.'
+      : 'OTP sent successfully. Valid for 10 minutes.',
     expiresInSeconds: 600,
-    debugOtp: OTP_PROVIDER === 'console' ? code : undefined
+    debugOtp: !IS_PROD && OTP_PROVIDER === 'console' ? code : undefined
   });
 });
 
@@ -1074,6 +1084,71 @@ app.patch('/api/products/:id/stock', requireSeller, (req, res) => {
 
   db.prepare('UPDATE products SET stock = ?, updated_at = ? WHERE id = ?').run(stock, new Date().toISOString(), id);
   res.json({ id, stock });
+});
+
+// Edit Product (Seller ownership enforced)
+app.patch('/api/products/:id', requireSeller, (req, res) => {
+  const { id } = req.params;
+  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+  if (!product) return res.status(404).json({ error: 'Product not found.' });
+
+  if (product.seller_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'You can only edit your own listings.' });
+  }
+
+  const { title, category, price, originalPrice, stock, image, description, regionalDeliveryFee, deliveryEstimateDays } = req.body || {};
+  const priceNum = price !== undefined ? Number(price) : product.price;
+  const origPriceNum = originalPrice !== undefined ? Number(originalPrice) : product.original_price;
+  const discount = Math.max(0, Math.round(((origPriceNum - priceNum) / origPriceNum) * 100));
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    UPDATE products SET
+      title = COALESCE(?, title),
+      category = COALESCE(?, category),
+      price = ?,
+      original_price = ?,
+      discount_percentage = ?,
+      stock = COALESCE(?, stock),
+      image = COALESCE(?, image),
+      description = COALESCE(?, description),
+      regional_delivery_fee = COALESCE(?, regional_delivery_fee),
+      delivery_estimate_days = COALESCE(?, delivery_estimate_days),
+      updated_at = ?
+    WHERE id = ?
+  `).run(
+    title ? title.trim() : null,
+    category || null,
+    priceNum,
+    origPriceNum,
+    discount,
+    stock !== undefined ? Math.max(0, Number(stock)) : null,
+    image || null,
+    description ? description.trim() : null,
+    regionalDeliveryFee !== undefined ? Number(regionalDeliveryFee) : null,
+    deliveryEstimateDays !== undefined ? Number(deliveryEstimateDays) : null,
+    nowIso,
+    id
+  );
+
+  logAudit(req.session.userId, req.session.name, 'seller', 'PRODUCT_EDITED', `Listing "${product.title}" updated`, req.ip);
+  const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+  res.json(updated);
+});
+
+// Delete Product (Seller ownership enforced)
+app.delete('/api/products/:id', requireSeller, (req, res) => {
+  const { id } = req.params;
+  const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
+  if (!product) return res.status(404).json({ error: 'Product not found.' });
+
+  if (product.seller_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'You can only delete your own listings.' });
+  }
+
+  db.prepare('DELETE FROM products WHERE id = ?').run(id);
+  logAudit(req.session.userId, req.session.name, 'seller', 'PRODUCT_DELETED', `Listing "${product.title}" removed by seller`, req.ip);
+  res.json({ success: true, id, message: 'Product listing removed successfully.' });
 });
 
 // Approve / Reject Product (Owner only)

@@ -31,14 +31,15 @@ export const INITIAL_ADDRESSES: SavedAddress[] = [
     id: 'addr_1',
     label: 'Home',
     title: 'Primary Residence',
-    fullAddress: 'Flat 101, Main Road, Bengaluru - 560001',
-    landmark: 'Near Central Station',
+    fullAddress: 'Flat 402, 100ft Road, Indiranagar, Bengaluru - 560038',
+    landmark: 'Near Indiranagar Metro',
     isDefault: true
   }
 ];
 
-// Clean catalog: No fake demo providers or demo services!
-// Real services only appear when providers apply and are approved by the Owner.
+// Clean slate: ZERO fake demo products or services!
+// Real products only appear when an approved seller or admin creates them.
+// Real services only appear when approved providers apply.
 export const MOCK_PROVIDERS: ProviderDetail[] = [];
 export const MOCK_PRODUCTS: Product[] = [];
 export const MOCK_SERVICES: Service[] = [];

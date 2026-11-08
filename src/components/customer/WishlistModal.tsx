@@ -30,7 +30,7 @@ export const WishlistModal: React.FC<{
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
       <div className="w-full max-w-md bg-white rounded-t-[32px] sm:rounded-[32px] shadow-2xl overflow-hidden border border-slate-100 max-h-[88vh] flex flex-col">
         {/* Header */}
-        <div className="px-5 py-3.5 border-b border-slate-150 flex items-center justify-between bg-white">
+        <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-white">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center">
               <Heart className="w-4 h-4 fill-rose-600" />
