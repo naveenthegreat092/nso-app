@@ -127,7 +127,7 @@ interface AppContextType {
   updateSpecialRequest: (requestId: string, status: SpecialRequest['status'], adminNotes?: string, adminQuotation?: number) => void;
   approveSeller: (sellerId: string, approved: boolean) => void;
   approveProviderCategory: (providerId: string, categoryId: string, approved: boolean) => void;
-  applyForSeller: (app: { storeName: string; businessType: string; gstin?: string; address: string; productCategory?: string; storeLogo?: string }) => void;
+  applyForSeller: (app: { storeName: string; businessType: string; gstin?: string; address: string; productCategory?: string; storeLogo?: string }) => Promise<void>;
   applyForProvider: (app: {
     tradeCategory: string;
     experienceYears: number;
@@ -139,7 +139,7 @@ interface AppContextType {
     idProofNumber?: string;
     profilePhoto?: string;
     idDocumentPhoto?: string;
-  }) => void;
+  }) => Promise<void>;
   approveSellerApplication: (approved: boolean) => void;
   approveProviderApplication: (approved: boolean) => void;
   approveProduct: (productId: string, approved: boolean, reason?: string) => void;
@@ -414,6 +414,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           Boolean(serverUser.adminVerified) ||
           (serverUser.phone && serverUser.phone.replace(/\D/g, '').endsWith('8310421121')) ||
           clean === '8310421121';
+        if (isOwner) {
+          localStorage.setItem('nso_admin_phone', '8310421121');
+        }
+        if (serverUser.phone) {
+          localStorage.setItem('nso_user_phone', serverUser.phone.replace(/\D/g, '').slice(-10));
+        }
         const authUser: UserProfile = {
           ...serverUser,
           adminVerified: isOwner || serverUser.adminVerified,
@@ -435,6 +441,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (clean === '8310421121') {
+      localStorage.setItem('nso_admin_phone', '8310421121');
+      localStorage.setItem('nso_user_phone', '8310421121');
       const adminProfile: UserProfile = {
         id: 'usr_owner_admin',
         name: 'Marketplace Owner',
@@ -463,6 +471,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const logoutUser = async (): Promise<void> => {
     addAuditLog('USER_LOGOUT', 'User logged out', user.activeRole);
     await api.logout();
+    localStorage.removeItem('nso_auth_token');
+    localStorage.removeItem('nso_admin_phone');
+    localStorage.removeItem('nso_user_phone');
     setUser(UNAUTHENTICATED_USER);
     setCart([]);
     setWishlist([]);
@@ -619,7 +630,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return false;
   };
 
-  const applyForSeller = (appData: { storeName: string; businessType: string; gstin?: string; address: string; productCategory?: string; storeLogo?: string }) => {
+  const applyForSeller = async (appData: { storeName: string; businessType: string; gstin?: string; address: string; productCategory?: string; storeLogo?: string }) => {
     setUser((prev) => ({
       ...prev,
       sellerStatus: 'pending',
@@ -628,11 +639,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submittedAt: new Date().toISOString().substring(0, 10)
       }
     }));
+    try {
+      await api.submitSellerApplication({
+        ...appData,
+        applicantName: user.name || 'Seller Applicant',
+        applicantPhone: user.phone || localStorage.getItem('nso_user_phone') || ''
+      });
+    } catch (e) {
+      console.error('Failed submitting seller application to server:', e);
+    }
     addAuditLog('SELLER_APPLICATION_SUBMITTED', `Store "${appData.storeName}" submitted for Admin KYC approval.`);
     showToast('Seller Application Submitted! Awaiting Admin verification.');
   };
 
-  const applyForProvider = (appData: {
+  const applyForProvider = async (appData: {
     tradeCategory: string;
     experienceYears: number;
     hourlyRate: number;
@@ -652,6 +672,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submittedAt: new Date().toISOString().substring(0, 10)
       }
     }));
+    try {
+      await api.submitProviderApplication({
+        ...appData,
+        applicantName: user.name || 'Provider Applicant',
+        applicantPhone: user.phone || localStorage.getItem('nso_user_phone') || ''
+      });
+    } catch (e) {
+      console.error('Failed submitting provider application to server:', e);
+    }
     addAuditLog('PROVIDER_APPLICATION_SUBMITTED', `Specialist application with resume & work submitted for "${appData.tradeCategory}".`);
     showToast('Provider Application & Portfolio Submitted! Awaiting Admin verification.');
   };

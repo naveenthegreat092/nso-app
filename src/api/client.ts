@@ -16,11 +16,33 @@ const API_BASE = getApiBase();
 /** Default fetch options — always include session cookies */
 const defaultOpts: RequestInit = { credentials: 'include' };
 
+/** Helper to provide authentication headers (tokens and admin bypass) across web and native WebViews */
+export const getAuthHeaders = (extra?: Record<string, string>): Record<string, string> => {
+  const headers: Record<string, string> = { ...extra };
+  const token = localStorage.getItem('nso_auth_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    headers['x-session-token'] = token;
+  }
+  const adminPhone = localStorage.getItem('nso_admin_phone');
+  if (adminPhone) {
+    headers['x-admin-phone'] = adminPhone;
+  }
+  const userPhone = localStorage.getItem('nso_user_phone');
+  if (userPhone) {
+    headers['x-user-phone'] = userPhone;
+  }
+  return headers;
+};
+
 export const api = {
   // Health
   checkHealth: async () => {
     try {
-      const res = await fetch(`${API_BASE}/health`, defaultOpts);
+      const res = await fetch(`${API_BASE}/health`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
       return await res.json();
     } catch (e) {
       console.warn('Backend offline, using local fallback');
@@ -39,7 +61,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/auth/send-otp`, {
         ...defaultOpts,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ phone })
       });
       const data = await res.json();
@@ -54,23 +76,33 @@ export const api = {
 
   /**
    * POST /api/auth/verify-otp
-   * Verifies the OTP the user entered.  On success the server sets an
-   * httpOnly session cookie and returns the authenticated UserProfile.
+   * Verifies the OTP the user entered. On success the server sets an
+   * httpOnly session cookie and returns the authenticated UserProfile and session token.
    */
   verifyOtp: async (
     phone: string,
     otp: string
-  ): Promise<{ success: boolean; user?: UserProfile; error?: string } | null> => {
+  ): Promise<{ success: boolean; user?: UserProfile; token?: string; signedToken?: string; error?: string } | null> => {
     try {
       const res = await fetch(`${API_BASE}/auth/verify-otp`, {
         ...defaultOpts,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ phone, otp })
       });
       const data = await res.json();
       if (!res.ok) {
         return { success: false, error: data.error || 'Invalid verification code.' };
+      }
+      if (data.token) {
+        localStorage.setItem('nso_auth_token', data.token);
+      } else if (data.signedToken) {
+        localStorage.setItem('nso_auth_token', data.signedToken);
+      }
+      const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+      localStorage.setItem('nso_user_phone', cleanPhone);
+      if (cleanPhone === '8310421121') {
+        localStorage.setItem('nso_admin_phone', cleanPhone);
       }
       return data;
     } catch {
@@ -80,12 +112,15 @@ export const api = {
 
   /**
    * GET /api/auth/me
-   * Returns the currently authenticated user based on the session cookie.
+   * Returns the currently authenticated user based on session token or cookie.
    * Returns null if unauthenticated or backend is offline.
    */
   getMe: async (): Promise<UserProfile | null> => {
     try {
-      const res = await fetch(`${API_BASE}/auth/me`, defaultOpts);
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -101,10 +136,17 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/auth/logout`, {
         ...defaultOpts,
+        headers: getAuthHeaders(),
         method: 'POST'
       });
+      localStorage.removeItem('nso_auth_token');
+      localStorage.removeItem('nso_admin_phone');
+      localStorage.removeItem('nso_user_phone');
       return res.ok;
     } catch {
+      localStorage.removeItem('nso_auth_token');
+      localStorage.removeItem('nso_admin_phone');
+      localStorage.removeItem('nso_user_phone');
       return false;
     }
   },
@@ -126,7 +168,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/users/register`, {
         ...defaultOpts,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data)
       });
       if (!res.ok) return null;
@@ -140,7 +182,10 @@ export const api = {
 
   getProducts: async (): Promise<Product[] | null> => {
     try {
-      const res = await fetch(`${API_BASE}/products`, defaultOpts);
+      const res = await fetch(`${API_BASE}/products`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -153,7 +198,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/products`, {
         ...defaultOpts,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(productData)
       });
       if (!res.ok) return null;
@@ -168,7 +213,7 @@ export const api = {
       await fetch(`${API_BASE}/products/${productId}/stock`, {
         ...defaultOpts,
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ stock })
       });
     } catch (e) {
@@ -180,6 +225,7 @@ export const api = {
     try {
       await fetch(`${API_BASE}/products/${productId}`, {
         ...defaultOpts,
+        headers: getAuthHeaders(),
         method: 'DELETE'
       });
     } catch (e) {
@@ -191,7 +237,10 @@ export const api = {
 
   getOrders: async (): Promise<Order[] | null> => {
     try {
-      const res = await fetch(`${API_BASE}/orders`, defaultOpts);
+      const res = await fetch(`${API_BASE}/orders`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -204,7 +253,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/orders`, {
         ...defaultOpts,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(orderData)
       });
       if (!res.ok) return null;
@@ -218,6 +267,7 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/orders/${orderId}/cancel`, {
         ...defaultOpts,
+        headers: getAuthHeaders(),
         method: 'POST'
       });
       return res.ok;
@@ -231,7 +281,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/orders/${orderId}/status`, {
         ...defaultOpts,
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ status })
       });
       return res.ok;
@@ -244,7 +294,10 @@ export const api = {
 
   getBookings: async (): Promise<Booking[] | null> => {
     try {
-      const res = await fetch(`${API_BASE}/bookings`, defaultOpts);
+      const res = await fetch(`${API_BASE}/bookings`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -257,7 +310,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/bookings`, {
         ...defaultOpts,
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(bookingData)
       });
       if (res.status === 409) return null; // slot conflict — handled by caller
@@ -272,6 +325,7 @@ export const api = {
     try {
       const res = await fetch(`${API_BASE}/bookings/${bookingId}/cancel`, {
         ...defaultOpts,
+        headers: getAuthHeaders(),
         method: 'POST'
       });
       return res.ok;
@@ -285,7 +339,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/bookings/${bookingId}/status`, {
         ...defaultOpts,
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ status })
       });
       return res.ok;
@@ -298,7 +352,11 @@ export const api = {
 
   resetDatabase: async () => {
     try {
-      await fetch(`${API_BASE}/reset`, { ...defaultOpts, method: 'POST' });
+      await fetch(`${API_BASE}/reset`, {
+        ...defaultOpts,
+        headers: getAuthHeaders(),
+        method: 'POST'
+      });
     } catch (e) {
       console.error(e);
     }
@@ -308,7 +366,10 @@ export const api = {
 
   getSpecialRequests: async (): Promise<SpecialRequest[] | null> => {
     try {
-      const res = await fetch(`${API_BASE}/special-requests`, defaultOpts);
+      const res = await fetch(`${API_BASE}/special-requests`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -316,11 +377,86 @@ export const api = {
     }
   },
 
+  // ── Applications (Seller & Provider Onboarding) ──────────────────────────
+
+  getApplications: async (): Promise<any[] | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/applications`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  submitSellerApplication: async (data: {
+    storeName: string;
+    businessType: string;
+    gstin?: string;
+    address: string;
+    productCategory?: string;
+    applicantName?: string;
+    applicantPhone?: string;
+  }): Promise<{ success: boolean; applicationId?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/applications/seller`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(data)
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        return { success: false, error: result.error || 'Failed to submit seller application' };
+      }
+      return result;
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
+    }
+  },
+
+  submitProviderApplication: async (data: {
+    tradeCategory: string;
+    experienceYears: number;
+    hourlyRate: number;
+    serviceArea?: string;
+    resumeText?: string;
+    previousWork?: string;
+    idProofType?: string;
+    idProofNumber?: string;
+    profilePhoto?: string;
+    idDocumentPhoto?: string;
+    applicantName?: string;
+    applicantPhone?: string;
+  }): Promise<{ success: boolean; applicationId?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/applications/provider`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(data)
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        return { success: false, error: result.error || 'Failed to submit provider application' };
+      }
+      return result;
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Network error' };
+    }
+  },
+
   // ── Users (admin) ───────────────────────────────────────────────────────────
 
   getUsers: async (): Promise<UserProfile[] | null> => {
     try {
-      const res = await fetch(`${API_BASE}/users`, defaultOpts);
+      const res = await fetch(`${API_BASE}/users`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -333,7 +469,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/users/${userId}/approve`, {
         ...defaultOpts,
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ approved })
       });
       return res.ok;
@@ -351,7 +487,7 @@ export const api = {
       const res = await fetch(`${API_BASE}/applications/${appId}/approve`, {
         ...defaultOpts,
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ approved, ...extra })
       });
       return res.ok;

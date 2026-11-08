@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api } from '../../api/client';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { PaymentTracker } from './PaymentTracker';
 import { promptBiometricAuth, checkBiometricSupport } from '../../utils/biometrics';
@@ -86,6 +87,9 @@ export const AdminDashboard: React.FC = () => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [appLoading, setAppLoading] = useState(false);
   const [commissionStats, setCommissionStats] = useState({ productsRate: 10, servicesRate: 15, totalEarned: 0, transactions: [] as any[] });
+  const [activeTab, setActiveTab] = useState<
+    'analytics' | 'payments' | 'special_requests' | 'quotes' | 'approvals' | 'audit' | 'settings'
+  >('analytics');
 
   const rawEnv = (import.meta as any).env?.VITE_API_URL;
   const API = rawEnv && rawEnv.trim() ? `${rawEnv.replace(/\/+$/, '')}/api` : '/api';
@@ -93,12 +97,9 @@ export const AdminDashboard: React.FC = () => {
   const fetchApplications = async () => {
     setAppLoading(true);
     try {
-      const res = await fetch(`${API}/applications`, { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setApplications(data);
-        }
+      const data = await api.getApplications();
+      if (Array.isArray(data)) {
+        setApplications(data);
       }
     } catch {}
     setAppLoading(false);
@@ -111,7 +112,14 @@ export const AdminDashboard: React.FC = () => {
     } catch {}
   };
 
-  useEffect(() => { fetchApplications(); fetchCommission(); }, []);
+  useEffect(() => {
+    fetchApplications();
+    fetchCommission();
+    if (activeTab === 'approvals') {
+      const timer = setInterval(fetchApplications, 6000);
+      return () => clearInterval(timer);
+    }
+  }, [activeTab]);
 
   const handleApproveApplication = async (appId: string, approved: boolean) => {
     const targetAppl = applications.find(a => a.id === appId);
@@ -119,15 +127,13 @@ export const AdminDashboard: React.FC = () => {
       approveProviderWithId(appId, approved, targetAppl);
     }
     try {
-      const res = await fetch(`${API}/applications/${appId}/approve`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approved, adminNotes: approved ? 'Approved by Admin' : 'Rejected by Admin' })
+      const success = await api.approveApplication(appId, approved, {
+        adminNotes: approved ? 'Approved by Admin' : 'Rejected by Admin'
       });
-      if (res.ok) {
-        const updated = await res.json();
-        setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: approved ? 'approved' : 'rejected', issuedProviderId: updated.issuedProviderId || a.issuedProviderId } : a));
+      if (success) {
+        setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: approved ? 'approved' : 'rejected' } : a));
         showToast(approved ? `✅ Approved! Provider ID Issued.` : '❌ Application Rejected.');
+        fetchApplications();
         return;
       }
     } catch {
@@ -148,9 +154,6 @@ export const AdminDashboard: React.FC = () => {
     } catch { showToast('Commission rate updated locally.'); }
   };
 
-  const [activeTab, setActiveTab] = useState<
-    'analytics' | 'payments' | 'special_requests' | 'quotes' | 'approvals' | 'audit' | 'settings'
-  >('analytics');
   const [adminQuoteInput, setAdminQuoteInput] = useState<{ [id: string]: string }>({});
 
   const pendingSpecialRequests = specialRequests.filter((r) => r.status === 'submitted' || r.status === 'under_review');

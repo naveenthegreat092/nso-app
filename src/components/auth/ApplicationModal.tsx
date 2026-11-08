@@ -145,7 +145,10 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
     }
     setLoading(true);
     try {
-      applyForProvider({
+      if (providerPhone) {
+        localStorage.setItem('nso_user_phone', providerPhone.replace(/\D/g, '').slice(-10));
+      }
+      await applyForProvider({
         tradeCategory,
         experienceYears: parseInt(experience),
         hourlyRate: parseFloat(hourlyRate),
@@ -157,32 +160,9 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
         profilePhoto,
         idDocumentPhoto
       });
-      // Also save to cloud backend
-      const rawEnv = (import.meta as any).env?.VITE_API_URL;
-      const API = rawEnv && rawEnv.trim() ? `${rawEnv.replace(/\/+$/, '')}/api` : '/api';
-      await fetch(`${API}/applications/provider`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'provider',
-          applicantName: providerName,
-          applicantPhone: providerPhone,
-          tradeCategory,
-          experienceYears: parseInt(experience),
-          hourlyRate: parseFloat(hourlyRate),
-          serviceArea,
-          resumeText,
-          previousWork,
-          idProofType,
-          idProofNumber,
-          profilePhoto,
-          idDocumentPhoto,
-          userId: user.id,
-          status: 'pending',
-          submittedAt: new Date().toISOString()
-        })
-      }).catch(() => {});
       setStep('submitted');
+    } catch (err: any) {
+      showToast(err?.message || 'Error submitting application');
     } finally {
       setLoading(false);
     }
@@ -196,28 +176,20 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
     }
     setLoading(true);
     try {
-      applyForSeller({ storeName, businessType, gstin, address: sellerAddress });
-      const rawEnv = (import.meta as any).env?.VITE_API_URL;
-      const API = rawEnv && rawEnv.trim() ? `${rawEnv.replace(/\/+$/, '')}/api` : '/api';
-      await fetch(`${API}/applications/seller`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'seller',
-          applicantName: sellerName,
-          applicantPhone: sellerPhone,
-          storeName,
-          businessType,
-          gstin,
-          address: sellerAddress,
-          productCategory,
-          storeLogo,
-          userId: user.id,
-          status: 'pending',
-          submittedAt: new Date().toISOString()
-        })
-      }).catch(() => {});
+      if (sellerPhone) {
+        localStorage.setItem('nso_user_phone', sellerPhone.replace(/\D/g, '').slice(-10));
+      }
+      await applyForSeller({
+        storeName,
+        businessType,
+        gstin,
+        address: sellerAddress,
+        productCategory,
+        storeLogo
+      });
       setStep('submitted');
+    } catch (err: any) {
+      showToast(err?.message || 'Error submitting application');
     } finally {
       setLoading(false);
     }
