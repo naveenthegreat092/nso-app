@@ -80,7 +80,7 @@ export const AccountScreen: React.FC<{
           <h3 className="font-black text-base text-slate-900 truncate">{user.name}</h3>
           <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mt-0.5">
             <Phone className="w-3.5 h-3.5 text-slate-400" />
-            <span>{user.phone || '+91 8310421121'}</span>
+            <span>{user.phone || '+91 ••••• •••••'}</span>
           </p>
           <p className="text-xs text-slate-400 font-medium truncate flex items-center gap-1.5 mt-0.5">
             <MapPin className="w-3.5 h-3.5 text-slate-400" />

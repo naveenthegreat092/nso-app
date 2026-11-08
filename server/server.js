@@ -675,7 +675,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   }
 
   // Constant-time comparison
-  const isValid = crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp)) || (OTP_PROVIDER === 'console' && enteredOtp === '123456');
+  const isValid = crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp));
 
   if (!isValid) {
     const attempts = record.attempts + 1;

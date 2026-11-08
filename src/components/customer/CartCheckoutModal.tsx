@@ -399,7 +399,7 @@ export const CartCheckoutModal: React.FC<{
 
               {/* Direct UPI Intent & QR Box (Zero Razorpay required) */}
               {paymentMethod === 'upi' && (() => {
-                const adminUpi = localStorage.getItem('nso_admin_upi') || '8310421121@upi';
+                const adminUpi = localStorage.getItem('nso_merchant_upi') || 'pay@nso';
                 const upiIntent = `upi://pay?pa=${adminUpi}&pn=NSO%20Orbit&am=${fullTotal}&cu=INR&tn=Order%20Payment`;
                 const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiIntent)}`;
 

@@ -11,24 +11,19 @@ import {
 } from '../types';
 
 export const INITIAL_USER: UserProfile = {
-  id: 'usr_owner_01',
-  name: 'NSO Store Owner',
-  email: 'owner@nso.in',
-  phone: '+91 8310421121',
-  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  activeRole: 'admin',
-  authorizedRoles: ['customer', 'seller', 'provider', 'admin'],
-  approvalStatus: 'approved',
-  sellerStatus: 'approved',
-  providerStatus: 'approved',
-  adminVerified: true,
-  address: 'Owner Suite, Orbit HQ, Central Station, Bengaluru - 560001',
-  houseNumber: 'Owner Suite',
-  streetNumber: 'Orbit HQ',
-  landmark: 'Central Station',
-  city: 'Bengaluru',
-  pincode: '560001',
-  isLoggedIn: true
+  id: '',
+  name: 'Guest',
+  email: '',
+  phone: '',
+  avatar: '',
+  activeRole: 'customer',
+  authorizedRoles: ['customer'],
+  approvalStatus: 'none' as any,
+  sellerStatus: 'none',
+  providerStatus: 'none',
+  adminVerified: false,
+  address: '',
+  isLoggedIn: false
 };
 
 export const INITIAL_ADDRESSES: SavedAddress[] = [

@@ -8,7 +8,6 @@ import {
   Store,
   Wrench,
   ShoppingBag,
-  ShieldAlert,
   ChevronRight,
   UserCheck
 } from 'lucide-react';
@@ -32,15 +31,15 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
   >('splash');
 
   // Phone & OTP
-  const [phone, setPhone] = useState('8310421121');
+  const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Customer Profile fields
   const [custName, setCustName] = useState('');
-  const [custArea, setCustArea] = useState('Indiranagar');
-  const [custAddress, setCustAddress] = useState('Flat 402, 100ft Road, Bengaluru - 560038');
+  const [custArea, setCustArea] = useState('');
+  const [custAddress, setCustAddress] = useState('');
 
   // Seller fields
   const [storeName, setStoreName] = useState('');
@@ -85,11 +84,11 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
     setIsSubmitting(false);
 
     if (res && res.debugOtp) {
-      showToast(`Verification Code: ${res.debugOtp}`);
+      // Dev mode only: backend returns debugOtp when OTP_PROVIDER=console
+      showToast(`[DEV] Verification Code: ${res.debugOtp}`);
       setOtp(res.debugOtp);
     } else {
       showToast(`Verification code sent to +91 ${clean}`);
-      setOtp('123456'); // Fallback dev OTP
     }
 
     setOtpError(null);
@@ -108,29 +107,27 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
     setOtpError(null);
 
     const clean = phone.replace(/\D/g, '');
-    const isOwner = clean.endsWith('8310421121');
 
     const verifyRes = await api.verifyOtp(`+91${clean}`, cleanOtp);
     setIsSubmitting(false);
 
     if (!verifyRes || !verifyRes.success) {
-      setOtpError('Invalid code. Please enter 123456 or the code shown in the message.');
+      setOtpError('Invalid or expired code. Please check the SMS and try again.');
       return;
     }
 
-    if (isOwner) {
-      // 👑 OWNER LOGIN: Immediately elevate to Admin and enter Admin Console!
-      await loginUser();
-      switchRole('admin');
-      showToast('👑 Welcome Owner! Entering Admin Console...');
-      onComplete();
-      return;
-    }
-
-    // Regular User: proceed to role selection
+    // Server is the ONLY authority for roles — load the session from server
     await loginUser();
-    showToast('Phone verified! Choose how you want to join NSO.');
-    setStep('select_role');
+    // loginUser() calls api.getMe() and sets user in context including activeRole
+    // The useEffect above will redirect admin immediately via onComplete()
+    // For regular users, proceed to role selection
+    if (user.activeRole === 'admin' || user.adminVerified) {
+      showToast('Welcome back! Entering Admin Console...');
+      onComplete();
+    } else {
+      showToast('Phone verified! Choose how you want to join NSO.');
+      setStep('select_role');
+    }
   };
 
   // Handle Customer Quick Start
@@ -213,30 +210,6 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
               </p>
             </div>
 
-            {/* Quick Demo Pre-set Pill */}
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 text-xs text-amber-900 space-y-1.5">
-              <div className="flex items-center gap-1.5 font-bold">
-                <ShieldAlert className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                <span>Marketplace Roles &amp; Numbers:</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setPhone('8310421121')}
-                  className="px-2.5 py-1 bg-white border border-amber-300 rounded-lg font-bold text-[11px] text-red-700 shadow-xs hover:bg-amber-100"
-                >
-                  👑 Owner (8310421121)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPhone('9876543210')}
-                  className="px-2.5 py-1 bg-white border border-amber-300 rounded-lg font-bold text-[11px] text-slate-700 shadow-xs hover:bg-amber-100"
-                >
-                  👤 User/Applicant (9876543210)
-                </button>
-              </div>
-            </div>
-
             {/* Input Form */}
             <form onSubmit={handleSendOtp} className="space-y-4">
               <div>
@@ -247,7 +220,7 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
                     type="tel"
                     required
                     maxLength={10}
-                    placeholder="8310421121"
+                    placeholder="Enter your 10-digit mobile number"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
                     className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -285,13 +258,13 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
                 type="text"
                 inputMode="numeric"
                 maxLength={6}
-                placeholder="123456"
+                placeholder="------"
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                 className="w-full text-center text-3xl font-mono font-black tracking-widest py-3.5 bg-slate-50 border-2 border-red-500/50 rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
               />
               <p className="text-[11px] text-center text-slate-400">
-                Tip: Enter the code shown in toast or <span className="font-bold text-slate-600">123456</span>
+                Check your SMS for the 6-digit verification code.
               </p>
 
               {otpError && (
@@ -634,7 +607,7 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
                 Sent to Owner Admin Console
               </h2>
               <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1 leading-relaxed">
-                Your application has been received. The marketplace owner (Phone 8310421121) can now view and approve your profile from their Admin Console.
+                Your application has been received. The NSO admin team will review and approve your profile. You'll be notified once approved.
               </p>
             </div>
           </div>

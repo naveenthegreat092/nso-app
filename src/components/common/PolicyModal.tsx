@@ -153,16 +153,16 @@ export const PolicyModal: React.FC<PolicyModalProps> = ({
                   <span className="font-black text-slate-900">NSO (New Shopping Orbit)</span>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Owner Helpdesk Mobile</span>
-                  <span className="font-mono font-bold text-slate-900">+91 8310421121</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Support Desk</span>
+                  <span className="font-mono font-bold text-slate-900">help@nso.in</span>
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold text-slate-400 block">Official Support Email</span>
-                  <span className="font-mono font-bold text-slate-900">support@newshoppingorbit.com</span>
+                  <span className="font-mono font-bold text-slate-900">support@nso.in</span>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Primary UPI Gateway</span>
-                  <span className="font-mono font-bold text-emerald-700">8310421121@upi</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Official Merchant Gateway</span>
+                  <span className="font-mono font-bold text-emerald-700">pay@nso</span>
                 </div>
               </div>
             </div>
