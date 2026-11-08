@@ -483,24 +483,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cleanPhone = data.phone.startsWith('+91') ? data.phone : `+91 ${data.phone.replace(/\D/g, '')}`;
 
     const rawDigits = data.phone.replace(/\D/g, '');
+    const isOwner = rawDigits.endsWith('8310421121');
 
-    // Build authenticated user profile — roles come from server via loginUser(), never client-side
+    // Build authenticated user profile — preserve owner privileges if owner phone
     const newUser: UserProfile = {
-      id: `usr_${Date.now()}`,
+      id: user.id || `usr_${Date.now()}`,
       name: data.name,
       email: `${rawDigits}@nso.in`,
       phone: cleanPhone,
-      activeRole: 'customer',
-      authorizedRoles: ['customer'],
+      activeRole: isOwner ? 'admin' : 'customer',
+      authorizedRoles: isOwner ? ['customer', 'admin', 'seller', 'provider'] : ['customer'],
       approvalStatus: 'approved',
       houseNumber: data.houseNumber,
       streetNumber: data.streetNumber,
       landmark: data.landmark,
       city: data.city,
       pincode: data.pincode,
-      sellerStatus: 'none',
-      providerStatus: 'none',
-      adminVerified: false,
+      sellerStatus: isOwner ? 'approved' : 'none',
+      providerStatus: isOwner ? 'approved' : 'none',
+      adminVerified: isOwner,
       address: fullAddress,
       isLoggedIn: true
     };

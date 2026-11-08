@@ -34,7 +34,7 @@ export const api = {
    * POST /api/auth/send-otp
    * Asks the server to send a 6-digit OTP to the given phone number.
    */
-  sendOtp: async (phone: string): Promise<{ success: boolean; message: string; debugOtp?: string } | null> => {
+  sendOtp: async (phone: string): Promise<{ success: boolean; message?: string; debugOtp?: string; error?: string } | null> => {
     try {
       const res = await fetch(`${API_BASE}/auth/send-otp`, {
         ...defaultOpts,
@@ -42,8 +42,11 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone })
       });
-      if (!res.ok) return null;
-      return await res.json();
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Failed to send verification code.' };
+      }
+      return data;
     } catch {
       return null;
     }
@@ -57,7 +60,7 @@ export const api = {
   verifyOtp: async (
     phone: string,
     otp: string
-  ): Promise<{ success: boolean; user?: UserProfile } | null> => {
+  ): Promise<{ success: boolean; user?: UserProfile; error?: string } | null> => {
     try {
       const res = await fetch(`${API_BASE}/auth/verify-otp`, {
         ...defaultOpts,
@@ -65,8 +68,11 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, otp })
       });
-      if (!res.ok) return null;
-      return await res.json();
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Invalid verification code.' };
+      }
+      return data;
     } catch {
       return null;
     }

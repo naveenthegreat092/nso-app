@@ -246,36 +246,38 @@ export const AccountScreen: React.FC<{
         </div>
       </div>
 
-      {/* 5. Store Owner & Superadmin Portal (Discrete, Protected Gateway) */}
-      <div className="space-y-2.5 pt-2">
-        <div className="flex items-center justify-between px-1">
-          <h4 className="font-black text-xs text-slate-900 uppercase tracking-wider">
-            Store Administration
-          </h4>
-          <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-full flex items-center gap-1 border border-purple-200/50">
-            <Lock className="w-2.5 h-2.5 text-purple-600" />
-            <span>Owner Protected</span>
-          </span>
-        </div>
-
-        <div
-          onClick={() => switchRole('admin')}
-          className="bg-gradient-to-r from-slate-900 to-indigo-950 rounded-3xl p-4 text-white shadow-md cursor-pointer hover:brightness-110 active:scale-98 transition-all flex items-center justify-between border border-slate-800"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-purple-600/30 text-purple-300 border border-purple-500/40 flex items-center justify-center font-bold">
-              <ShieldAlert className="w-5 h-5 text-purple-400" />
-            </div>
-            <div>
-              <h5 className="font-black text-sm text-white">Owner Admin Control Panel</h5>
-              <p className="text-xs text-purple-200/80 mt-0.5">
-                Sales analytics, UPI payment verification & inventory
-              </p>
-            </div>
+      {/* 5. Store Owner & Superadmin Portal (Discrete, Protected Gateway - Only visible to verified Admin) */}
+      {user.adminVerified && (
+        <div className="space-y-2.5 pt-2">
+          <div className="flex items-center justify-between px-1">
+            <h4 className="font-black text-xs text-slate-900 uppercase tracking-wider">
+              Store Administration
+            </h4>
+            <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-full flex items-center gap-1 border border-purple-200/50">
+              <Lock className="w-2.5 h-2.5 text-purple-600" />
+              <span>Owner Protected</span>
+            </span>
           </div>
-          <ChevronRight className="w-5 h-5 text-purple-400" />
+
+          <div
+            onClick={() => switchRole('admin')}
+            className="bg-gradient-to-r from-slate-900 to-indigo-950 rounded-3xl p-4 text-white shadow-md cursor-pointer hover:brightness-110 active:scale-98 transition-all flex items-center justify-between border border-slate-800"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="w-11 h-11 rounded-2xl bg-purple-600/30 text-purple-300 border border-purple-500/40 flex items-center justify-center font-bold">
+                <ShieldAlert className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <h5 className="font-black text-sm text-white">Owner Admin Control Panel</h5>
+                <p className="text-xs text-purple-200/80 mt-0.5">
+                  Sales analytics, UPI payment verification & inventory
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="w-5 h-5 text-purple-400" />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 6. Sign Out */}
       <div className="pt-2 pb-2">
