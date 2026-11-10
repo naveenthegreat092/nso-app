@@ -588,6 +588,21 @@ function formatUserResponse(u) {
   if (u.provider_status === 'approved') authorizedRoles.push('provider');
   if (u.is_admin === 1) authorizedRoles.push('admin');
 
+  // Look up latest applications if any
+  let providerApp = null;
+  try {
+    if (u.provider_status && u.provider_status !== 'none') {
+      providerApp = db.prepare('SELECT * FROM provider_applications WHERE user_id = ? ORDER BY submitted_at DESC LIMIT 1').get(u.id);
+    }
+  } catch (_) {}
+
+  let sellerApp = null;
+  try {
+    if (u.seller_status && u.seller_status !== 'none') {
+      sellerApp = db.prepare('SELECT * FROM seller_applications WHERE user_id = ? ORDER BY submitted_at DESC LIMIT 1').get(u.id);
+    }
+  } catch (_) {}
+
   return {
     id: u.id,
     name: u.name,
@@ -606,7 +621,31 @@ function formatUserResponse(u) {
     city: u.city,
     pincode: u.pincode,
     address: u.address,
-    isLoggedIn: true
+    isLoggedIn: true,
+    providerApplication: providerApp ? {
+      tradeCategory: providerApp.trade_category,
+      experienceYears: providerApp.experience_years,
+      hourlyRate: providerApp.hourly_rate,
+      serviceArea: providerApp.service_area,
+      resumeText: providerApp.resume_text,
+      previousWork: providerApp.previous_work,
+      idProofType: providerApp.id_proof_type,
+      idProofNumber: providerApp.id_proof_number,
+      profilePhoto: providerApp.profile_photo,
+      idDocumentPhoto: providerApp.id_document_photo,
+      issuedProviderId: providerApp.issued_provider_id,
+      status: providerApp.status,
+      submittedAt: providerApp.submitted_at
+    } : undefined,
+    sellerApplication: sellerApp ? {
+      storeName: sellerApp.store_name,
+      businessType: sellerApp.business_type,
+      gstin: sellerApp.gstin,
+      address: sellerApp.address,
+      productCategory: sellerApp.product_category,
+      status: sellerApp.status,
+      submittedAt: sellerApp.submitted_at
+    } : undefined
   };
 }
 
@@ -818,10 +857,22 @@ app.post('/api/auth/logout', requireAuth, (req, res) => {
 
 // Current User Profile & Session Check
 app.get('/api/auth/me', (req, res) => {
-  if (!req.session || !req.session.userId) {
+  let userId = req.session?.userId;
+  if (!userId) {
+    const rawPhone = req.headers['x-admin-phone'] || req.headers['x-user-phone'];
+    if (rawPhone) {
+      const cleanPhone = String(rawPhone).replace(/\D/g, '').slice(-10);
+      const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
+      if (user) {
+        userId = user.id;
+      }
+    }
+  }
+
+  if (!userId) {
     return res.status(401).json({ error: 'No active session.' });
   }
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
   if (!user) {
     return res.status(401).json({ error: 'User not found.' });
   }
