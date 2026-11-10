@@ -19,7 +19,6 @@ export const translations: Record<Language, Record<string, string>> = {
     // Nav
     'nav.home': 'Home',
     'nav.explore': 'Explore',
-    'nav.ask_nso': 'Ask NSO',
     'nav.orders': 'Orders',
     'nav.account': 'Account',
 
@@ -65,7 +64,6 @@ export const translations: Record<Language, Record<string, string>> = {
     // Nav
     'nav.home': 'होम',
     'nav.explore': 'खोजें',
-    'nav.ask_nso': 'NSO AI',
     'nav.orders': 'ऑर्डर',
     'nav.account': 'खाता',
 
@@ -111,7 +109,6 @@ export const translations: Record<Language, Record<string, string>> = {
     // Nav
     'nav.home': 'ಮುಖಪುಟ',
     'nav.explore': 'ಅನ್ವೇಷಿಸಿ',
-    'nav.ask_nso': 'NSO AI',
     'nav.orders': 'ಆರ್ಡರ್‌ಗಳು',
     'nav.account': 'ಖಾತೆ',
 
@@ -157,7 +154,6 @@ export const translations: Record<Language, Record<string, string>> = {
     // Nav
     'nav.home': 'முகப்பு',
     'nav.explore': 'ஆராய்வு',
-    'nav.ask_nso': 'NSO AI',
     'nav.orders': 'ஆர்டர்கள்',
     'nav.account': 'கணக்கு',
 
@@ -203,7 +199,6 @@ export const translations: Record<Language, Record<string, string>> = {
     // Nav
     'nav.home': 'హోమ్',
     'nav.explore': 'శోధన',
-    'nav.ask_nso': 'NSO AI',
     'nav.orders': 'ఆర్డర్లు',
     'nav.account': 'ఖాతా',
 

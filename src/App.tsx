@@ -7,7 +7,6 @@ import { JourneyNavigator } from './components/common/JourneyNavigator';
 import { OnboardingFlow } from './components/auth/OnboardingFlow';
 import { HomeScreen } from './components/customer/HomeScreen';
 import { ExploreScreen } from './components/customer/ExploreScreen';
-import { AskNSOScreen } from './components/ai/AskNSOScreen';
 import { OrdersScreen } from './components/customer/OrdersScreen';
 import { AccountScreen } from './components/account/AccountScreen';
 import { ProductDetailModal } from './components/customer/ProductDetailModal';
@@ -75,7 +74,6 @@ export const AppContent: React.FC = () => {
     if (user.activeRole === 'seller') return 'seller';
     if (user.activeRole === 'provider') return 'provider';
     if (user.activeRole === 'admin') return 'admin';
-    if (activeTab === 'ask_nso') return 'ai';
     if (activeTab === 'explore') return 'services';
     return 'customer_home';
   };
@@ -96,11 +94,6 @@ export const AppContent: React.FC = () => {
     }
     if (sectionId === 'admin') {
       switchRole('admin');
-      return;
-    }
-    if (sectionId === 'ai') {
-      switchRole('customer');
-      setActiveTab('ask_nso');
       return;
     }
     if (sectionId === 'services') {
@@ -163,13 +156,6 @@ export const AppContent: React.FC = () => {
                   onSelectProduct={(p: Product) => setSelectedProduct(p)}
                   onSelectService={(s: Service) => setSelectedService(s)}
                   onOpenMapRadius={() => setIsMapRadiusOpen(true)}
-                />
-              )}
-
-              {activeTab === 'ask_nso' && (
-                <AskNSOScreen
-                  onSelectProduct={(p: Product) => setSelectedProduct(p)}
-                  onSelectService={(s: Service) => setSelectedService(s)}
                 />
               )}
 

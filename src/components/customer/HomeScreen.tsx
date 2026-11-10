@@ -373,27 +373,7 @@ export const HomeScreen: React.FC<{
         )}
       </div>
 
-      {/* 5. Smart AI Assistant Card */}
-      <div
-        onClick={() => setActiveTab('ask_nso')}
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 text-white p-5 cursor-pointer shadow-lg active:scale-[0.98] transition-all border border-slate-800/80 flex items-center justify-between"
-      >
-        <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-red-600 to-rose-600 flex items-center justify-center font-black text-white shadow-md shadow-red-500/30">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <h4 className="font-black text-sm text-white">Ask NSO Smart AI</h4>
-            <p className="text-[11px] text-slate-300 mt-0.5">
-              Compare products or get matched with verified technicians
-            </p>
-          </div>
-        </div>
-        <ArrowRight className="w-5 h-5 text-red-400 flex-shrink-0" />
-        <div className="absolute top-0 right-0 w-24 h-full bg-gradient-to-l from-indigo-900/40 to-transparent pointer-events-none" />
-      </div>
-
-      {/* 6. Special Custom Work Banner */}
+      {/* Special Custom Work Banner */}
       <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50/70 border border-amber-200/60 p-5 space-y-2.5">
         <span className="text-[10px] uppercase font-black tracking-wider text-amber-800 bg-amber-200/60 px-2.5 py-0.5 rounded-full inline-block">
           Custom Task Requests

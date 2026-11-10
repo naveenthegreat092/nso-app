@@ -26,8 +26,7 @@ export const ProductDetailModal: React.FC<{
   product: Product;
   onClose: () => void;
   onOpenCheckoutDirect: (product: Product, quantity: number, variant?: ProductVariant) => void;
-  onAskAI?: (prompt: string) => void;
-}> = ({ product, onClose, onOpenCheckoutDirect, onAskAI }) => {
+}> = ({ product, onClose, onOpenCheckoutDirect }) => {
   const {
     addToCart,
     showToast,
@@ -255,25 +254,6 @@ export const ProductDetailModal: React.FC<{
             <p className="text-xs text-slate-500 leading-relaxed pt-2">
               {product.description}
             </p>
-          </div>
-          {/* Ask AI Shopping Assistant Callout */}
-          <div
-            onClick={() => {
-              onClose();
-              setActiveTab('ask_nso');
-            }}
-            className="p-3 bg-gradient-to-r from-red-50 to-rose-50 border border-red-200 rounded-2xl flex items-center justify-between cursor-pointer hover:bg-red-100/60 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
-                <Sparkles className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-xs font-black text-slate-900">Have questions about this item?</p>
-                <p className="text-[10px] text-slate-500">Ask NSO AI for compatibility or specs</p>
-              </div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-red-600" />
           </div>
 
           {/* Customer Reviews & Breakdown (Amazon Style) */}

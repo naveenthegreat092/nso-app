@@ -58,7 +58,7 @@ interface AppContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   t: (key: string, defaultText?: string) => string;
-  activeTab: 'home' | 'explore' | 'ask_nso' | 'orders' | 'account';
+  activeTab: 'home' | 'explore' | 'orders' | 'account';
   isAuthModalOpen: boolean;
   selectedProduct: Product | null;
   selectedService: Service | null;
@@ -71,7 +71,7 @@ interface AppContextType {
   isAppLoading: boolean;
 
   // Actions
-  setActiveTab: (tab: 'home' | 'explore' | 'ask_nso' | 'orders' | 'account') => void;
+  setActiveTab: (tab: 'home' | 'explore' | 'orders' | 'account') => void;
   openAuthModal: () => void;
   closeAuthModal: () => void;
   setSelectedProduct: (product: Product | null) => void;
@@ -213,7 +213,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return translations[language]?.[key] || translations['en']?.[key] || defaultText || key;
   };
 
-  const [activeTab, setActiveTab] = useState<'home' | 'explore' | 'ask_nso' | 'orders' | 'account'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'explore' | 'orders' | 'account'>('home');
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);

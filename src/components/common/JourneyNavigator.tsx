@@ -21,10 +21,9 @@ export const JourneyNavigator: React.FC<{
 
   const allJourneys = [
     { id: 'onboarding', label: '1. Onboarding & Splash', icon: Play, color: 'text-rose-400' },
-    { id: 'customer_home', label: '4. Customer Shopping', icon: ShoppingBag, color: 'text-blue-400' },
-    { id: 'services', label: '4. Book Services', icon: Wrench, color: 'text-amber-400' },
-    { id: 'ai', label: '7. NSO AI Assistant', icon: Bot, color: 'text-red-400' },
-    { id: 'special_request', label: '8. Special Request (Admin)', icon: Sparkles, color: 'text-yellow-400' },
+    { id: 'customer_home', label: '2. Customer Shopping', icon: ShoppingBag, color: 'text-blue-400' },
+    { id: 'services', label: '3. Book Services', icon: Wrench, color: 'text-amber-400' },
+    { id: 'special_request', label: '4. Special Request (Admin)', icon: Sparkles, color: 'text-yellow-400' },
     { id: 'seller', label: '5. Seller Journey', icon: Store, color: 'text-emerald-400' },
     { id: 'provider', label: '6. Provider Hub', icon: Wrench, color: 'text-orange-400' },
     { id: 'admin', label: 'Admin Center (Superadmin)', icon: ShieldAlert, color: 'text-purple-400' }
