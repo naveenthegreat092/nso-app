@@ -451,7 +451,7 @@ export const OrdersScreen: React.FC = () => {
                       {/* Track technician if active */}
                       {['confirmed', 'in_progress'].includes(booking.status) && (
                         <button
-                          onClick={() => openTracking(booking.serviceTitle, booking.providerName, 'technician')}
+                          onClick={() => openTracking(booking.serviceTitle, booking.providerName, 'technician', booking.id, booking)}
                           className="flex items-center gap-1 text-[11px] font-bold text-white bg-red-600 hover:bg-red-700 px-2.5 py-1.5 rounded-lg shadow-sm"
                         >
                           <Navigation className="w-3 h-3" />

@@ -64,7 +64,7 @@ interface AppContextType {
   selectedService: Service | null;
   selectedProviderDetail: ProviderDetail | null;
   chatPeerName: string | null;
-  trackingModalData: { title: string; partnerName: string; type: 'technician' | 'delivery' } | null;
+  trackingModalData: { title: string; partnerName: string; type: 'technician' | 'delivery'; bookingId?: string; booking?: Booking } | null;
   reviewModalData: { title: string; type: 'product' | 'service'; targetId: string } | null;
   isAddressModalOpen: boolean;
   notification: string | null;
@@ -80,7 +80,7 @@ interface AppContextType {
   closeProviderProfile: () => void;
   openChat: (peerName: string) => void;
   closeChat: () => void;
-  openTracking: (title: string, partnerName: string, type: 'technician' | 'delivery') => void;
+  openTracking: (title: string, partnerName: string, type: 'technician' | 'delivery', bookingId?: string, booking?: Booking) => void;
   closeTracking: () => void;
   openReviewModal: (title: string, type: 'product' | 'service', targetId: string) => void;
   closeReviewModal: () => void;
@@ -219,7 +219,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedProviderDetail, setSelectedProviderDetail] = useState<ProviderDetail | null>(null);
   const [chatPeerName, setChatPeerName] = useState<string | null>(null);
-  const [trackingModalData, setTrackingModalData] = useState<{ title: string; partnerName: string; type: 'technician' | 'delivery' } | null>(null);
+  const [trackingModalData, setTrackingModalData] = useState<{ title: string; partnerName: string; type: 'technician' | 'delivery'; bookingId?: string; booking?: Booking } | null>(null);
   const [reviewModalData, setReviewModalData] = useState<{ title: string; type: 'product' | 'service'; targetId: string } | null>(null);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
@@ -302,8 +302,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const openChat = (peerName: string) => setChatPeerName(peerName);
   const closeChat = () => setChatPeerName(null);
 
-  const openTracking = (title: string, partnerName: string, type: 'technician' | 'delivery') => {
-    setTrackingModalData({ title, partnerName, type });
+  const openTracking = (title: string, partnerName: string, type: 'technician' | 'delivery', bookingId?: string, booking?: Booking) => {
+    setTrackingModalData({ title, partnerName, type, bookingId, booking });
   };
   const closeTracking = () => setTrackingModalData(null);
 

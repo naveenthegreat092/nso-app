@@ -21,7 +21,20 @@ export const ServiceBookingModal: React.FC<{
   onClose: () => void;
 }> = ({ service, onClose }) => {
   const { createBooking, bookings, user, openProviderProfile, openChat } = useApp();
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().substring(0, 10));
+
+  // ── Dynamic date generation (always today, tomorrow, day after) ───────────
+  const dynamicDates = (() => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return [0, 1, 2].map((offset) => {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      const iso = d.toISOString().substring(0, 10);
+      const label = offset === 0 ? 'Today' : offset === 1 ? 'Tomorrow' : days[d.getDay()];
+      return { iso, label };
+    });
+  })();
+
+  const [selectedDate, setSelectedDate] = useState(() => dynamicDates[0].iso);
   const [selectedSlot, setSelectedSlot] = useState(service.availableSlots[0]);
   const [serviceMode, setServiceMode] = useState<'home_visit' | 'provider_location'>('home_visit');
   const [address, setAddress] = useState(
@@ -103,6 +116,25 @@ export const ServiceBookingModal: React.FC<{
                 <span>Standard Inspection Fee:</span>
                 <span className="font-black text-emerald-600 text-sm">₹{isConfirmed.totalPrice}</span>
               </div>
+              {isConfirmed.serviceMode === 'home_visit' && (
+                <>
+                  <div className="flex justify-between text-slate-600">
+                    <span>Advance to Reserve (25%):</span>
+                    <span className="font-black text-amber-600">
+                      ₹{isConfirmed.advanceAmount || Math.round(isConfirmed.totalPrice * 0.25)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-slate-600">
+                    <span>Balance Due on Completion:</span>
+                    <span className="font-bold text-slate-700">
+                      ₹{isConfirmed.totalPrice - (isConfirmed.advanceAmount || Math.round(isConfirmed.totalPrice * 0.25))}
+                    </span>
+                  </div>
+                  <div className="mt-1 p-2 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-800 font-semibold">
+                    ⚡ Pay the advance in Orders tab to unlock live GPS tracking for your doorstep visit.
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="p-3 bg-blue-50 border border-blue-200/80 rounded-xl text-left text-[11px] text-blue-900 space-y-1">
@@ -204,18 +236,18 @@ export const ServiceBookingModal: React.FC<{
                 <span>Select Date</span>
               </span>
               <div className="grid grid-cols-3 gap-2">
-                {['2026-11-04', '2026-11-05', '2026-11-06'].map((d) => (
+                {dynamicDates.map(({ iso, label }) => (
                   <button
-                    key={d}
+                    key={iso}
                     type="button"
-                    onClick={() => setSelectedDate(d)}
+                    onClick={() => setSelectedDate(iso)}
                     className={`py-2 px-1 rounded-xl text-xs font-black border transition-all ${
-                      selectedDate === d
+                      selectedDate === iso
                         ? 'border-red-600 bg-red-600 text-white shadow-md'
                         : 'border-slate-200 text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    {d === '2026-11-04' ? 'Today' : d === '2026-11-05' ? 'Tomorrow' : d}
+                    {label}
                   </button>
                 ))}
               </div>

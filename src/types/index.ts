@@ -140,6 +140,9 @@ export interface Service {
   availableSlots: string[];
   approvedByAdmin: boolean;
   approvalStatus?: 'approved' | 'pending_approval' | 'rejected';
+  hubAddress?: string;
+  hubLat?: number;
+  hubLng?: number;
 }
 
 export interface CartItem {
@@ -218,6 +221,21 @@ export interface Booking {
   rating?: number;
   reviewComment?: string;
   technicianEtaMinutes?: number;
+  advanceAmount?: number;
+  advancePaymentStatus?: 'pending' | 'paid' | 'waived';
+  isLiveTrackingActive?: boolean;
+  providerLat?: number;
+  providerLng?: number;
+  providerHeading?: number;
+  providerSpeed?: number;
+  providerLocationUpdatedAt?: string;
+  providerAddress?: string;
+  providerHubLat?: number;
+  providerHubLng?: number;
+  customerLat?: number;
+  customerLng?: number;
+  distanceKm?: number;
+  directionsUrl?: string;
 }
 
 export type SpecialRequestStatus = 'submitted' | 'under_review' | 'quote_offered' | 'accepted' | 'declined';

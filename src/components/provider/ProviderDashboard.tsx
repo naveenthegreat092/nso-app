@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   Wrench,
@@ -14,8 +14,14 @@ import {
   UploadCloud,
   Check,
   X,
-  ChevronRight
+  ChevronRight,
+  MapPin,
+  Navigation,
+  Radio,
+  WifiOff,
+  ExternalLink,
 } from 'lucide-react';
+import { api } from '../../api/client';
 
 export const ProviderDashboard: React.FC = () => {
   const { bookings, updateBookingStatus, submitRevisedQuote, providers, addProviderPortfolioImage, user, showToast } = useApp();
@@ -45,6 +51,92 @@ export const ProviderDashboard: React.FC = () => {
   const currentProviderTrade = user.providerApplication?.tradeCategory || 'Home Services';
   const currentProviderDetail = providers.find((p) => p.id === user.id) || null;
   const portfolioItems = currentProviderDetail?.portfolio || [];
+
+  // ── Live GPS sharing state (per booking) ──────────────────────────────────
+  const [sharingBookingId, setSharingBookingId] = useState<string | null>(null);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const streamIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastCoordsRef = useRef<{ lat: number; lng: number; heading?: number; speed?: number } | null>(null);
+
+  // Stop GPS sharing cleanly
+  const stopSharing = useCallback(async (bookingId: string, markOnServer = true) => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    if (streamIntervalRef.current !== null) {
+      clearInterval(streamIntervalRef.current);
+      streamIntervalRef.current = null;
+    }
+    lastCoordsRef.current = null;
+    setSharingBookingId(null);
+    setGpsError(null);
+    if (markOnServer) {
+      await api.toggleLocationSharing(bookingId, false);
+    }
+  }, []);
+
+  // Start GPS sharing
+  const startSharing = useCallback(async (bookingId: string) => {
+    if (!('geolocation' in navigator)) {
+      setGpsError('GPS not available on this device.');
+      return;
+    }
+    setGpsError(null);
+
+    // Tell server we are starting
+    const res = await api.toggleLocationSharing(bookingId, true);
+    if (!res.success) {
+      setGpsError(res.error || 'Could not activate tracking on server.');
+      return;
+    }
+    setSharingBookingId(bookingId);
+
+    // Watch position and cache latest coords
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        lastCoordsRef.current = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          heading: pos.coords.heading ?? undefined,
+          speed: pos.coords.speed ?? undefined,
+        };
+      },
+      (err) => {
+        console.warn('GPS error:', err.message);
+        if (err.code === err.PERMISSION_DENIED) {
+          setGpsError('GPS permission denied. Please allow location access and try again.');
+          stopSharing(bookingId);
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 4000 }
+    );
+
+    // Stream coords to server every 6 seconds
+    streamIntervalRef.current = setInterval(async () => {
+      if (lastCoordsRef.current) {
+        await api.sendProviderLocation(bookingId, lastCoordsRef.current);
+      }
+    }, 6000);
+  }, [stopSharing]);
+
+  // Auto-stop when booking is completed or cancelled
+  useEffect(() => {
+    if (!sharingBookingId) return;
+    const booking = bookings.find((b) => b.id === sharingBookingId);
+    if (booking && (booking.status === 'completed' || booking.status === 'cancelled')) {
+      stopSharing(sharingBookingId, false); // server already stopped on status change
+    }
+  }, [bookings, sharingBookingId, stopSharing]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (streamIntervalRef.current !== null) clearInterval(streamIntervalRef.current);
+    };
+  }, []);
 
   const handleOpenQuoteModal = (bookingId: string) => {
     setSelectedBookingForQuote(bookingId);
@@ -190,9 +282,35 @@ export const ProviderDashboard: React.FC = () => {
                     <p className="text-[11px] text-gray-500">
                       Slot: <span className="font-bold text-red-600">{b.date} ({b.timeSlot})</span>
                     </p>
-                    <p className="text-[11px] text-gray-500">
-                      Address: {b.customerAddress}
-                    </p>
+                    {/* Show customer address for home_visit ONLY after advance payment */}
+                    {b.serviceMode === 'home_visit' ? (
+                      (b.advancePaymentStatus === 'paid' || b.paymentStatus === 'success') ? (
+                        <div className="mt-1 flex items-start gap-1.5">
+                          <MapPin className="w-3 h-3 text-emerald-600 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-[11px] text-emerald-800 font-bold">Customer Location (Unlocked):</p>
+                            <p className="text-[11px] text-gray-700">{b.customerAddress}</p>
+                            <a
+                              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.customerAddress)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-[10px] text-blue-600 font-bold mt-0.5"
+                            >
+                              <ExternalLink className="w-3 h-3" /> Navigate in Google Maps
+                            </a>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-700">
+                          <MapPin className="w-3 h-3 text-amber-500" />
+                          <span>Customer address unlocks after advance payment is verified.</span>
+                        </div>
+                      )
+                    ) : (
+                      <p className="text-[11px] text-gray-500">
+                        Mode: Customer visits your hub
+                      </p>
+                    )}
                   </div>
 
                   {/* Accept / Decline incoming customer requests */}
@@ -230,15 +348,44 @@ export const ProviderDashboard: React.FC = () => {
                           <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
                           <span>Active Job On-Site</span>
                         </div>
-                        <div className="flex items-center gap-1 text-indigo-700 bg-white/90 border border-indigo-200 px-2 py-0.5 rounded-md font-mono text-[10px] font-bold shadow-xs">
-                          <Clock className="w-3 h-3 text-indigo-600" />
-                          <span>42m 18s</span>
-                        </div>
                       </div>
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="text-[10px] text-indigo-700 font-medium">OTP Verified: 4829</span>
+
+                      {/* GPS Sharing Controls — only for home_visit with verified advance */}
+                      {b.serviceMode === 'home_visit' && (b.advancePaymentStatus === 'paid' || b.paymentStatus === 'success') && (
+                        <div className="bg-white rounded-lg border border-indigo-200 p-2.5 space-y-2">
+                          <p className="text-[10px] font-black text-indigo-800 uppercase tracking-wider">Live GPS Sharing</p>
+                          {gpsError && sharingBookingId === b.id && (
+                            <p className="text-[10px] text-rose-600 font-bold">{gpsError}</p>
+                          )}
+                          {sharingBookingId === b.id ? (
+                            <div className="space-y-1.5">
+                              <div className="flex items-center gap-1.5 text-emerald-700 text-[11px] font-bold">
+                                <Radio className="w-3.5 h-3.5 animate-pulse" />
+                                <span>Sharing live location with customer…</span>
+                              </div>
+                              <button
+                                onClick={() => stopSharing(b.id)}
+                                className="w-full py-1.5 bg-rose-100 hover:bg-rose-200 text-rose-700 font-black text-[11px] rounded-lg flex items-center justify-center gap-1.5 active:scale-95"
+                              >
+                                <WifiOff className="w-3.5 h-3.5" /> Stop Sharing Location
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => startSharing(b.id)}
+                              className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] rounded-lg flex items-center justify-center gap-1.5 active:scale-95"
+                            >
+                              <Navigation className="w-3.5 h-3.5" /> Start Sharing Live Location
+                            </button>
+                          )}
+                          <p className="text-[9px] text-gray-400">Your GPS is shared only with this customer and stops automatically when job is completed.</p>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-end pt-1">
                         <button
                           onClick={() => {
+                            if (sharingBookingId === b.id) stopSharing(b.id);
                             updateBookingStatus(b.id, 'completed');
                             showToast('🎉 Job marked as Completed! Invoice generated.');
                           }}

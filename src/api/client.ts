@@ -348,6 +348,95 @@ export const api = {
     }
   },
 
+  // ── Live GPS Tracking ────────────────────────────────────────────────────────
+
+  /** Pay advance for a booking (marks advance as verified on server) */
+  payBookingAdvance: async (bookingId: string, paymentDetails: { paymentMethod: string; paymentRef?: string }): Promise<{ success: boolean; booking?: Booking; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/pay-advance`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(paymentDetails)
+      });
+      const data = await res.json();
+      if (!res.ok) return { success: false, error: data.error || 'Advance payment failed.' };
+      return { success: true, booking: data };
+    } catch {
+      return { success: false, error: 'Network error. Please try again.' };
+    }
+  },
+
+  /** Provider: start or stop sharing live location for a booking */
+  toggleLocationSharing: async (bookingId: string, active: boolean): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/tracking`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ active })
+      });
+      const data = await res.json();
+      if (!res.ok) return { success: false, error: data.error || 'Could not update tracking.' };
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Network error.' };
+    }
+  },
+
+  /** Provider: stream current GPS position to server */
+  sendProviderLocation: async (bookingId: string, coords: { lat: number; lng: number; heading?: number; speed?: number }): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/location`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(coords)
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  /** Customer / Provider: fetch current tracking state for a booking */
+  getBookingLocation: async (bookingId: string): Promise<{
+    status: 'awaiting_payment' | 'tracking_not_started' | 'provider_sharing' | 'provider_offline' | 'provider_location';
+    serviceMode?: string;
+    isLiveTrackingActive?: boolean;
+    providerLat?: number;
+    providerLng?: number;
+    providerHeading?: number;
+    providerSpeed?: number;
+    customerLat?: number;
+    customerLng?: number;
+    customerAddress?: string;
+    distanceKm?: number | null;
+    etaMinutes?: number | null;
+    providerName?: string;
+    serviceTitle?: string;
+    bookingStatus?: string;
+    providerAddress?: string;
+    directionsUrl?: string;
+    advanceAmount?: number;
+    message?: string;
+    error?: string;
+  } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/location`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { status: 'awaiting_payment', ...data };
+      }
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
   // ── Reset ───────────────────────────────────────────────────────────────────
 
   resetDatabase: async () => {

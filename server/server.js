@@ -319,8 +319,24 @@ try { db.exec('ALTER TABLE bookings ADD COLUMN problem_description TEXT;'); } ca
 try { db.exec('ALTER TABLE bookings ADD COLUMN problem_photo TEXT;'); } catch (_) {}
 try { db.exec("ALTER TABLE bookings ADD COLUMN request_type TEXT DEFAULT 'repair';"); } catch (_) {}
 try { db.exec("ALTER TABLE bookings ADD COLUMN payment_method TEXT DEFAULT 'online';"); } catch (_) {}
+try { db.exec('ALTER TABLE bookings ADD COLUMN advance_amount REAL DEFAULT 0;'); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN advance_payment_status TEXT DEFAULT 'pending';"); } catch (_) {}
+try { db.exec('ALTER TABLE bookings ADD COLUMN customer_lat REAL DEFAULT 12.9716;'); } catch (_) {}
+try { db.exec('ALTER TABLE bookings ADD COLUMN customer_lng REAL DEFAULT 77.5946;'); } catch (_) {}
+try { db.exec('ALTER TABLE bookings ADD COLUMN provider_lat REAL;'); } catch (_) {}
+try { db.exec('ALTER TABLE bookings ADD COLUMN provider_lng REAL;'); } catch (_) {}
+try { db.exec('ALTER TABLE bookings ADD COLUMN provider_heading REAL;'); } catch (_) {}
+try { db.exec('ALTER TABLE bookings ADD COLUMN provider_speed REAL;'); } catch (_) {}
+try { db.exec('ALTER TABLE bookings ADD COLUMN provider_location_updated_at TEXT;'); } catch (_) {}
+try { db.exec('ALTER TABLE bookings ADD COLUMN is_live_tracking_active INTEGER DEFAULT 0;'); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN provider_address TEXT DEFAULT 'NSO Verified Specialist Hub, Indiranagar, Bengaluru';"); } catch (_) {}
+try { db.exec('ALTER TABLE bookings ADD COLUMN provider_hub_lat REAL DEFAULT 12.9784;'); } catch (_) {}
+try { db.exec('ALTER TABLE bookings ADD COLUMN provider_hub_lng REAL DEFAULT 77.6408;'); } catch (_) {}
 try { db.exec('ALTER TABLE provider_applications ADD COLUMN profile_photo TEXT;'); } catch (_) {}
 try { db.exec('ALTER TABLE provider_applications ADD COLUMN id_document_photo TEXT;'); } catch (_) {}
+try { db.exec("ALTER TABLE services ADD COLUMN hub_address TEXT DEFAULT 'NSO Verified Specialist Hub, Indiranagar, Bengaluru';"); } catch (_) {}
+try { db.exec('ALTER TABLE services ADD COLUMN hub_lat REAL DEFAULT 12.9784;'); } catch (_) {}
+try { db.exec('ALTER TABLE services ADD COLUMN hub_lng REAL DEFAULT 77.6408;'); } catch (_) {}
 
 // Seed default marketplace settings if not present
 const getSetting = (key, defaultVal) => {
@@ -1706,48 +1722,95 @@ app.post('/api/orders/:id/cancel', requireAuth, (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 13. BOOKINGS & SERVER-ENFORCED SLOT CONFLICTS
+// 13. BOOKINGS, LIVE GPS TELEMETRY & SERVER-ENFORCED SLOT CONFLICTS
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Mathematical Haversine Distance Calculation (km)
+function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+  if (lat1 === undefined || lon1 === undefined || lat2 === undefined || lon2 === undefined ||
+      lat1 === null || lon1 === null || lat2 === null || lon2 === null) {
+    return null;
+  }
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return parseFloat((R * c).toFixed(2));
+}
+
+// Estimated Arrival Time (minutes) based on distance and average Bengaluru city speed (25 km/h)
+function calculateEstimatedEtaMinutes(distanceKm, averageSpeedKmh = 25) {
+  if (distanceKm === null || distanceKm === undefined) return null;
+  if (distanceKm <= 0.05) return 1;
+  const hours = distanceKm / averageSpeedKmh;
+  return Math.max(1, Math.round(hours * 60));
+}
 
 // Get Bookings
 app.get('/api/bookings', requireAuth, (req, res) => {
   let rows = [];
+  const isProvider = req.session.providerStatus === 'approved';
   if (req.session.isAdmin) {
     rows = db.prepare('SELECT * FROM bookings ORDER BY created_at DESC').all();
-  } else if (req.session.providerStatus === 'approved') {
+  } else if (isProvider) {
     rows = db.prepare('SELECT * FROM bookings WHERE provider_id = ? ORDER BY created_at DESC').all(req.session.userId);
   } else {
     rows = db.prepare('SELECT * FROM bookings WHERE customer_id = ? ORDER BY created_at DESC').all(req.session.userId);
   }
 
-  const bookings = rows.map((b) => ({
-    id: b.id,
-    bookingNumber: b.booking_number,
-    serviceId: b.service_id,
-    serviceTitle: b.service_title,
-    providerId: b.provider_id,
-    providerName: b.provider_name,
-    customerId: b.customer_id,
-    customerName: b.customer_name,
-    customerPhone: b.customer_phone,
-    date: b.date,
-    timeSlot: b.time_slot,
-    serviceMode: b.service_mode,
-    customerAddress: b.customer_address,
-    totalPrice: b.total_price,
-    status: b.status,
-    paymentStatus: b.payment_status,
-    cancellationTerms: b.cancellation_terms,
-    revisedQuote: b.revised_quote_json ? JSON.parse(b.revised_quote_json) : undefined,
-    createdAt: b.created_at
-  }));
+  const bookings = rows.map((b) => {
+    // Privacy protection: only reveal customer precise address once advance payment is confirmed!
+    const isPaidOrVerified = b.payment_status === 'success' || b.advance_payment_status === 'paid' || b.payment_method === 'cod';
+    let customerAddress = b.customer_address;
+    if (isProvider && !req.session.isAdmin && !isPaidOrVerified && b.service_mode === 'home_visit') {
+      customerAddress = '🔒 Customer precise address unlocks once advance payment is confirmed.';
+    }
+
+    return {
+      id: b.id,
+      bookingNumber: b.booking_number,
+      serviceId: b.service_id,
+      serviceTitle: b.service_title,
+      providerId: b.provider_id,
+      providerName: b.provider_name,
+      customerId: b.customer_id,
+      customerName: b.customer_name,
+      customerPhone: b.customer_phone,
+      date: b.date,
+      timeSlot: b.time_slot,
+      serviceMode: b.service_mode,
+      customerAddress,
+      totalPrice: b.total_price,
+      advanceAmount: b.advance_amount || Math.round(b.total_price * 0.25),
+      advancePaymentStatus: b.advance_payment_status || 'pending',
+      paymentMethod: b.payment_method || 'online',
+      status: b.status,
+      paymentStatus: b.payment_status,
+      cancellationTerms: b.cancellation_terms,
+      isLiveTrackingActive: Boolean(b.is_live_tracking_active),
+      providerLat: b.provider_lat,
+      providerLng: b.provider_lng,
+      providerHeading: b.provider_heading,
+      providerSpeed: b.provider_speed,
+      providerLocationUpdatedAt: b.provider_location_updated_at,
+      providerAddress: b.provider_address || 'NSO Verified Specialist Hub, Indiranagar, Bengaluru',
+      providerHubLat: b.provider_hub_lat || 12.9784,
+      providerHubLng: b.provider_hub_lng || 77.6408,
+      revisedQuote: b.revised_quote_json ? JSON.parse(b.revised_quote_json) : undefined,
+      createdAt: b.created_at
+    };
+  });
 
   res.json(bookings);
 });
 
 // Create Booking: Server-enforced slot conflict prevention
 app.post('/api/bookings', requireAuth, (req, res) => {
-  const { serviceId, date, timeSlot, mode, address } = req.body || {};
+  const { serviceId, date, timeSlot, mode, address, advanceAmount, paymentMethod, customerLat, customerLng } = req.body || {};
 
   if (!serviceId || !date || !timeSlot || !address) {
     return res.status(400).json({ error: 'Service, date, time slot, and address are required.' });
@@ -1776,13 +1839,24 @@ app.post('/api/bookings', requireAuth, (req, res) => {
     const bookingNumber = `NSO-BKG-${crypto.randomInt(10000, 99999)}`;
     const nowIso = new Date().toISOString();
 
+    const requiredAdvance = Number(advanceAmount) || Math.max(100, Math.round(service.price * 0.25));
+    const selectedMode = mode || 'home_visit';
+    const chosenPaymentMethod = paymentMethod || 'online';
+    const initAdvanceStatus = chosenPaymentMethod === 'cod' ? 'waived' : 'pending';
+
+    const hubAddress = service.hub_address || 'NSO Verified Specialist Hub, Indiranagar, Bengaluru';
+    const hubLat = service.hub_lat || 12.9784;
+    const hubLng = service.hub_lng || 77.6408;
+
     db.prepare(`
       INSERT INTO bookings (
         id, booking_number, service_id, service_title, provider_id, provider_name,
         customer_id, customer_name, customer_phone, date, time_slot, service_mode,
-        customer_address, total_price, status, payment_status, cancellation_terms,
+        customer_address, total_price, advance_amount, advance_payment_status,
+        payment_method, customer_lat, customer_lng, provider_address, provider_hub_lat,
+        provider_hub_lng, status, payment_status, cancellation_terms, is_live_tracking_active,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', 'pending', ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', 'pending', ?, 0, ?, ?)
     `).run(
       bookingId,
       bookingNumber,
@@ -1795,9 +1869,17 @@ app.post('/api/bookings', requireAuth, (req, res) => {
       req.session.phone,
       date,
       timeSlot,
-      mode || 'home_visit',
+      selectedMode,
       address.trim(),
       service.price,
+      requiredAdvance,
+      initAdvanceStatus,
+      chosenPaymentMethod,
+      customerLat || 12.9716,
+      customerLng || 77.5946,
+      hubAddress,
+      hubLat,
+      hubLng,
       service.cancellation_policy,
       nowIso,
       nowIso
@@ -1818,12 +1900,19 @@ app.post('/api/bookings', requireAuth, (req, res) => {
       customerName: req.session.name,
       date,
       timeSlot,
-      serviceMode: mode || 'home_visit',
+      serviceMode: selectedMode,
       customerAddress: address.trim(),
       totalPrice: service.price,
+      advanceAmount: requiredAdvance,
+      advancePaymentStatus: initAdvanceStatus,
+      paymentMethod: chosenPaymentMethod,
+      providerAddress: hubAddress,
+      providerHubLat: hubLat,
+      providerHubLng: hubLng,
       status: 'confirmed',
       paymentStatus: 'pending',
       cancellationTerms: service.cancellation_policy,
+      isLiveTrackingActive: false,
       createdAt: nowIso
     });
   } catch (err) {
@@ -1831,6 +1920,225 @@ app.post('/api/bookings', requireAuth, (req, res) => {
     console.error('Booking creation error:', err);
     res.status(500).json({ error: 'Failed to create booking due to a server error.' });
   }
+});
+
+// Verify & Process Booking Advance Payment
+app.post('/api/bookings/:id/pay-advance', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { razorpayPaymentId, razorpayOrderId, razorpaySignature, paymentMethod } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.customer_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Unauthorized to make payment on this booking.' });
+  }
+
+  // If Razorpay keys are configured and signature provided, verify HMAC
+  if (RAZORPAY_KEY_SECRET && razorpayPaymentId && razorpayOrderId && razorpaySignature) {
+    const generated = crypto.createHmac('sha256', RAZORPAY_KEY_SECRET)
+      .update(`${razorpayOrderId}|${razorpayPaymentId}`).digest('hex');
+    if (generated !== razorpaySignature) {
+      return res.status(400).json({ error: 'Payment signature verification failed. Tampered response detected.' });
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  db.prepare(`
+    UPDATE bookings SET
+      advance_payment_status = 'paid',
+      payment_status = 'success',
+      payment_method = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(paymentMethod || 'online', nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, 'customer', 'BOOKING_ADVANCE_PAID', `Advance payment of ₹${booking.advance_amount || 100} verified for booking ${booking.booking_number}`, req.ip);
+
+  res.json({
+    success: true,
+    message: 'Advance payment verified successfully. Service location and live tracking are now active.',
+    bookingId: id,
+    advancePaymentStatus: 'paid',
+    paymentStatus: 'success',
+    status: booking.status
+  });
+});
+
+// Provider Explicit Control: Start / Stop Live GPS Tracking
+app.patch('/api/bookings/:id/tracking', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { active } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only the assigned provider can start or stop location sharing.' });
+  }
+
+  if (booking.status === 'cancelled' || booking.status === 'completed') {
+    return res.status(400).json({ error: 'Cannot share location for a completed or cancelled booking.' });
+  }
+
+  if (booking.service_mode !== 'home_visit') {
+    return res.status(400).json({ error: 'Live location tracking is only applicable for doorstep / home visit services.' });
+  }
+
+  const isAdvanceVerified = booking.payment_status === 'success' || booking.advance_payment_status === 'paid' || booking.payment_method === 'cod';
+  if (!isAdvanceVerified) {
+    return res.status(400).json({ error: 'Advance payment must be confirmed before live tracking can be initiated.' });
+  }
+
+  const isStarting = Boolean(active);
+  const nowIso = new Date().toISOString();
+  const newStatus = isStarting && booking.status === 'confirmed' ? 'in_progress' : booking.status;
+
+  db.prepare(`
+    UPDATE bookings SET
+      is_live_tracking_active = ?,
+      status = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(isStarting ? 1 : 0, newStatus, nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, 'provider', isStarting ? 'TRACKING_STARTED' : 'TRACKING_STOPPED', `Provider ${isStarting ? 'started' : 'stopped'} live GPS sharing for ${booking.booking_number}`, req.ip);
+
+  res.json({
+    success: true,
+    isLiveTrackingActive: isStarting,
+    status: newStatus
+  });
+});
+
+// Provider Telemetry Ingestion: Stream Real GPS Coordinates
+app.post('/api/bookings/:id/location', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { lat, lng, heading, speed } = req.body || {};
+
+  if (lat === undefined || lng === undefined || typeof lat !== 'number' || typeof lng !== 'number') {
+    return res.status(400).json({ error: 'Valid numerical latitude and longitude are required.' });
+  }
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only the assigned provider can stream telemetry for this job.' });
+  }
+
+  if (!booking.is_live_tracking_active) {
+    return res.status(400).json({ error: 'Live tracking is currently paused or inactive for this booking.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  db.prepare(`
+    UPDATE bookings SET
+      provider_lat = ?,
+      provider_lng = ?,
+      provider_heading = ?,
+      provider_speed = ?,
+      provider_location_updated_at = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(lat, lng, heading || null, speed || null, nowIso, nowIso, id);
+
+  res.json({ success: true, timestamp: nowIso });
+});
+
+// Customer / Provider / Admin: Fetch Live Tracking & Directions
+app.get('/api/bookings/:id/location', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.customer_id !== req.session.userId && booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Unauthorized to view location for this booking.' });
+  }
+
+  // Case A: Customer chose to visit specialist facility (provider_location)
+  if (booking.service_mode === 'provider_location') {
+    const hubLat = booking.provider_hub_lat || 12.9784;
+    const hubLng = booking.provider_hub_lng || 77.6408;
+    const providerAddress = booking.provider_address || 'NSO Verified Specialist Hub, Indiranagar, Bengaluru';
+    const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${hubLat},${hubLng}`;
+
+    return res.json({
+      serviceMode: 'provider_location',
+      status: 'provider_location',
+      providerAddress,
+      providerHubLat: hubLat,
+      providerHubLng: hubLng,
+      directionsUrl,
+      providerName: booking.provider_name,
+      serviceTitle: booking.service_title,
+      bookingStatus: booking.status
+    });
+  }
+
+  // Case B: Doorstep visit (home_visit)
+  // Check advance payment status
+  const isAdvanceVerified = booking.payment_status === 'success' || booking.advance_payment_status === 'paid' || booking.payment_method === 'cod';
+  if (!isAdvanceVerified) {
+    return res.status(402).json({
+      status: 'awaiting_payment',
+      error: 'Advance payment is required before live location tracking is available.',
+      bookingId: booking.id,
+      advanceAmount: booking.advance_amount || Math.round(booking.total_price * 0.25)
+    });
+  }
+
+  // Check if provider has initiated sharing
+  if (!booking.is_live_tracking_active) {
+    return res.json({
+      status: 'tracking_not_started',
+      serviceMode: 'home_visit',
+      isLiveTrackingActive: false,
+      message: 'Specialist has not yet started sharing live location for this visit.',
+      bookingStatus: booking.status,
+      providerName: booking.provider_name,
+      serviceTitle: booking.service_title,
+      customerAddress: booking.customer_address
+    });
+  }
+
+  // Provider is sharing: check if telemetry is stale (>90s)
+  const updatedAtMs = booking.provider_location_updated_at ? new Date(booking.provider_location_updated_at).getTime() : 0;
+  const isStale = Date.now() - updatedAtMs > 90000;
+
+  // Real Haversine distance and real estimated ETA calculation
+  const customerLat = booking.customer_lat || 12.9716;
+  const customerLng = booking.customer_lng || 77.5946;
+  const providerLat = booking.provider_lat;
+  const providerLng = booking.provider_lng;
+
+  let distanceKm = null;
+  let etaMinutes = null;
+
+  if (providerLat && providerLng) {
+    distanceKm = calculateHaversineDistance(providerLat, providerLng, customerLat, customerLng);
+    etaMinutes = calculateEstimatedEtaMinutes(distanceKm, 25);
+  }
+
+  res.json({
+    status: isStale ? 'provider_offline' : 'provider_sharing',
+    serviceMode: 'home_visit',
+    isLiveTrackingActive: true,
+    isStale,
+    providerLat,
+    providerLng,
+    providerHeading: booking.provider_heading,
+    providerSpeed: booking.provider_speed,
+    providerLocationUpdatedAt: booking.provider_location_updated_at,
+    customerLat,
+    customerLng,
+    customerAddress: booking.customer_address,
+    distanceKm,
+    etaMinutes,
+    providerName: booking.provider_name,
+    serviceTitle: booking.service_title,
+    bookingStatus: booking.status
+  });
 });
 
 // Update Booking Status: Provider or Admin
@@ -1851,17 +2159,21 @@ app.patch('/api/bookings/:id/status', requireAuth, (req, res) => {
   }
 
   const nowIso = new Date().toISOString();
-  db.prepare('UPDATE bookings SET status = ?, updated_at = ? WHERE id = ?').run(status, nowIso, id);
+  // If completed or cancelled, automatically terminate live tracking
+  const stopTracking = status === 'completed' || status === 'cancelled';
+  const trackingActive = stopTracking ? 0 : booking.is_live_tracking_active;
+
+  db.prepare('UPDATE bookings SET status = ?, is_live_tracking_active = ?, updated_at = ? WHERE id = ?').run(status, trackingActive, nowIso, id);
 
   // If marked completed, automatically record service commission
   if (status === 'completed') {
-    db.prepare("UPDATE bookings SET payment_status = 'success', updated_at = ? WHERE id = ?").run(nowIso, id);
+    db.prepare("UPDATE bookings SET payment_status = 'success', advance_payment_status = 'paid', updated_at = ? WHERE id = ?").run(nowIso, id);
     recordServiceCommission(booking.id, booking.total_price, booking.provider_id);
   }
 
   logAudit(req.session.userId, req.session.name, req.session.activeRole, 'BOOKING_STATUS_UPDATED', `Booking ${booking.booking_number} marked ${status}`, req.ip);
 
-  res.json({ id, status });
+  res.json({ id, status, isLiveTrackingActive: Boolean(trackingActive) });
 });
 
 // Cancel Booking
@@ -1875,10 +2187,9 @@ app.post('/api/bookings/:id/cancel', requireAuth, (req, res) => {
   }
 
   const nowIso = new Date().toISOString();
-  db.prepare("UPDATE bookings SET status = 'cancelled', payment_status = 'refunded', updated_at = ? WHERE id = ?").run(nowIso, id);
+  db.prepare("UPDATE bookings SET status = 'cancelled', payment_status = 'refunded', is_live_tracking_active = 0, updated_at = ? WHERE id = ?").run(nowIso, id);
 
   logAudit(req.session.userId, req.session.name, req.session.activeRole, 'BOOKING_CANCELLED', `Booking ${booking.booking_number} cancelled`, req.ip);
-
   res.json({ success: true, message: 'Booking cancelled. Time slot released.' });
 });
 

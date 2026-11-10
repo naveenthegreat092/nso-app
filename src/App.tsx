@@ -246,6 +246,7 @@ export const AppContent: React.FC = () => {
           trackingTitle={trackingModalData.title}
           partnerName={trackingModalData.partnerName}
           partnerType={trackingModalData.type}
+          bookingId={trackingModalData.bookingId}
           onClose={closeTracking}
           onOpenChat={(name) => {
             closeTracking();
