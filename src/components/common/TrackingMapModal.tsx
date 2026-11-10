@@ -21,7 +21,6 @@ import { api } from '../../api/client';
 // ── Types ─────────────────────────────────────────────────────────────────────
 type TrackingStatus =
   | 'loading'
-  | 'awaiting_payment'
   | 'tracking_not_started'
   | 'provider_sharing'
   | 'provider_offline'
@@ -247,28 +246,6 @@ export const TrackingMapModal: React.FC<{
           <div className="flex flex-col items-center justify-center h-48 gap-3">
             <Compass className="w-8 h-8 text-blue-600 animate-spin" />
             <p className="text-sm font-bold text-slate-600">Fetching live tracking status…</p>
-          </div>
-        );
-
-      case 'awaiting_payment':
-        return (
-          <div className="flex flex-col items-center justify-center h-48 gap-4 px-4 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center">
-              <CreditCard className="w-7 h-7 text-amber-600" />
-            </div>
-            <div>
-              <p className="font-black text-slate-900 text-sm">Advance Payment Required</p>
-              <p className="text-xs text-slate-500 mt-1">
-                Complete the advance payment to unlock live GPS tracking.
-                {locationData.advanceAmount ? ` ₹${locationData.advanceAmount.toLocaleString()} required.` : ''}
-              </p>
-            </div>
-            <button
-              className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs shadow-md active:scale-95"
-              onClick={() => showToast('Go to Orders → Pay Advance to unlock tracking.')}
-            >
-              How to Pay Advance
-            </button>
           </div>
         );
 

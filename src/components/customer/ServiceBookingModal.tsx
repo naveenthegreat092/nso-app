@@ -116,25 +116,6 @@ export const ServiceBookingModal: React.FC<{
                 <span>Standard Inspection Fee:</span>
                 <span className="font-black text-emerald-600 text-sm">₹{isConfirmed.totalPrice}</span>
               </div>
-              {isConfirmed.serviceMode === 'home_visit' && (
-                <>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Advance to Reserve (25%):</span>
-                    <span className="font-black text-amber-600">
-                      ₹{isConfirmed.advanceAmount || Math.round(isConfirmed.totalPrice * 0.25)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Balance Due on Completion:</span>
-                    <span className="font-bold text-slate-700">
-                      ₹{isConfirmed.totalPrice - (isConfirmed.advanceAmount || Math.round(isConfirmed.totalPrice * 0.25))}
-                    </span>
-                  </div>
-                  <div className="mt-1 p-2 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-800 font-semibold">
-                    ⚡ Pay the advance in Orders tab to unlock live GPS tracking for your doorstep visit.
-                  </div>
-                </>
-              )}
             </div>
 
             <div className="p-3 bg-blue-50 border border-blue-200/80 rounded-xl text-left text-[11px] text-blue-900 space-y-1">

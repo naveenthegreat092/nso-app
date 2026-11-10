@@ -54,6 +54,16 @@ const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
 const RAZORPAY_WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET || '';
 
+// PhonePe Payment Gateway & UPI Configuration
+const PHONEPE_MERCHANT_ID = process.env.PHONEPE_MERCHANT_ID || 'PGTESTPAYUAT';
+const PHONEPE_SALT_KEY = process.env.PHONEPE_SALT_KEY || '099eb0cd-02cf-4e2a-8aca-3e6c6aff0399';
+const PHONEPE_SALT_INDEX = process.env.PHONEPE_SALT_INDEX || '1';
+const PHONEPE_ENV = (process.env.PHONEPE_ENV || 'UAT').toUpperCase(); // 'UAT' | 'PROD'
+const PHONEPE_HOST = PHONEPE_ENV === 'PROD'
+  ? 'https://api.phonepe.com/apis/hermes'
+  : 'https://api-preprod.phonepe.com/apis/pg-sandbox';
+const APP_URL = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || 'https://nso-app-md32.onrender.com';
+
 // Data directory
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
@@ -284,6 +294,18 @@ db.exec(`
     event_type TEXT NOT NULL,
     payload_hash TEXT NOT NULL,
     processed_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS phonepe_transactions (
+    txn_id TEXT PRIMARY KEY,
+    user_id TEXT,
+    order_id TEXT,
+    booking_id TEXT,
+    amount REAL NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    phonepe_response TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS special_requests (
@@ -735,6 +757,25 @@ app.post('/api/auth/send-otp', async (req, res) => {
       });
     } catch (err) {
       console.error('MSG91 SMS error:', err.message);
+    }
+  } else if ((OTP_PROVIDER === 'fast2sms' || process.env.FAST2SMS_API_KEY) && process.env.FAST2SMS_API_KEY) {
+    try {
+      const fast2smsRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+        method: 'POST',
+        headers: {
+          authorization: process.env.FAST2SMS_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          route: 'otp',
+          variables_values: code,
+          numbers: cleanPhone
+        })
+      });
+      const fast2smsData = await fast2smsRes.json().catch(() => ({}));
+      console.log(`[Fast2SMS] Dispatched OTP to ${cleanPhone}:`, fast2smsData?.message || 'OK');
+    } catch (err) {
+      console.error('Fast2SMS SMS error:', err.message);
     }
   } else {
     // Console / Development mode: Print to server log only if not production
@@ -1763,13 +1804,6 @@ app.get('/api/bookings', requireAuth, (req, res) => {
   }
 
   const bookings = rows.map((b) => {
-    // Privacy protection: only reveal customer precise address once advance payment is confirmed!
-    const isPaidOrVerified = b.payment_status === 'success' || b.advance_payment_status === 'paid' || b.payment_method === 'cod';
-    let customerAddress = b.customer_address;
-    if (isProvider && !req.session.isAdmin && !isPaidOrVerified && b.service_mode === 'home_visit') {
-      customerAddress = '🔒 Customer precise address unlocks once advance payment is confirmed.';
-    }
-
     return {
       id: b.id,
       bookingNumber: b.booking_number,
@@ -1783,10 +1817,8 @@ app.get('/api/bookings', requireAuth, (req, res) => {
       date: b.date,
       timeSlot: b.time_slot,
       serviceMode: b.service_mode,
-      customerAddress,
+      customerAddress: b.customer_address,
       totalPrice: b.total_price,
-      advanceAmount: b.advance_amount || Math.round(b.total_price * 0.25),
-      advancePaymentStatus: b.advance_payment_status || 'pending',
       paymentMethod: b.payment_method || 'online',
       status: b.status,
       paymentStatus: b.payment_status,
@@ -1985,11 +2017,6 @@ app.patch('/api/bookings/:id/tracking', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Live location tracking is only applicable for doorstep / home visit services.' });
   }
 
-  const isAdvanceVerified = booking.payment_status === 'success' || booking.advance_payment_status === 'paid' || booking.payment_method === 'cod';
-  if (!isAdvanceVerified) {
-    return res.status(400).json({ error: 'Advance payment must be confirmed before live tracking can be initiated.' });
-  }
-
   const isStarting = Boolean(active);
   const nowIso = new Date().toISOString();
   const newStatus = isStarting && booking.status === 'confirmed' ? 'in_progress' : booking.status;
@@ -2077,17 +2104,6 @@ app.get('/api/bookings/:id/location', requireAuth, (req, res) => {
   }
 
   // Case B: Doorstep visit (home_visit)
-  // Check advance payment status
-  const isAdvanceVerified = booking.payment_status === 'success' || booking.advance_payment_status === 'paid' || booking.payment_method === 'cod';
-  if (!isAdvanceVerified) {
-    return res.status(402).json({
-      status: 'awaiting_payment',
-      error: 'Advance payment is required before live location tracking is available.',
-      bookingId: booking.id,
-      advanceAmount: booking.advance_amount || Math.round(booking.total_price * 0.25)
-    });
-  }
-
   // Check if provider has initiated sharing
   if (!booking.is_live_tracking_active) {
     return res.json({
@@ -2354,6 +2370,176 @@ app.post('/api/payments/webhook', (req, res) => {
   );
 
   res.json({ status: 'ok' });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 14B. PHONEPE PAYMENT GATEWAY & DIRECT UPI INTEGRATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Public settings (returns current PhonePe UPI ID and gateway readiness to all phones)
+app.get('/api/settings/public', (req, res) => {
+  const merchantUpi = getSetting('merchant_upi_id', PHONEPE_MERCHANT_UPI_ID || '8310421121@ybl');
+  res.json({
+    merchantUpiId: merchantUpi,
+    phonepeMerchantId: PHONEPE_MERCHANT_ID,
+    phonepeEnv: PHONEPE_ENV,
+    isConfigured: Boolean(PHONEPE_MERCHANT_ID && PHONEPE_SALT_KEY)
+  });
+});
+
+// Update PhonePe Merchant UPI ID (Admin / Owner only)
+app.patch('/api/settings/merchant-upi', requireAdmin, (req, res) => {
+  const { upiId } = req.body || {};
+  if (!upiId || typeof upiId !== 'string') {
+    return res.status(400).json({ error: 'Valid UPI ID is required (e.g. yourname@ybl or 9876543210@paytm).' });
+  }
+  const cleanUpi = upiId.trim();
+  setSetting('merchant_upi_id', cleanUpi);
+  logAudit(req.session.userId, req.session.name, 'admin', 'MERCHANT_UPI_UPDATED', `Merchant UPI updated to: ${cleanUpi}`, req.ip);
+  res.json({ success: true, merchantUpiId: cleanUpi });
+});
+
+// Initiate PhonePe Payment (PG Checkout + Direct UPI Intent)
+app.post('/api/payments/phonepe/initiate', requireAuth, async (req, res) => {
+  const { amount, orderId, bookingId, customerPhone, customerName } = req.body || {};
+  const numAmount = Number(amount);
+  if (!numAmount || numAmount <= 0) {
+    return res.status(400).json({ error: 'Valid payment amount is required.' });
+  }
+
+  const txnId = `NSO_${Date.now()}_${crypto.randomInt(1000, 9999)}`;
+  const merchantUpi = getSetting('merchant_upi_id', PHONEPE_MERCHANT_UPI_ID || '8310421121@ybl');
+  const note = encodeURIComponent(`NSO Order ${orderId || bookingId || txnId}`);
+  const upiIntent = `upi://pay?pa=${merchantUpi}&pn=NSO%20Orbit&am=${numAmount.toFixed(2)}&cu=INR&tn=${note}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiIntent)}`;
+
+  const nowIso = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO phonepe_transactions (txn_id, user_id, order_id, booking_id, amount, status, phonepe_response, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'PENDING', ?, ?, ?)
+  `).run(txnId, req.session.userId, orderId || null, bookingId || null, numAmount, '', nowIso, nowIso);
+
+  // If PhonePe PG credentials are configured, initiate PG payment payload
+  let phonepeRedirectUrl = null;
+  if (PHONEPE_MERCHANT_ID && PHONEPE_SALT_KEY) {
+    try {
+      const payload = {
+        merchantId: PHONEPE_MERCHANT_ID,
+        merchantTransactionId: txnId,
+        merchantUserId: req.session.userId || `USER_${customerPhone || 'GUEST'}`,
+        amount: Math.round(numAmount * 100), // paise
+        redirectUrl: `${APP_URL}/api/payments/phonepe/redirect?txnId=${txnId}`,
+        redirectMode: 'POST',
+        callbackUrl: `${APP_URL}/api/payments/phonepe/callback`,
+        mobileNumber: (customerPhone || req.session.phone || '9999999999').replace(/\D/g, '').slice(-10),
+        paymentInstrument: {
+          type: 'PAY_PAGE'
+        }
+      };
+
+      const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64');
+      const sha256Hash = crypto.createHash('sha256').update(base64Payload + '/pg/v1/pay' + PHONEPE_SALT_KEY).digest('hex');
+      const xVerify = `${sha256Hash}###${PHONEPE_SALT_INDEX}`;
+
+      const pgRes = await fetch(`${PHONEPE_HOST}/pg/v1/pay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-VERIFY': xVerify
+        },
+        body: JSON.stringify({ request: base64Payload })
+      });
+
+      const pgData = await pgRes.json().catch(() => ({}));
+      if (pgData?.success && pgData?.data?.instrumentResponse?.redirectInfo?.url) {
+        phonepeRedirectUrl = pgData.data.instrumentResponse.redirectInfo.url;
+      }
+    } catch (err) {
+      console.warn('PhonePe PG request error (falling back to direct UPI):', err.message);
+    }
+  }
+
+  res.json({
+    success: true,
+    txnId,
+    amount: numAmount,
+    merchantUpiId: merchantUpi,
+    upiIntent,
+    qrUrl,
+    phonepeRedirectUrl
+  });
+});
+
+// Check PhonePe Payment Status & Verify
+app.get('/api/payments/phonepe/status/:txnId', requireAuth, async (req, res) => {
+  const { txnId } = req.params;
+  const txn = db.prepare('SELECT * FROM phonepe_transactions WHERE txn_id = ?').get(txnId);
+  if (!txn) {
+    return res.status(404).json({ error: 'Transaction not found.' });
+  }
+
+  // If already marked success
+  if (txn.status === 'SUCCESS' || txn.status === 'COMPLETED') {
+    return res.json({ success: true, status: 'SUCCESS', txnId });
+  }
+
+  let isVerified = false;
+
+  // Check with PhonePe Hermes API if configured
+  if (PHONEPE_MERCHANT_ID && PHONEPE_SALT_KEY) {
+    try {
+      const endpoint = `/pg/v1/status/${PHONEPE_MERCHANT_ID}/${txnId}`;
+      const sha256Hash = crypto.createHash('sha256').update(endpoint + PHONEPE_SALT_KEY).digest('hex');
+      const xVerify = `${sha256Hash}###${PHONEPE_SALT_INDEX}`;
+
+      const statusRes = await fetch(`${PHONEPE_HOST}${endpoint}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-VERIFY': xVerify,
+          'X-MERCHANT-ID': PHONEPE_MERCHANT_ID
+        }
+      });
+
+      const statusData = await statusRes.json().catch(() => ({}));
+      if (statusData?.code === 'PAYMENT_SUCCESS') {
+        isVerified = true;
+      }
+    } catch (e) {
+      console.warn('PhonePe status check error:', e.message);
+    }
+  }
+
+  // If client confirms manual UPI payment with transaction reference
+  if (req.query.confirm === 'true') {
+    isVerified = true;
+  }
+
+  if (isVerified) {
+    const nowIso = new Date().toISOString();
+    db.prepare("UPDATE phonepe_transactions SET status = 'SUCCESS', updated_at = ? WHERE txn_id = ?").run(nowIso, txnId);
+
+    if (txn.order_id) {
+      const ord = db.prepare('SELECT * FROM orders WHERE id = ?').get(txn.order_id);
+      if (ord) {
+        db.prepare("UPDATE orders SET payment_status = 'success', payment_gateway_payment_id = ?, updated_at = ? WHERE id = ?")
+          .run(txnId, nowIso, txn.order_id);
+        recordProductCommission(ord.id, ord.total, JSON.parse(ord.items_json));
+      }
+    }
+
+    if (txn.booking_id) {
+      const bkg = db.prepare('SELECT * FROM bookings WHERE id = ?').get(txn.booking_id);
+      if (bkg) {
+        db.prepare("UPDATE bookings SET payment_status = 'success', updated_at = ? WHERE id = ?").run(nowIso, txn.booking_id);
+        recordServiceCommission(bkg.id, bkg.total_price, bkg.provider_id);
+      }
+    }
+
+    return res.json({ success: true, status: 'SUCCESS', txnId });
+  }
+
+  res.json({ success: false, status: txn.status, txnId });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

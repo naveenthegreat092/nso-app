@@ -87,6 +87,8 @@ export const AdminDashboard: React.FC = () => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [appLoading, setAppLoading] = useState(false);
   const [commissionStats, setCommissionStats] = useState({ productsRate: 10, servicesRate: 15, totalEarned: 0, transactions: [] as any[] });
+  const [merchantUpi, setMerchantUpi] = useState('8310421121@ybl');
+  const [upiSaving, setUpiSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<
     'analytics' | 'payments' | 'special_requests' | 'quotes' | 'approvals' | 'audit' | 'settings'
   >('analytics');
@@ -112,9 +114,28 @@ export const AdminDashboard: React.FC = () => {
     } catch {}
   };
 
+  const fetchMerchantUpi = async () => {
+    try {
+      const res = await api.getPublicSettings();
+      if (res?.merchantUpiId) setMerchantUpi(res.merchantUpiId);
+    } catch {}
+  };
+
+  const handleSaveMerchantUpi = async () => {
+    setUpiSaving(true);
+    const ok = await api.updateMerchantUpi(merchantUpi);
+    setUpiSaving(false);
+    if (ok) {
+      showToast('✅ PhonePe Merchant UPI ID updated! All customer phones now use this UPI ID.');
+    } else {
+      showToast('❌ Failed to update Merchant UPI ID.');
+    }
+  };
+
   useEffect(() => {
     fetchApplications();
     fetchCommission();
+    fetchMerchantUpi();
     if (activeTab === 'approvals') {
       const timer = setInterval(fetchApplications, 6000);
       return () => clearInterval(timer);
@@ -605,6 +626,41 @@ export const AdminDashboard: React.FC = () => {
               <div className="bg-white rounded-xl px-3 py-2 border border-green-100 flex items-center justify-between">
                 <span className="text-xs font-black text-green-800">Total Commission Earned</span>
                 <span className="text-sm font-black text-green-700">₹{commissionStats.totalEarned.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* PhonePe & UPI Payment Gateway Settings */}
+            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl border border-purple-200 p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-purple-600 animate-pulse" />
+                  <span className="text-xs font-black text-purple-950 uppercase tracking-wider">
+                    PhonePe & UPI Payment Gateway
+                  </span>
+                </div>
+                <span className="text-[10px] bg-purple-200/80 text-purple-900 px-2 py-0.5 rounded-full font-bold">
+                  Live Over Internet
+                </span>
+              </div>
+              <p className="text-[11px] text-purple-800">
+                Enter your PhonePe Business / Personal UPI ID. Every customer phone will immediately scan your QR code and pay directly to this account with 0% platform fee.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={merchantUpi}
+                  onChange={(e) => setMerchantUpi(e.target.value)}
+                  placeholder="e.g. 8310421121@ybl or yourname@paytm"
+                  className="flex-1 bg-white border border-purple-200 rounded-xl px-3 py-2 text-xs font-black text-purple-950 outline-none font-mono"
+                />
+                <button
+                  type="button"
+                  disabled={upiSaving}
+                  onClick={handleSaveMerchantUpi}
+                  className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white rounded-xl text-xs font-black shadow-sm disabled:opacity-50 active:scale-95 transition-all"
+                >
+                  {upiSaving ? 'Saving…' : 'Save UPI'}
+                </button>
               </div>
             </div>
 

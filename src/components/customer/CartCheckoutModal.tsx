@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api } from '../../api/client';
 import {
   X,
   Trash2,
@@ -37,6 +38,15 @@ export const CartCheckoutModal: React.FC<{
   const [couponDiscount, setCouponDiscount] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkoutComplete, setCheckoutComplete] = useState<any>(null);
+  const [serverMerchantUpi, setServerMerchantUpi] = useState<string>('8310421121@ybl');
+
+  useEffect(() => {
+    api.getPublicSettings().then((settings) => {
+      if (settings?.merchantUpiId) {
+        setServerMerchantUpi(settings.merchantUpiId);
+      }
+    });
+  }, []);
 
   if (!isOpen) return null;
 
@@ -403,7 +413,7 @@ export const CartCheckoutModal: React.FC<{
 
               {/* Direct UPI Intent & QR Box (Zero Razorpay required) */}
               {paymentMethod === 'upi' && (() => {
-                const adminUpi = localStorage.getItem('nso_merchant_upi') || 'pay@nso';
+                const adminUpi = serverMerchantUpi || localStorage.getItem('nso_merchant_upi') || '8310421121@ybl';
                 const upiIntent = `upi://pay?pa=${adminUpi}&pn=NSO%20Orbit&am=${fullTotal}&cu=INR&tn=Order%20Payment`;
                 const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiIntent)}`;
 

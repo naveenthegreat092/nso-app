@@ -583,5 +583,71 @@ export const api = {
     } catch {
       return false;
     }
+  },
+
+  // ── PhonePe & Marketplace UPI Gateway ──────────────────────────────────────
+
+  getPublicSettings: async (): Promise<{ merchantUpiId: string; phonepeMerchantId?: string; isConfigured?: boolean } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/settings/public`, { ...defaultOpts });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  updateMerchantUpi: async (upiId: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/settings/merchant-upi`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ upiId })
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  initiatePhonePePayment: async (data: {
+    amount: number;
+    orderId?: string;
+    bookingId?: string;
+    customerPhone?: string;
+    customerName?: string;
+  }): Promise<{
+    success: boolean;
+    txnId?: string;
+    merchantUpiId?: string;
+    upiIntent?: string;
+    qrUrl?: string;
+    phonepeRedirectUrl?: string;
+    error?: string;
+  } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/payments/phonepe/initiate`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(data)
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  checkPhonePePaymentStatus: async (txnId: string, confirm = false): Promise<{ success: boolean; status?: string } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/payments/phonepe/status/${txnId}?confirm=${confirm}`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
   }
 };

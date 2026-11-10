@@ -282,30 +282,23 @@ export const ProviderDashboard: React.FC = () => {
                     <p className="text-[11px] text-gray-500">
                       Slot: <span className="font-bold text-red-600">{b.date} ({b.timeSlot})</span>
                     </p>
-                    {/* Show customer address for home_visit ONLY after advance payment */}
+                    {/* Show customer address for home_visit */}
                     {b.serviceMode === 'home_visit' ? (
-                      (b.advancePaymentStatus === 'paid' || b.paymentStatus === 'success') ? (
-                        <div className="mt-1 flex items-start gap-1.5">
-                          <MapPin className="w-3 h-3 text-emerald-600 mt-0.5 shrink-0" />
-                          <div>
-                            <p className="text-[11px] text-emerald-800 font-bold">Customer Location (Unlocked):</p>
-                            <p className="text-[11px] text-gray-700">{b.customerAddress}</p>
-                            <a
-                              href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.customerAddress)}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-[10px] text-blue-600 font-bold mt-0.5"
-                            >
-                              <ExternalLink className="w-3 h-3" /> Navigate in Google Maps
-                            </a>
-                          </div>
+                      <div className="mt-1 flex items-start gap-1.5">
+                        <MapPin className="w-3 h-3 text-emerald-600 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[11px] text-emerald-800 font-bold">Customer Location:</p>
+                          <p className="text-[11px] text-gray-700">{b.customerAddress}</p>
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.customerAddress)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-[10px] text-blue-600 font-bold mt-0.5"
+                          >
+                            <ExternalLink className="w-3 h-3" /> Navigate in Google Maps
+                          </a>
                         </div>
-                      ) : (
-                        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-700">
-                          <MapPin className="w-3 h-3 text-amber-500" />
-                          <span>Customer address unlocks after advance payment is verified.</span>
-                        </div>
-                      )
+                      </div>
                     ) : (
                       <p className="text-[11px] text-gray-500">
                         Mode: Customer visits your hub
@@ -350,8 +343,8 @@ export const ProviderDashboard: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* GPS Sharing Controls — only for home_visit with verified advance */}
-                      {b.serviceMode === 'home_visit' && (b.advancePaymentStatus === 'paid' || b.paymentStatus === 'success') && (
+                      {/* GPS Sharing Controls — for home_visit */}
+                      {b.serviceMode === 'home_visit' && (
                         <div className="bg-white rounded-lg border border-indigo-200 p-2.5 space-y-2">
                           <p className="text-[10px] font-black text-indigo-800 uppercase tracking-wider">Live GPS Sharing</p>
                           {gpsError && sharingBookingId === b.id && (
