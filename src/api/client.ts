@@ -233,6 +233,20 @@ export const api = {
     }
   },
 
+  approveProduct: async (productId: string, approved: boolean, adminNotes?: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/products/${productId}/approve`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ approved, adminNotes })
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
   // ── Orders ──────────────────────────────────────────────────────────────────
 
   getOrders: async (): Promise<Order[] | null> => {
@@ -287,6 +301,22 @@ export const api = {
       return res.ok;
     } catch {
       return false;
+    }
+  },
+
+  updateOrderDeliveryFee: async (orderId: string, deliveryFee: number): Promise<{ success: boolean; sellerDeliveryCharge?: number; total?: number }> => {
+    try {
+      const res = await fetch(`${API_BASE}/orders/${orderId}/delivery-fee`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ deliveryFee })
+      });
+      if (!res.ok) return { success: false };
+      const data = await res.json();
+      return { success: true, ...data };
+    } catch {
+      return { success: false };
     }
   },
 

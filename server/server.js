@@ -359,6 +359,7 @@ try { db.exec('ALTER TABLE provider_applications ADD COLUMN id_document_photo TE
 try { db.exec("ALTER TABLE services ADD COLUMN hub_address TEXT DEFAULT 'NSO Verified Specialist Hub, Indiranagar, Bengaluru';"); } catch (_) {}
 try { db.exec('ALTER TABLE services ADD COLUMN hub_lat REAL DEFAULT 12.9784;'); } catch (_) {}
 try { db.exec('ALTER TABLE services ADD COLUMN hub_lng REAL DEFAULT 77.6408;'); } catch (_) {}
+try { db.exec('ALTER TABLE orders ADD COLUMN seller_delivery_charge REAL DEFAULT 0;'); } catch (_) {}
 
 // Seed default marketplace settings if not present
 const getSetting = (key, defaultVal) => {
@@ -1727,6 +1728,43 @@ app.patch('/api/orders/:id/status', requireAuth, (req, res) => {
   logAudit(req.session.userId, req.session.name, req.session.activeRole, 'ORDER_STATUS_UPDATED', `Order ${order.order_number} marked ${status}`, req.ip);
 
   res.json({ id, orderStatus: status });
+});
+
+// Update Order Delivery Fee: Seller decides delivery charge based on customer distance/location
+app.patch('/api/orders/:id/delivery-fee', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { deliveryFee } = req.body || {};
+  const fee = Math.max(0, Number(deliveryFee));
+  if (isNaN(fee)) {
+    return res.status(400).json({ error: 'Valid numerical delivery fee required.' });
+  }
+
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+  // Ownership verification: seller owns an item in order, or admin
+  if (!req.session.isAdmin) {
+    const items = JSON.parse(order.items_json);
+    const ownsItem = items.some((item) => item.sellerId === req.session.userId);
+    if (!ownsItem) {
+      return res.status(403).json({ error: 'Access denied: You can only adjust delivery charges for orders containing your products.' });
+    }
+  }
+
+  const newTotal = Math.max(0, order.subtotal + fee + order.platform_fee + order.tip_amount - order.coupon_discount);
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    UPDATE orders SET
+      seller_delivery_charge = ?,
+      total = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(fee, newTotal, nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'DELIVERY_FEE_UPDATED', `Seller set delivery fee for Order ${order.order_number} to ₹${fee} based on customer location (Total: ₹${newTotal})`, req.ip);
+
+  res.json({ id, sellerDeliveryCharge: fee, total: newTotal });
 });
 
 // Cancel Order

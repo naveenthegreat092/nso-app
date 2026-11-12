@@ -20,11 +20,13 @@ import {
   Camera,
   Upload,
   Image as ImageIcon,
-  Trash2
+  Trash2,
+  MapPin,
+  ExternalLink
 } from 'lucide-react';
 
 export const SellerDashboard: React.FC = () => {
-  const { products, orders, updateOrderStatus, addProduct, deleteProduct, updateProductStock, user, showToast } = useApp();
+  const { products, orders, updateOrderStatus, updateOrderDeliveryFee, addProduct, deleteProduct, updateProductStock, user, showToast } = useApp();
   const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'earnings'>('orders');
 
   // New product form modal state
@@ -35,6 +37,7 @@ export const SellerDashboard: React.FC = () => {
   const [newStock, setNewStock] = useState('25');
   const [newCategory, setNewCategory] = useState<'Electronics' | 'Fashion' | 'Home & Living' | 'Groceries' | 'Beauty'>('Electronics');
   const [newDeliveryFee, setNewDeliveryFee] = useState('49');
+  const [newDescription, setNewDescription] = useState('');
   const [newImage, setNewImage] = useState('https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=500&auto=format&fit=crop&q=80');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -95,13 +98,14 @@ export const SellerDashboard: React.FC = () => {
       deliveryEstimateDays: 2,
       regionalDeliveryFee: parseFloat(newDeliveryFee) || 0,
       variants: [{ id: 'v1', name: 'Standard Edition', inStock: true }],
-      description: `High performance authentic ${newTitle} backed by manufacturer warranty.`,
+      description: newDescription.trim() || `High performance authentic ${newTitle} backed by manufacturer warranty.`,
       highlights: ['1 Year Warranty', 'Instant Regional Dispatch', '100% Genuine'],
       approvalStatus: 'pending_approval'
     });
 
     setShowAddModal(false);
     setNewTitle('');
+    setNewDescription('');
     setActiveTab('products');
   };
 
@@ -207,9 +211,59 @@ export const SellerDashboard: React.FC = () => {
                     <p className="text-[11px] text-gray-500 mt-0.5">
                       Customer: <span className="font-semibold text-gray-800">{order.customerName}</span>
                     </p>
-                    <p className="text-[11px] text-gray-500">
-                      Deliver to: {order.deliveryAddress}
-                    </p>
+                    <div className="mt-1 p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                      <div className="flex items-start gap-1.5 text-[11px] text-gray-700">
+                        <MapPin className="w-3.5 h-3.5 text-red-600 mt-0.5 shrink-0" />
+                        <div>
+                          <span className="font-bold text-gray-900 block">Delivery Address:</span>
+                          <span>{order.deliveryAddress}</span>
+                        </div>
+                      </div>
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(order.deliveryAddress)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[10px] text-blue-600 font-bold ml-5 hover:underline"
+                      >
+                        <ExternalLink className="w-3 h-3" /> Check Distance on Google Maps
+                      </a>
+                    </div>
+
+                    {/* Location-Based Delivery Fee Control */}
+                    <div className="mt-2 p-2.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-emerald-950">Delivery Charge (Distance-Based):</span>
+                        <span className="font-black text-emerald-800">₹{order.sellerDeliveryCharge}</span>
+                      </div>
+                      <p className="text-[10px] text-emerald-700 leading-tight">
+                        You decide the delivery charge for each order based on customer distance.
+                      </p>
+                      {order.orderStatus !== 'delivered' && order.orderStatus !== 'cancelled' && (
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="Set Delivery Fee (₹)"
+                            id={`delivery_fee_${order.id}`}
+                            defaultValue={order.sellerDeliveryCharge}
+                            className="flex-1 bg-white border border-emerald-200 rounded-lg px-2.5 py-1 text-xs font-bold text-gray-800 outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const input = document.getElementById(`delivery_fee_${order.id}`) as HTMLInputElement;
+                              const fee = parseFloat(input?.value);
+                              if (!isNaN(fee) && fee >= 0) {
+                                updateOrderDeliveryFee(order.id, fee);
+                              }
+                            }}
+                            className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs active:scale-95 transition-all"
+                          >
+                            Set Fee
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Stage-by-Stage Dispatch Actions */}
@@ -426,6 +480,41 @@ export const SellerDashboard: React.FC = () => {
                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Delivery Charge (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    required
+                    value={newDeliveryFee}
+                    onChange={(e) => setNewDeliveryFee(e.target.value)}
+                    placeholder="e.g. 49 (0 for Free)"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">Estimated Days</label>
+                  <input
+                    type="text"
+                    disabled
+                    value="2 Days (Express)"
+                    className="w-full p-2.5 bg-gray-100 border border-gray-200 rounded-xl text-xs font-semibold text-gray-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">Product Description</label>
+                <textarea
+                  rows={2}
+                  placeholder="Key features, specifications, and warranty details..."
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
               </div>
 
               {/* Photo Upload: Camera / Gallery + Presets */}

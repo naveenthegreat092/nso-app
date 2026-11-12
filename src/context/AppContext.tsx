@@ -118,6 +118,7 @@ interface AppContextType {
   ) => Promise<Booking | null>;
   updateOrderStatus: (orderId: string, status: Order['orderStatus']) => void;
   updateOrderPaymentStatus: (orderId: string, status: Order['paymentStatus']) => void;
+  updateOrderDeliveryFee: (orderId: string, fee: number) => Promise<boolean>;
   updateBookingStatus: (bookingId: string, status: Booking['status']) => void;
   updateBookingPaymentStatus: (bookingId: string, status: Booking['paymentStatus']) => void;
   submitRevisedQuote: (bookingId: string, amount: number, reason: string) => void;
@@ -721,6 +722,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : p
       )
     );
+    api.approveProduct(productId, approved, reason);
     addAuditLog('PRODUCT_CATALOG_DECISION', `Admin ${approved ? 'APPROVED' : 'REJECTED'} product ID ${productId}`);
     showToast(`Product ${approved ? 'APPROVED and published to live store!' : 'REJECTED'}`);
   };
@@ -943,6 +945,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     addAuditLog('ORDER_PAYMENT_UPDATE', `Order ${orderId} payment status marked as ${status.toUpperCase()}`);
     showToast(`Order payment status updated to ${status.toUpperCase()}`);
+  };
+
+  const updateOrderDeliveryFee = async (orderId: string, fee: number): Promise<boolean> => {
+    const res = await api.updateOrderDeliveryFee(orderId, fee);
+    if (res.success) {
+      setOrders((prev) =>
+        prev.map((o) => {
+          if (o.id !== orderId) return o;
+          const newTotal = Math.max(0, o.subtotal + fee + o.platformFee + (o.tipAmount || 0) - (o.couponDiscount || 0));
+          return {
+            ...o,
+            sellerDeliveryCharge: fee,
+            total: newTotal
+          };
+        })
+      );
+      addAuditLog('DELIVERY_FEE_UPDATED', `Seller adjusted delivery fee for Order ${orderId} to ₹${fee}`);
+      showToast(`✅ Delivery fee updated to ₹${fee} based on location.`);
+      return true;
+    }
+    showToast('Failed to update delivery fee.');
+    return false;
   };
 
   const updateBookingStatus = (bookingId: string, status: Booking['status']) => {
@@ -1233,6 +1257,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createBooking,
         updateOrderStatus,
         updateOrderPaymentStatus,
+        updateOrderDeliveryFee,
         updateBookingStatus,
         updateBookingPaymentStatus,
         submitRevisedQuote,
