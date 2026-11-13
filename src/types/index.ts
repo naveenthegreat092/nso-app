@@ -83,10 +83,18 @@ export interface Product {
   adminRejectionReason?: string;
 }
 
+export type PricingType = 'fixed' | 'hourly' | 'metered' | 'quotation_required';
+
+export type RateApprovalStatus = 'approved' | 'pending_admin' | 'rejected';
+
 export interface ServiceCategory {
   id: string;
   name: string;
   icon: string;
+  description?: string;
+  subServices?: string[];
+  displayOrder?: number;
+  isActive?: boolean;
 }
 
 export interface ProviderDetail {
@@ -103,6 +111,11 @@ export interface ProviderDetail {
   bio: string;
   certifications: string[];
   verificationBadges: string[];
+  hourlyRate?: number;
+  cancellationCount?: number;
+  totalBookingsCount?: number;
+  cancellationRate?: number;
+  cancellationReviewFlagged?: boolean;
   portfolio: {
     id: string;
     title: string;
@@ -130,6 +143,14 @@ export interface Service {
   category: string;
   price: number;
   unit: string;
+  pricingType?: PricingType;
+  rateApprovalStatus?: RateApprovalStatus;
+  hourlyRate?: number;
+  meteredRate?: number;
+  estimatedDurationHours?: number;
+  requiresQuotation?: boolean;
+  subServiceName?: string;
+  categoryId?: string;
   providerId: string;
   providerName: string;
   providerRating: number;
@@ -186,13 +207,111 @@ export interface Order {
   reviewComment?: string;
 }
 
-export type BookingStatus = 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'disputed';
+export type BookingStatus =
+  | 'confirmed'
+  | 'assessing'
+  | 'quotation_pending'
+  | 'quotation_admin_review'
+  | 'quotation_customer_review'
+  | 'quotation_declined'
+  | 'travelling'
+  | 'in_progress'
+  | 'work_paused_extra_time'
+  | 'completed_pending_review'
+  | 'problem_reported'
+  | 'completed'
+  | 'cancelled'
+  | 'disputed';
 
 export interface RevisedQuote {
   amount: number;
   reason: string;
   status: 'pending_admin' | 'admin_approved' | 'customer_approved' | 'rejected';
   submittedAt: string;
+}
+
+export interface JobQuotation {
+  id: string;
+  proposedWork: string;
+  laborCost: number;
+  partsCost: number;
+  additionalFees: number;
+  totalAmount: number;
+  assumptions: string;
+  estimatedDuration: string;
+  expiryDate: string;
+  notes?: string;
+  status:
+    | 'pending_admin'
+    | 'admin_approved'
+    | 'admin_returned'
+    | 'customer_accepted'
+    | 'customer_changes_requested'
+    | 'customer_declined';
+  adminFeedback?: string;
+  customerFeedback?: string;
+  submittedAt: string;
+  decidedAt?: string;
+}
+
+export interface HourlyDetails {
+  hourlyRate: number;
+  approvedTimeLimitHours: number;
+  timeUsedHours: number;
+  timerStartedAt?: string;
+  timerRunning?: boolean;
+  calculatedAmount: number;
+  extraTimeRequest?: {
+    requestedHours: number;
+    rate: number;
+    reason: string;
+    extraAmount: number;
+    status: 'pending_customer' | 'approved' | 'declined';
+    requestedAt: string;
+    decidedAt?: string;
+  };
+}
+
+export interface ReportedProblem {
+  id: string;
+  problemType: 'poor_quality' | 'incomplete_work' | 'damage' | 'other';
+  description: string;
+  photos?: string[];
+  reportedAt: string;
+  adminReviewStatus: 'under_review' | 'site_visit_scheduled' | 'resolved';
+  siteVisitRequired?: boolean;
+  siteVisitScheduledAt?: string;
+  adminNotes?: string;
+  resolutionNotes?: string;
+  clearedAt?: string;
+}
+
+export interface CancellationDetails {
+  cancelledBy: 'customer' | 'provider' | 'admin';
+  reason: string;
+  stage: 'before_assignment' | 'after_assignment' | 'travelling' | 'work_started';
+  cancellationFee: number;
+  adminFeeApproved?: boolean;
+  workCompletedCharge?: number;
+  materialsUsedCharge?: number;
+  breakdown?: string;
+  replacementProviderOffered?: boolean;
+  replacementProviderId?: string;
+  replacementProviderName?: string;
+  timestamp: string;
+}
+
+export interface ProviderCancellationReview {
+  id: string;
+  providerId: string;
+  providerName: string;
+  totalBookings: number;
+  cancelledBookings: number;
+  cancellationRate: number;
+  reason: string;
+  status: 'pending_admin_review' | 'reviewed';
+  adminNotes?: string;
+  createdAt: string;
 }
 
 export interface Booking {
@@ -204,6 +323,7 @@ export interface Booking {
   providerName: string;
   customerId: string;
   customerName: string;
+  customerPhone?: string;
   date: string;
   timeSlot: string;
   serviceMode: 'home_visit' | 'provider_location';
@@ -213,6 +333,18 @@ export interface Booking {
   totalPrice: number;
   cancellationTerms: string;
   createdAt: string;
+  pricingType?: PricingType;
+  jobDescription?: string;
+  jobAttachments?: string[];
+  providerAssigned?: boolean;
+  quotation?: JobQuotation;
+  hourlyDetails?: HourlyDetails;
+  meteredUnits?: number;
+  meteredRate?: number;
+  reportedProblem?: ReportedProblem;
+  cancellationDetails?: CancellationDetails;
+  completedAt?: string;
+  confirmedCompletedAt?: string;
   revisedQuote?: RevisedQuote;
   completionNotes?: string;
   problemDescription?: string;

@@ -20,17 +20,73 @@ import {
   Radio,
   WifiOff,
   ExternalLink,
+  Timer,
+  Play,
+  Pause,
+  Layers,
+  FileText,
+  Tag
 } from 'lucide-react';
 import { api } from '../../api/client';
 
 export const ProviderDashboard: React.FC = () => {
-  const { bookings, updateBookingStatus, submitRevisedQuote, providers, addProviderPortfolioImage, user, showToast } = useApp();
-  const [activeTab, setActiveTab] = useState<'jobs' | 'schedule' | 'portfolio' | 'categories'>('jobs');
+  const {
+    bookings,
+    updateBookingStatus,
+    submitRevisedQuote,
+    providers,
+    addProviderPortfolioImage,
+    user,
+    showToast,
+    submitJobQuotation,
+    requestHourlyExtraTime,
+    updateHourlyTimeUsed,
+    markServiceComplete,
+    cancelBooking,
+    services,
+    serviceCategories,
+    addNewService,
+    updateProviderRate
+  } = useApp();
+  const [activeTab, setActiveTab] = useState<'jobs' | 'schedule' | 'portfolio' | 'categories' | 'rates'>('jobs');
 
   // Revised quote modal state
   const [selectedBookingForQuote, setSelectedBookingForQuote] = useState<string | null>(null);
   const [quoteAmount, setQuoteAmount] = useState('250');
   const [quoteReason, setQuoteReason] = useState('Additional internal pipeline copper pipe soldering required.');
+
+  // Formal Job Quotation modal state
+  const [selectedBookingForJobQuote, setSelectedBookingForJobQuote] = useState<string | null>(null);
+  const [quoteProposedWork, setQuoteProposedWork] = useState('');
+  const [quoteLaborCost, setQuoteLaborCost] = useState(800);
+  const [quotePartsCost, setQuotePartsCost] = useState(400);
+  const [quoteAdditionalFees, setQuoteAdditionalFees] = useState(100);
+  const [quoteAssumptions, setQuoteAssumptions] = useState('Includes standard replacement parts and 30-day workmanship warranty.');
+  const [quoteEstimatedDuration, setQuoteEstimatedDuration] = useState('3-4 Hours');
+  const [quoteExpiryDate, setQuoteExpiryDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().substring(0, 10);
+  });
+
+  // Extra time request modal state
+  const [selectedBookingForExtraTime, setSelectedBookingForExtraTime] = useState<string | null>(null);
+  const [extraHours, setExtraHours] = useState(1);
+  const [extraReason, setExtraReason] = useState('Complex wiring and concealed conduit pipe troubleshooting required.');
+
+  // Structured Cancellation state
+  const [selectedBookingForCancel, setSelectedBookingForCancel] = useState<string | null>(null);
+  const [cancelStage, setCancelStage] = useState<'before_assignment' | 'after_assignment' | 'travelling' | 'work_started'>('after_assignment');
+  const [cancelWorkCharge, setCancelWorkCharge] = useState(0);
+  const [cancelMaterialCharge, setCancelMaterialCharge] = useState(0);
+  const [cancelReason, setCancelReason] = useState('');
+
+  // Rate update modal state
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [ratePrice, setRatePrice] = useState(499);
+  const [rateHourly, setRateHourly] = useState(350);
+  const [ratePricingType, setRatePricingType] = useState<'fixed' | 'hourly' | 'metered' | 'quotation_required'>('fixed');
+  const [rateUnit, setRateUnit] = useState('service');
 
   // Portfolio photo upload state
   const [showAddPhotoModal, setShowAddPhotoModal] = useState(false);
@@ -244,6 +300,15 @@ export const ProviderDashboard: React.FC = () => {
           >
             Approvals
           </button>
+          <button
+            onClick={() => setActiveTab('rates')}
+            className={`flex-1 py-1.5 px-2 rounded-lg transition-all whitespace-nowrap flex items-center justify-center gap-1 ${
+              activeTab === 'rates' ? 'bg-white text-amber-800 shadow-sm font-black' : 'text-gray-500'
+            }`}
+          >
+            <Tag className="w-3 h-3" />
+            <span>My Rates</span>
+          </button>
         </div>
       </div>
 
@@ -306,28 +371,159 @@ export const ProviderDashboard: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Accept / Decline incoming customer requests */}
-                  {b.status === 'confirmed' && (
-                    <div className="p-2.5 bg-amber-50/70 rounded-xl border border-amber-200/60 space-y-2">
-                      <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider block">
-                        Incoming Request Action:
-                      </span>
+                  {/* Incoming / Assessing Action Buttons */}
+                  {['confirmed', 'assessing', 'quotation_pending'].includes(b.status) && (
+                    <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200/60 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider block">
+                          Specialist Action Required:
+                        </span>
+                        <span className="text-[10px] font-bold text-amber-800 capitalize bg-amber-100 px-2 py-0.5 rounded-full">
+                          {b.pricingType || 'fixed'}
+                        </span>
+                      </div>
+
+                      {/* Display Customer Job Description if provided */}
+                      {b.jobDescription && (
+                        <div className="p-2 bg-white rounded-lg border border-amber-200 text-[11px] text-gray-700">
+                          <span className="font-bold text-gray-900 block">Customer Issue Description:</span>
+                          <p>{b.jobDescription}</p>
+                        </div>
+                      )}
+
                       <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => handleStartJob(b.id)}
-                          className="py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] rounded-lg shadow-sm flex items-center justify-center gap-1"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Accept &amp; Start Job</span>
-                        </button>
+                        {b.status === 'confirmed' && (
+                          <button
+                            onClick={() => handleStartJob(b.id)}
+                            className="py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] rounded-lg shadow-sm flex items-center justify-center gap-1 active:scale-95"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Accept &amp; Start Job</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => {
-                            updateBookingStatus(b.id, 'cancelled');
-                            showToast('Booking declined by provider');
+                            setSelectedBookingForJobQuote(b.id);
+                            setQuoteProposedWork(b.jobDescription || `Standard ${b.serviceTitle} diagnostic & repair.`);
                           }}
-                          className="py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold text-[11px] rounded-lg"
+                          className="py-1.5 bg-purple-900 hover:bg-purple-800 text-white font-black text-[11px] rounded-lg shadow-sm flex items-center justify-center gap-1 active:scale-95"
                         >
-                          Decline
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>Submit Formal Quote</span>
+                        </button>
+                        <button
+                          onClick={() => setSelectedBookingForCancel(b.id)}
+                          className="py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[11px] rounded-lg border border-rose-200 col-span-2 active:scale-95"
+                        >
+                          Decline / Cancel Booking
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* FORMAL QUOTATION PREVIEW & STATUS */}
+                  {b.quotation && (
+                    <div className="p-3 bg-purple-50/70 border border-purple-200/80 rounded-xl space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-purple-950 flex items-center gap-1">
+                          <FileText className="w-3.5 h-3.5 text-purple-700" />
+                          Submitted Job Quotation
+                        </span>
+                        <span className="text-[10px] bg-purple-200 text-purple-900 font-black px-2 py-0.5 rounded-full capitalize">
+                          {b.quotation.status.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-700"><span className="font-bold">Scope:</span> {b.quotation.proposedWork}</p>
+                      <div className="grid grid-cols-4 gap-1.5 text-center font-mono">
+                        <div className="bg-white p-1 rounded-lg border border-purple-100">
+                          <span className="text-[8px] text-gray-400 block">Labor</span>
+                          <span className="font-bold text-slate-800">₹{b.quotation.laborCost}</span>
+                        </div>
+                        <div className="bg-white p-1 rounded-lg border border-purple-100">
+                          <span className="text-[8px] text-gray-400 block">Parts</span>
+                          <span className="font-bold text-slate-800">₹{b.quotation.partsCost}</span>
+                        </div>
+                        <div className="bg-white p-1 rounded-lg border border-purple-100">
+                          <span className="text-[8px] text-gray-400 block">Fees</span>
+                          <span className="font-bold text-slate-800">₹{b.quotation.additionalFees}</span>
+                        </div>
+                        <div className="bg-purple-900 text-white p-1 rounded-lg">
+                          <span className="text-[8px] text-purple-200 block">Total</span>
+                          <span className="font-black">₹{b.quotation.totalAmount}</span>
+                        </div>
+                      </div>
+                      {b.quotation.adminFeedback && (
+                        <p className="text-[10px] text-purple-900 bg-white p-1.5 rounded-lg border border-purple-100">
+                          <span className="font-bold">Admin Feedback:</span> {b.quotation.adminFeedback}
+                        </p>
+                      )}
+                      {b.quotation.customerFeedback && (
+                        <p className="text-[10px] text-indigo-900 bg-white p-1.5 rounded-lg border border-indigo-100">
+                          <span className="font-bold">Customer Feedback:</span> {b.quotation.customerFeedback}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* HOURLY TIMER BOX (if pricing is hourly or hourlyDetails exists) */}
+                  {(b.pricingType === 'hourly' || b.hourlyDetails) && (
+                    <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-indigo-950 flex items-center gap-1">
+                          <Timer className="w-3.5 h-3.5 text-indigo-600" />
+                          Hourly Time Tracker
+                        </span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          b.hourlyDetails?.timerRunning ? 'bg-indigo-600 text-white animate-pulse' : 'bg-gray-200 text-gray-700'
+                        }`}>
+                          {b.hourlyDetails?.timerRunning ? 'Timer Running' : 'Timer Paused'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 bg-white p-2 rounded-lg text-center font-mono">
+                        <div>
+                          <span className="text-[8px] text-gray-400 block uppercase">Time Logged</span>
+                          <span className="font-black text-slate-800">{b.hourlyDetails?.timeUsedHours || 0} hrs</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] text-gray-400 block uppercase">Approved Cap</span>
+                          <span className="font-bold text-slate-700">{b.hourlyDetails?.approvedTimeLimitHours || 2} hrs</span>
+                        </div>
+                        <div>
+                          <span className="text-[8px] text-gray-400 block uppercase">Calculated</span>
+                          <span className="font-extrabold text-indigo-700">₹{b.hourlyDetails?.calculatedAmount || b.totalPrice}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          onClick={() => {
+                            const isRunning = Boolean(b.hourlyDetails?.timerRunning);
+                            const currentUsed = b.hourlyDetails?.timeUsedHours || 0;
+                            updateHourlyTimeUsed(b.id, isRunning ? currentUsed + 0.5 : currentUsed, !isRunning);
+                            showToast(isRunning ? 'Timer paused. Logged +0.5 hr.' : 'Timer started.');
+                          }}
+                          className={`py-1.5 font-black text-[11px] rounded-lg shadow-sm flex items-center justify-center gap-1 active:scale-95 ${
+                            b.hourlyDetails?.timerRunning
+                              ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                              : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                          }`}
+                        >
+                          {b.hourlyDetails?.timerRunning ? (
+                            <>
+                              <Pause className="w-3.5 h-3.5" /> Pause Timer (+0.5h)
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3.5 h-3.5" /> Start / Resume Timer
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setSelectedBookingForExtraTime(b.id)}
+                          className="py-1.5 bg-white border border-indigo-300 text-indigo-800 hover:bg-indigo-50 font-bold text-[11px] rounded-lg active:scale-95"
+                        >
+                          + Request Extra Time
                         </button>
                       </div>
                     </div>
@@ -375,16 +571,22 @@ export const ProviderDashboard: React.FC = () => {
                         </div>
                       )}
 
-                      <div className="flex items-center justify-end pt-1">
+                      <div className="flex items-center justify-between pt-1">
                         <button
-                          onClick={() => {
-                            if (sharingBookingId === b.id) stopSharing(b.id);
-                            updateBookingStatus(b.id, 'completed');
-                            showToast('🎉 Job marked as Completed! Invoice generated.');
-                          }}
-                          className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[11px] rounded-lg shadow-sm active:scale-95 transition-all"
+                          onClick={() => setSelectedBookingForCancel(b.id)}
+                          className="py-1.5 px-3 bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 font-bold text-[11px] rounded-lg active:scale-95"
                         >
-                          Finish & Mark Completed
+                          Cancel Booking
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (sharingBookingId === b.id) await stopSharing(b.id);
+                            await markServiceComplete(b.id, 'Work completed successfully on-site.');
+                            showToast('🎉 Service completed! Customer notified for payment confirmation.');
+                          }}
+                          className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] rounded-lg shadow-sm active:scale-95 transition-all"
+                        >
+                          Finish &amp; Mark Completed
                         </button>
                       </div>
                     </div>
@@ -533,6 +735,68 @@ export const ProviderDashboard: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* My Rates & Services */}
+        {activeTab === 'rates' && (
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-extrabold text-sm text-gray-900">My Service Rates &amp; Listings</h4>
+                <p className="text-[11px] text-gray-500">Configure hourly rates, diagnostic fees, and transparent pricing</p>
+              </div>
+            </div>
+
+            <div className="space-y-2.5 pt-1">
+              {services.map((svc) => (
+                <div key={svc.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h5 className="font-extrabold text-slate-900">{svc.title}</h5>
+                      <p className="text-[10px] text-slate-500">{svc.category} • {svc.subServiceName || 'General'}</p>
+                    </div>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${
+                      svc.rateApprovalStatus === 'pending_admin'
+                        ? 'bg-amber-100 text-amber-900 animate-pulse'
+                        : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      {svc.rateApprovalStatus === 'pending_admin' ? 'Rate Pending Admin' : 'Active Rate'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 bg-white p-2 rounded-lg text-center text-[11px]">
+                    <div>
+                      <span className="text-[8px] text-gray-400 block uppercase font-bold">Pricing Model</span>
+                      <span className="font-bold text-slate-800 capitalize">{svc.pricingType || 'fixed'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[8px] text-gray-400 block uppercase font-bold">Base Price</span>
+                      <span className="font-extrabold text-emerald-700">₹{svc.price}</span>
+                    </div>
+                    <div>
+                      <span className="text-[8px] text-gray-400 block uppercase font-bold">Hourly Rate</span>
+                      <span className="font-bold text-indigo-700">{svc.hourlyRate ? `₹${svc.hourlyRate}/hr` : 'N/A'}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <button
+                      onClick={() => {
+                        setEditingServiceId(svc.id);
+                        setRatePrice(svc.price);
+                        setRateHourly(svc.hourlyRate || svc.price);
+                        setRatePricingType(svc.pricingType || 'fixed');
+                        setRateUnit(svc.unit || 'service');
+                      }}
+                      className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs active:scale-95"
+                    >
+                      Update Rate &amp; Model
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
 
@@ -593,6 +857,408 @@ export const ProviderDashboard: React.FC = () => {
                   className="py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-md"
                 >
                   Save Photo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Formal Job Quotation Modal */}
+      {selectedBookingForJobQuote && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-3 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-black text-sm text-purple-950">
+                <FileText className="w-4 h-4 text-purple-700" />
+                <span>Submit Formal Quotation</span>
+              </div>
+              <button onClick={() => setSelectedBookingForJobQuote(null)} className="p-1 rounded-full text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500">
+              NSO Transparency Policy: Quotation will be reviewed by Admin, then sent to Customer for approval before work starts.
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const total = Number(quoteLaborCost || 0) + Number(quotePartsCost || 0) + Number(quoteAdditionalFees || 0);
+                await submitJobQuotation(selectedBookingForJobQuote, {
+                  proposedWork: quoteProposedWork.trim() || 'Comprehensive service diagnostic and repair.',
+                  laborCost: Number(quoteLaborCost || 0),
+                  partsCost: Number(quotePartsCost || 0),
+                  additionalFees: Number(quoteAdditionalFees || 0),
+                  totalAmount: total,
+                  assumptions: quoteAssumptions.trim(),
+                  estimatedDuration: quoteEstimatedDuration,
+                  expiryDate: quoteExpiryDate
+                });
+                setSelectedBookingForJobQuote(null);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="font-bold text-gray-700 block mb-0.5">Proposed Work / Scope</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={quoteProposedWork}
+                  onChange={(e) => setQuoteProposedWork(e.target.value)}
+                  className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="font-bold text-gray-700 block mb-0.5">Labor (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    value={quoteLaborCost}
+                    onChange={(e) => setQuoteLaborCost(Number(e.target.value))}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-black text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 block mb-0.5">Parts (₹)</label>
+                  <input
+                    type="number"
+                    value={quotePartsCost}
+                    onChange={(e) => setQuotePartsCost(Number(e.target.value))}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-black text-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 block mb-0.5">Fees (₹)</label>
+                  <input
+                    type="number"
+                    value={quoteAdditionalFees}
+                    onChange={(e) => setQuoteAdditionalFees(Number(e.target.value))}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-black text-slate-800"
+                  />
+                </div>
+              </div>
+
+              <div className="p-2.5 bg-purple-900 text-white rounded-xl flex items-center justify-between font-mono">
+                <span className="text-xs uppercase text-purple-200 font-sans font-bold">Total Quotation:</span>
+                <span className="text-lg font-black">
+                  ₹{Number(quoteLaborCost || 0) + Number(quotePartsCost || 0) + Number(quoteAdditionalFees || 0)}
+                </span>
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 block mb-0.5">Assumptions / Scope Exclusions</label>
+                <input
+                  type="text"
+                  value={quoteAssumptions}
+                  onChange={(e) => setQuoteAssumptions(e.target.value)}
+                  className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-gray-700 block mb-0.5">Estimated Duration</label>
+                  <input
+                    type="text"
+                    value={quoteEstimatedDuration}
+                    onChange={(e) => setQuoteEstimatedDuration(e.target.value)}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 block mb-0.5">Valid Until</label>
+                  <input
+                    type="date"
+                    value={quoteExpiryDate}
+                    onChange={(e) => setQuoteExpiryDate(e.target.value)}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedBookingForJobQuote(null)}
+                  className="py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl active:scale-95"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="py-2.5 bg-purple-900 hover:bg-purple-800 text-white font-bold rounded-xl shadow-md active:scale-95"
+                >
+                  Submit Quote
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Extra Time Request Modal */}
+      {selectedBookingForExtraTime && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-3 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-black text-sm text-indigo-950">
+                <Timer className="w-4 h-4 text-indigo-600" />
+                <span>Request Extra Work Time</span>
+              </div>
+              <button onClick={() => setSelectedBookingForExtraTime(null)} className="p-1 rounded-full text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500">
+              Hourly work caps prevent surprises. The customer must approve additional time extension.
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                await requestHourlyExtraTime(selectedBookingForExtraTime, extraHours, extraReason);
+                setSelectedBookingForExtraTime(null);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">Additional Hours Needed</label>
+                <select
+                  value={extraHours}
+                  onChange={(e) => setExtraHours(Number(e.target.value))}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-black text-indigo-700"
+                >
+                  {[1, 2, 3, 4].map((h) => (
+                    <option key={h} value={h}>+{h} Hour{h > 1 ? 's' : ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">Reason for Extension</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={extraReason}
+                  onChange={(e) => setExtraReason(e.target.value)}
+                  className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedBookingForExtraTime(null)}
+                  className="py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl active:scale-95"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-md active:scale-95"
+                >
+                  Send Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Structured Cancellation Modal */}
+      {selectedBookingForCancel && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-3 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-black text-sm text-rose-700">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Cancel / Decline Booking</span>
+              </div>
+              <button onClick={() => setSelectedBookingForCancel(null)} className="p-1 rounded-full text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500">
+              Provide cancellation stage and any work/material costs incurred to protect both parties under NSO policy.
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                await cancelBooking(selectedBookingForCancel, cancelReason || 'Cancelled by provider', {
+                  stage: cancelStage,
+                  workCompletedCharge: cancelWorkCharge,
+                  materialsUsedCharge: cancelMaterialCharge,
+                  breakdown: `Work: ₹${cancelWorkCharge}, Materials: ₹${cancelMaterialCharge}`,
+                  cancelledBy: 'provider'
+                });
+                setSelectedBookingForCancel(null);
+                setCancelReason('');
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">Cancellation Stage</label>
+                <select
+                  value={cancelStage}
+                  onChange={(e) => setCancelStage(e.target.value as any)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold"
+                >
+                  <option value="before_assignment">Before Technician Assignment</option>
+                  <option value="after_assignment">Assigned / Pre-departure</option>
+                  <option value="travelling">Technician En Route</option>
+                  <option value="work_started">Work Already Started</option>
+                </select>
+              </div>
+
+              {cancelStage === 'work_started' && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-0.5">Work Done Charge (₹)</label>
+                    <input
+                      type="number"
+                      value={cancelWorkCharge}
+                      onChange={(e) => setCancelWorkCharge(Number(e.target.value))}
+                      className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-0.5">Materials Used (₹)</label>
+                    <input
+                      type="number"
+                      value={cancelMaterialCharge}
+                      onChange={(e) => setCancelMaterialCharge(Number(e.target.value))}
+                      className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-bold"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">Reason for Cancellation</label>
+                <textarea
+                  rows={2}
+                  required
+                  placeholder="e.g. Unforeseen structural defect, safety issue, customer requested postponement..."
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedBookingForCancel(null)}
+                  className="py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl active:scale-95"
+                >
+                  Back
+                </button>
+                <button
+                  type="submit"
+                  className="py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-md active:scale-95"
+                >
+                  Confirm Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Rate & Pricing Model Update Modal */}
+      {editingServiceId && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-3 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-black text-sm text-amber-950">
+                <Tag className="w-4 h-4 text-amber-700" />
+                <span>Update Service Rate</span>
+              </div>
+              <button onClick={() => setEditingServiceId(null)} className="p-1 rounded-full text-gray-400 hover:text-gray-700">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500">
+              Proposed rate changes are reviewed by Admin within 24 hours to ensure fair marketplace pricing.
+            </p>
+
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                await updateProviderRate(editingServiceId, {
+                  price: ratePrice,
+                  hourlyRate: rateHourly,
+                  pricingType: ratePricingType,
+                  unit: rateUnit
+                });
+                setEditingServiceId(null);
+              }}
+              className="space-y-3 text-xs"
+            >
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">Pricing Model</label>
+                <select
+                  value={ratePricingType}
+                  onChange={(e) => setRatePricingType(e.target.value as any)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold"
+                >
+                  <option value="fixed">Fixed Price</option>
+                  <option value="hourly">Hourly Rate</option>
+                  <option value="quotation_required">Formal Quotation Required</option>
+                  <option value="metered">Metered / Per Unit</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">Base Price (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    value={ratePrice}
+                    onChange={(e) => setRatePrice(Number(e.target.value))}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">Hourly Rate (₹/hr)</label>
+                  <input
+                    type="number"
+                    value={rateHourly}
+                    onChange={(e) => setRateHourly(Number(e.target.value))}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-bold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">Billing Unit</label>
+                <input
+                  type="text"
+                  value={rateUnit}
+                  onChange={(e) => setRateUnit(e.target.value)}
+                  placeholder="e.g. visit, job, hour, sq ft"
+                  className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setEditingServiceId(null)}
+                  className="py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl active:scale-95"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-md active:scale-95"
+                >
+                  Submit for Approval
                 </button>
               </div>
             </form>

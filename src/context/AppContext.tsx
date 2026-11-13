@@ -4,15 +4,24 @@ import {
   Role,
   Product,
   Service,
+  ServiceCategory,
+  PricingType,
+  JobQuotation,
+  HourlyDetails,
+  ReportedProblem,
+  CancellationDetails,
+  ProviderCancellationReview,
   CartItem,
   Order,
   Booking,
+  BookingStatus,
   SpecialRequest,
   AuditLog,
   RevisedQuote,
   ProviderDetail,
   SavedAddress
 } from '../types';
+import { INITIAL_SERVICE_CATEGORIES } from '../data/serviceCatalog';
 import {
   INITIAL_ADDRESSES,
   MOCK_PROVIDERS,
@@ -45,7 +54,9 @@ interface AppContextType {
   user: UserProfile;
   products: Product[];
   services: Service[];
+  serviceCategories: ServiceCategory[];
   providers: ProviderDetail[];
+  providerCancellationReviews: ProviderCancellationReview[];
   addresses: SavedAddress[];
   selectedAddress: SavedAddress;
   cart: CartItem[];
@@ -90,15 +101,10 @@ interface AppContextType {
   closeWishlist: () => void;
   toggleWishlist: (product: Product) => void;
   cancelOrder: (orderId: string, reason?: string) => void;
-  cancelBooking: (bookingId: string, reason?: string) => void;
+  cancelBooking: (bookingId: string, reason?: string, cancelData?: { stage?: string; workCompletedCharge?: number; materialsUsedCharge?: number; breakdown?: string; cancelledBy?: 'customer' | 'provider' | 'admin' }) => Promise<void>;
   selectAddress: (addr: SavedAddress) => void;
   submitReview: (rating: number, comment: string, tags: string[]) => void;
   switchRole: (role: Role) => boolean;
-  /**
-   * loginUser() — called after the server has verified the OTP.
-   * It calls GET /api/auth/me to retrieve the real user and sets state.
-   * No role or phone argument accepted from the client.
-   */
   loginUser: (phoneHint?: string) => Promise<UserProfile | null>;
   logoutUser: () => Promise<void>;
   addToCart: (product: Product, quantity?: number, variantId?: string) => void;
@@ -114,7 +120,9 @@ interface AppContextType {
     address: string,
     problemDescription?: string,
     problemPhoto?: string,
-    requestType?: 'site_visit' | 'repair' | 'inspection'
+    requestType?: 'site_visit' | 'repair' | 'inspection',
+    jobAttachments?: string[],
+    hourlyApprovedTimeLimit?: number
   ) => Promise<Booking | null>;
   updateOrderStatus: (orderId: string, status: Order['orderStatus']) => void;
   updateOrderPaymentStatus: (orderId: string, status: Order['paymentStatus']) => void;
@@ -124,6 +132,23 @@ interface AppContextType {
   submitRevisedQuote: (bookingId: string, amount: number, reason: string) => void;
   sendProviderQuotation: (bookingId: string, amount: number, reason: string) => void;
   respondToRevisedQuote: (bookingId: string, approvedByAdmin: boolean, customerApproved?: boolean) => void;
+  submitJobQuotation: (bookingId: string, quoteData: Partial<JobQuotation>) => Promise<void>;
+  adminReviewQuotation: (bookingId: string, decision: 'approve' | 'return' | 'request_info', adminFeedback?: string) => Promise<void>;
+  customerDecideQuotation: (bookingId: string, decision: 'accept' | 'request_changes' | 'decline', customerFeedback?: string) => Promise<void>;
+  requestHourlyExtraTime: (bookingId: string, requestedHours: number, reason: string, extraAmount?: number) => Promise<void>;
+  customerDecideExtraTime: (bookingId: string, approved: boolean) => Promise<void>;
+  updateHourlyTimeUsed: (bookingId: string, timeUsedHours: number, timerRunning?: boolean) => Promise<void>;
+  markServiceComplete: (bookingId: string, completionNotes?: string) => Promise<void>;
+  confirmServiceCompletion: (bookingId: string, rating?: number, reviewComment?: string) => Promise<void>;
+  reportServiceProblem: (bookingId: string, problemType: 'poor_quality' | 'incomplete_work' | 'damage' | 'other', description: string, photos?: string[]) => Promise<void>;
+  adminReviewProblem: (bookingId: string, reviewData: { siteVisitRequired?: boolean; siteVisitScheduledAt?: string; adminNotes?: string; resolved?: boolean; resolutionNotes?: string }) => Promise<void>;
+  addServiceCategory: (cat: Partial<ServiceCategory>) => Promise<void>;
+  updateServiceCategory: (id: string, cat: Partial<ServiceCategory>) => Promise<void>;
+  addNewService: (serviceData: Partial<Service>) => Promise<void>;
+  updateProviderRate: (serviceId: string, rateData: { price?: number; hourlyRate?: number; meteredRate?: number; pricingType?: PricingType; unit?: string; estimatedDurationHours?: number }) => Promise<void>;
+  approveProviderRate: (serviceId: string, approved: boolean, adminNotes?: string) => Promise<void>;
+  approveServiceListing: (serviceId: string, approved: boolean, adminNotes?: string) => Promise<void>;
+  adminReviewProviderCancellation: (reviewId: string, adminNotes: string, status?: string) => Promise<void>;
   submitSpecialRequest: (title: string, category: string, description: string, budget: number, timeline: string) => SpecialRequest;
   updateSpecialRequest: (requestId: string, status: SpecialRequest['status'], adminNotes?: string, adminQuotation?: number) => void;
   approveSeller: (sellerId: string, approved: boolean) => void;
@@ -183,7 +208,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
   const [services, setServices] = useState<Service[]>(MOCK_SERVICES);
+  const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>(INITIAL_SERVICE_CATEGORIES);
   const [providers, setProviders] = useState<ProviderDetail[]>(MOCK_PROVIDERS);
+  const [providerCancellationReviews, setProviderCancellationReviews] = useState<ProviderCancellationReview[]>([]);
 
   const [cart, setCart] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem('nso_cart');
@@ -257,6 +284,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const cloudBookings = await api.getBookings();
       if (cloudBookings && cloudBookings.length > 0) setBookings(cloudBookings);
+
+      const cloudCategories = await api.getServiceCategories();
+      if (cloudCategories && cloudCategories.length > 0) setServiceCategories(cloudCategories);
+
+      const cloudServices = await api.getServices();
+      if (cloudServices && cloudServices.length > 0) setServices(cloudServices);
+
+      const cloudCancellations = await api.getProviderCancellations();
+      if (cloudCancellations && cloudCancellations.length > 0) setProviderCancellationReviews(cloudCancellations);
     };
     syncCloudData();
   }, []);
@@ -341,13 +377,85 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Order cancelled. Full refund initiated.`);
   };
 
-  const cancelBooking = (bookingId: string, _reason = 'Customer cancelled slot') => {
+  const cancelBooking = async (
+    bookingId: string,
+    reason = 'Customer cancelled slot',
+    cancelData?: { stage?: string; workCompletedCharge?: number; materialsUsedCharge?: number; breakdown?: string; cancelledBy?: 'customer' | 'provider' | 'admin' }
+  ) => {
+    const existing = bookings.find((b) => b.id === bookingId);
+    const cancelledBy = cancelData?.cancelledBy || (user.activeRole === 'provider' ? 'provider' : user.activeRole === 'admin' ? 'admin' : 'customer');
+    const stage = cancelData?.stage || (existing?.status === 'in_progress' ? 'work_started' : 'after_assignment');
+
+    let cancellationFee = 0;
+    let finalTotal = 0;
+    let replacementOffered = false;
+    let repName = 'NSO Verified Specialist Network';
+
+    if (cancelledBy === 'customer') {
+      if (stage === 'before_assignment' || !existing?.providerAssigned) {
+        cancellationFee = 0;
+        finalTotal = 0;
+      } else if (stage === 'work_started') {
+        const workDone = Number(cancelData?.workCompletedCharge) || 0;
+        const matDone = Number(cancelData?.materialsUsedCharge) || 0;
+        finalTotal = workDone + matDone;
+        cancellationFee = finalTotal;
+      } else {
+        cancellationFee = Math.min(150, Math.round((existing?.totalPrice || 0) * 0.2));
+        finalTotal = cancellationFee;
+      }
+    } else if (cancelledBy === 'provider') {
+      replacementOffered = true;
+      finalTotal = 0;
+      cancellationFee = 0;
+    }
+
+    const cancellationDetails: CancellationDetails = {
+      cancelledBy,
+      reason,
+      stage: stage as any,
+      cancellationFee,
+      workCompletedCharge: cancelData?.workCompletedCharge,
+      materialsUsedCharge: cancelData?.materialsUsedCharge,
+      breakdown: cancelData?.breakdown,
+      replacementProviderOffered: replacementOffered,
+      replacementProviderId: replacementOffered ? 'prov_general_specialist_1' : undefined,
+      replacementProviderName: replacementOffered ? repName : undefined,
+      timestamp: new Date().toISOString()
+    };
+
     setBookings((prev) =>
-      prev.map((b) => (b.id === bookingId ? { ...b, status: 'cancelled', paymentStatus: 'refunded' } : b))
+      prev.map((b) =>
+        b.id === bookingId
+          ? {
+              ...b,
+              status: 'cancelled',
+              paymentStatus: finalTotal > 0 ? b.paymentStatus : 'refunded',
+              totalPrice: finalTotal,
+              cancellationDetails
+            }
+          : b
+      )
     );
-    api.cancelBooking(bookingId);
-    addAuditLog('BOOKING_CANCELLED', `Service booking ${bookingId} cancelled.`);
-    showToast(`Booking cancelled. Zero penalty applied.`);
+
+    try {
+      await api.cancelBooking(bookingId, {
+        reason,
+        stage,
+        workCompletedCharge: cancelData?.workCompletedCharge,
+        materialsUsedCharge: cancelData?.materialsUsedCharge,
+        breakdown: cancelData?.breakdown
+      });
+    } catch {}
+
+    addAuditLog('BOOKING_CANCELLED', `Service booking ${bookingId} cancelled by ${cancelledBy}. Fee: ₹${cancellationFee}`);
+    if (replacementOffered) {
+      showToast(`Booking cancelled. Replacement specialist (${repName}) is available.`);
+    } else if (cancellationFee > 0) {
+      showToast(`Booking cancelled. Billed ₹${cancellationFee} for work/materials used.`);
+    } else {
+      showToast(`Booking cancelled. Zero penalty applied.`);
+    }
   };
 
   const selectAddress = (addr: SavedAddress) => {
@@ -842,17 +950,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /**
    * createBooking — POSTs to /api/bookings.
    * If server returns 409 (slot conflict), shows appropriate message.
-   * Falls back to local conflict check if server is offline.
+   * Supports quotation-required, hourly time limits, and attachments.
    */
   const createBooking = async (
     serviceId: string,
     date: string,
     timeSlot: string,
     mode: 'home_visit' | 'provider_location',
-    address: string
+    address: string,
+    problemDescription?: string,
+    problemPhoto?: string,
+    requestType?: 'site_visit' | 'repair' | 'inspection',
+    jobAttachments?: string[],
+    hourlyApprovedTimeLimit?: number
   ): Promise<Booking | null> => {
     const service = services.find((s) => s.id === serviceId);
     if (!service) return null;
+
+    const resolvedPricingType = service.pricingType || (service.requiresQuotation ? 'quotation_required' : 'fixed');
+    const isQuotationRequired = resolvedPricingType === 'quotation_required';
+    const isHourly = resolvedPricingType === 'hourly';
 
     const payload = {
       serviceId,
@@ -860,6 +977,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       timeSlot,
       mode,
       address,
+      jobDescription: problemDescription || '',
+      jobAttachments: jobAttachments || (problemPhoto ? [problemPhoto] : []),
+      pricingType: resolvedPricingType,
+      hourlyApprovedTimeLimit: hourlyApprovedTimeLimit || service.estimatedDurationHours || 2,
       customerId: user.id,
       customerName: user.name
     };
@@ -895,12 +1016,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         b.providerId === service.providerId &&
         b.date === date &&
         b.timeSlot === timeSlot &&
-        b.status !== 'cancelled'
+        b.status !== 'cancelled' &&
+        b.status !== 'quotation_declined'
     );
 
     if (hasConflict) {
       showToast('Selected time slot conflicts with an existing booking for this provider.');
       return null;
+    }
+
+    let initialPrice = service.price;
+    let initialStatus: BookingStatus = 'confirmed';
+    let hourlyDetails: HourlyDetails | undefined;
+
+    if (isQuotationRequired) {
+      initialPrice = 0;
+      initialStatus = 'assessing';
+    } else if (isHourly) {
+      const rate = service.hourlyRate || service.price || 300;
+      const hours = hourlyApprovedTimeLimit || service.estimatedDurationHours || 2;
+      initialPrice = rate * hours;
+      hourlyDetails = {
+        hourlyRate: rate,
+        approvedTimeLimitHours: hours,
+        timeUsedHours: 0,
+        timerRunning: false,
+        calculatedAmount: 0
+      };
     }
 
     const fallbackBooking: Booking = {
@@ -916,9 +1058,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       timeSlot,
       serviceMode: mode,
       customerAddress: address,
-      status: 'confirmed',
+      status: initialStatus,
       paymentStatus: 'pending',
-      totalPrice: service.price,
+      totalPrice: initialPrice,
+      pricingType: resolvedPricingType,
+      jobDescription: problemDescription || '',
+      jobAttachments: jobAttachments || (problemPhoto ? [problemPhoto] : []),
+      providerAssigned: true,
+      hourlyDetails,
       cancellationTerms: service.cancellationPolicy,
       createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
       technicianEtaMinutes: 14
@@ -1029,6 +1176,458 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { ...b, revisedQuote: { ...b.revisedQuote, status: 'admin_approved' } };
       })
     );
+  };
+
+  // ── Quotation Workflow ──────────────────────────────────────────────────────
+
+  const submitJobQuotation = async (bookingId: string, quoteData: Partial<JobQuotation>) => {
+    const quote: JobQuotation = {
+      id: `quote_${Date.now()}`,
+      proposedWork: quoteData.proposedWork || 'Assessed service work',
+      laborCost: Number(quoteData.laborCost) || 0,
+      partsCost: Number(quoteData.partsCost) || 0,
+      additionalFees: Number(quoteData.additionalFees) || 0,
+      totalAmount: Number(quoteData.totalAmount) || ((Number(quoteData.laborCost) || 0) + (Number(quoteData.partsCost) || 0) + (Number(quoteData.additionalFees) || 0)),
+      assumptions: quoteData.assumptions || 'Standard conditions',
+      estimatedDuration: quoteData.estimatedDuration || '2 hours',
+      expiryDate: quoteData.expiryDate || new Date(Date.now() + 7 * 86400000).toISOString().substring(0, 10),
+      notes: quoteData.notes || '',
+      status: 'pending_admin',
+      submittedAt: new Date().toISOString()
+    };
+
+    setBookings((prev) =>
+      prev.map((b) =>
+        b.id === bookingId
+          ? { ...b, quotation: quote, status: 'quotation_admin_review' }
+          : b
+      )
+    );
+
+    try {
+      await api.submitQuotation(bookingId, quote);
+    } catch {}
+
+    addAuditLog('QUOTATION_SUBMITTED', `Provider submitted itemized quotation of ₹${quote.totalAmount} for Booking ${bookingId}. Sent to Admin for review.`);
+    showToast('Quotation submitted for Admin review.');
+  };
+
+  const adminReviewQuotation = async (bookingId: string, decision: 'approve' | 'return' | 'request_info', adminFeedback?: string) => {
+    setBookings((prev) =>
+      prev.map((b) => {
+        if (b.id !== bookingId || !b.quotation) return b;
+        const updatedQuote: JobQuotation = {
+          ...b.quotation,
+          status: decision === 'approve' ? 'admin_approved' : 'admin_returned',
+          adminFeedback: adminFeedback || (decision === 'approve' ? 'Approved by Admin' : 'Returned for revision'),
+          decidedAt: new Date().toISOString()
+        };
+        const nextStatus: BookingStatus = decision === 'approve' ? 'quotation_customer_review' : 'assessing';
+        return {
+          ...b,
+          quotation: updatedQuote,
+          status: nextStatus
+        };
+      })
+    );
+
+    try {
+      await api.reviewQuotation(bookingId, decision, adminFeedback);
+    } catch {}
+
+    if (decision === 'approve') {
+      addAuditLog('QUOTATION_ADMIN_APPROVED', `Admin approved quotation for Booking ${bookingId}. Sent to customer.`);
+      showToast('Quotation approved and sent to customer.');
+    } else {
+      addAuditLog('QUOTATION_ADMIN_RETURNED', `Admin returned quotation for Booking ${bookingId}: ${adminFeedback}`);
+      showToast('Quotation returned to provider for correction.');
+    }
+  };
+
+  const customerDecideQuotation = async (bookingId: string, decision: 'accept' | 'request_changes' | 'decline', customerFeedback?: string) => {
+    setBookings((prev) =>
+      prev.map((b) => {
+        if (b.id !== bookingId || !b.quotation) return b;
+        const now = new Date().toISOString();
+        if (decision === 'accept') {
+          return {
+            ...b,
+            totalPrice: b.quotation.totalAmount,
+            status: 'confirmed',
+            quotation: { ...b.quotation, status: 'customer_accepted', decidedAt: now }
+          };
+        } else if (decision === 'request_changes') {
+          return {
+            ...b,
+            status: 'assessing',
+            quotation: { ...b.quotation, status: 'customer_changes_requested', customerFeedback, decidedAt: now }
+          };
+        } else {
+          // Decline quotation carries no charge
+          return {
+            ...b,
+            totalPrice: 0,
+            status: 'quotation_declined',
+            paymentStatus: 'refunded',
+            quotation: { ...b.quotation, status: 'customer_declined', customerFeedback, decidedAt: now }
+          };
+        }
+      })
+    );
+
+    try {
+      await api.decideQuotation(bookingId, decision, customerFeedback);
+    } catch {}
+
+    if (decision === 'accept') {
+      addAuditLog('QUOTATION_CUSTOMER_ACCEPTED', `Customer accepted quotation for Booking ${bookingId}. Work authorized to begin.`);
+      showToast('Quotation accepted! Work is authorized to proceed.');
+    } else if (decision === 'request_changes') {
+      addAuditLog('QUOTATION_CUSTOMER_CHANGES', `Customer requested revisions on Booking ${bookingId}: ${customerFeedback}`);
+      showToast('Changes requested. Provider notified.');
+    } else {
+      addAuditLog('QUOTATION_CUSTOMER_DECLINED', `Customer declined quotation for Booking ${bookingId}. Closed with ₹0 charges.`);
+      showToast('Quotation declined. Zero charge applied.');
+    }
+  };
+
+  // ── Hourly Work & Extra Time ────────────────────────────────────────────────
+
+  const requestHourlyExtraTime = async (bookingId: string, requestedHours: number, reason: string, extraAmount?: number) => {
+    const booking = bookings.find((b) => b.id === bookingId);
+    const hourly = booking?.hourlyDetails || { hourlyRate: 300, approvedTimeLimitHours: 1, timeUsedHours: 1, calculatedAmount: 300 };
+    const rate = hourly.hourlyRate || 300;
+    const amount = extraAmount !== undefined ? extraAmount : (requestedHours * rate);
+
+    const updatedHourly: HourlyDetails = {
+      ...hourly,
+      timerRunning: false,
+      extraTimeRequest: {
+        requestedHours,
+        rate,
+        reason,
+        extraAmount: amount,
+        status: 'pending_customer',
+        requestedAt: new Date().toISOString()
+      }
+    };
+
+    setBookings((prev) =>
+      prev.map((b) =>
+        b.id === bookingId
+          ? { ...b, hourlyDetails: updatedHourly, status: 'work_paused_extra_time' }
+          : b
+      )
+    );
+
+    try {
+      await api.requestExtraTime(bookingId, { requestedHours, reason, extraAmount: amount });
+    } catch {}
+
+    addAuditLog('EXTRA_TIME_REQUESTED', `Provider paused Booking ${bookingId} and requested +${requestedHours} hrs (+₹${amount}): ${reason}`);
+    showToast('Work paused. Customer approval requested for extra time.');
+  };
+
+  const customerDecideExtraTime = async (bookingId: string, approved: boolean) => {
+    setBookings((prev) =>
+      prev.map((b) => {
+        if (b.id !== bookingId || !b.hourlyDetails?.extraTimeRequest) return b;
+        const req = b.hourlyDetails.extraTimeRequest;
+        const now = new Date().toISOString();
+
+        if (approved) {
+          const updatedHourly: HourlyDetails = {
+            ...b.hourlyDetails,
+            approvedTimeLimitHours: b.hourlyDetails.approvedTimeLimitHours + req.requestedHours,
+            extraTimeRequest: { ...req, status: 'approved', decidedAt: now }
+          };
+          return {
+            ...b,
+            totalPrice: b.totalPrice + req.extraAmount,
+            hourlyDetails: updatedHourly,
+            status: 'in_progress'
+          };
+        } else {
+          const updatedHourly: HourlyDetails = {
+            ...b.hourlyDetails,
+            extraTimeRequest: { ...req, status: 'declined', decidedAt: now }
+          };
+          return {
+            ...b,
+            hourlyDetails: updatedHourly,
+            status: 'in_progress'
+          };
+        }
+      })
+    );
+
+    try {
+      await api.decideExtraTime(bookingId, approved);
+    } catch {}
+
+    if (approved) {
+      addAuditLog('EXTRA_TIME_APPROVED', `Customer approved extra time on Booking ${bookingId}.`);
+      showToast('Extra time approved! Provider may proceed.');
+    } else {
+      addAuditLog('EXTRA_TIME_DECLINED', `Customer declined extra time on Booking ${bookingId}.`);
+      showToast('Extra time declined. Work continues under original limit.');
+    }
+  };
+
+  const updateHourlyTimeUsed = async (bookingId: string, timeUsedHours: number, timerRunning?: boolean) => {
+    setBookings((prev) =>
+      prev.map((b) => {
+        if (b.id !== bookingId) return b;
+        const h = b.hourlyDetails || { hourlyRate: 300, approvedTimeLimitHours: 2, timeUsedHours: 0, calculatedAmount: 0 };
+        const calc = Math.round(timeUsedHours * (h.hourlyRate || 300));
+        return {
+          ...b,
+          hourlyDetails: {
+            ...h,
+            timeUsedHours,
+            calculatedAmount: calc,
+            timerRunning: timerRunning !== undefined ? timerRunning : h.timerRunning
+          }
+        };
+      })
+    );
+
+    try {
+      await api.updateTimeUsed(bookingId, timeUsedHours, timerRunning);
+    } catch {}
+  };
+
+  // ── Completion & Problem Reporting ──────────────────────────────────────────
+
+  const markServiceComplete = async (bookingId: string, completionNotes?: string) => {
+    const now = new Date().toISOString();
+    setBookings((prev) =>
+      prev.map((b) =>
+        b.id === bookingId
+          ? { ...b, status: 'completed_pending_review', completedAt: now, completionNotes }
+          : b
+      )
+    );
+
+    try {
+      await api.markServiceComplete(bookingId, completionNotes);
+    } catch {}
+
+    addAuditLog('SERVICE_MARKED_COMPLETE', `Provider marked Booking ${bookingId} as completed. Customer notified.`);
+    showToast('Job marked completed! Waiting for customer confirmation.');
+  };
+
+  const confirmServiceCompletion = async (bookingId: string, rating?: number, reviewComment?: string) => {
+    const now = new Date().toISOString();
+    setBookings((prev) =>
+      prev.map((b) =>
+        b.id === bookingId
+          ? {
+              ...b,
+              status: 'completed',
+              paymentStatus: 'success',
+              confirmedCompletedAt: now,
+              rating: rating || b.rating,
+              reviewComment: reviewComment || b.reviewComment
+            }
+          : b
+      )
+    );
+
+    try {
+      await api.confirmServiceCompletion(bookingId, rating, reviewComment);
+    } catch {}
+
+    addAuditLog('SERVICE_COMPLETED_CONFIRMED', `Customer confirmed completion for Booking ${bookingId}. Payment collected.`);
+    showToast('Service confirmed complete! Payment processed.');
+  };
+
+  const reportServiceProblem = async (bookingId: string, problemType: 'poor_quality' | 'incomplete_work' | 'damage' | 'other', description: string, photos?: string[]) => {
+    const problem: ReportedProblem = {
+      id: `prob_${Date.now()}`,
+      problemType,
+      description,
+      photos: photos || [],
+      reportedAt: new Date().toISOString(),
+      adminReviewStatus: 'under_review',
+      siteVisitRequired: false
+    };
+
+    setBookings((prev) =>
+      prev.map((b) =>
+        b.id === bookingId
+          ? { ...b, status: 'problem_reported', reportedProblem: problem }
+          : b
+      )
+    );
+
+    try {
+      await api.reportServiceProblem(bookingId, { problemType, description, photos });
+    } catch {}
+
+    addAuditLog('PROBLEM_REPORTED', `Customer reported issue on Booking ${bookingId} (${problemType}): ${description}. Job kept open.`);
+    showToast('Problem reported to Admin. Booking remains open while investigated.');
+  };
+
+  const adminReviewProblem = async (bookingId: string, reviewData: { siteVisitRequired?: boolean; siteVisitScheduledAt?: string; adminNotes?: string; resolved?: boolean; resolutionNotes?: string }) => {
+    setBookings((prev) =>
+      prev.map((b) => {
+        if (b.id !== bookingId || !b.reportedProblem) return b;
+        const updatedProblem: ReportedProblem = {
+          ...b.reportedProblem,
+          siteVisitRequired: reviewData.siteVisitRequired !== undefined ? reviewData.siteVisitRequired : b.reportedProblem.siteVisitRequired,
+          siteVisitScheduledAt: reviewData.siteVisitScheduledAt || b.reportedProblem.siteVisitScheduledAt,
+          adminNotes: reviewData.adminNotes || b.reportedProblem.adminNotes,
+          adminReviewStatus: reviewData.resolved ? 'resolved' : reviewData.siteVisitScheduledAt ? 'site_visit_scheduled' : b.reportedProblem.adminReviewStatus,
+          resolutionNotes: reviewData.resolutionNotes || b.reportedProblem.resolutionNotes,
+          clearedAt: reviewData.resolved ? new Date().toISOString() : b.reportedProblem.clearedAt
+        };
+        const nextStatus: BookingStatus = reviewData.resolved ? 'completed_pending_review' : b.status;
+        return {
+          ...b,
+          reportedProblem: updatedProblem,
+          status: nextStatus
+        };
+      })
+    );
+
+    try {
+      await api.reviewReportedProblem(bookingId, reviewData);
+    } catch {}
+
+    addAuditLog('PROBLEM_ADMIN_REVIEWED', `Admin reviewed reported problem for Booking ${bookingId}: resolved=${reviewData.resolved}`);
+    showToast(`Problem report updated.${reviewData.resolved ? ' Issue cleared.' : ''}`);
+  };
+
+  // ── Categories & Provider Rates Oversight ───────────────────────────────────
+
+  const addServiceCategory = async (cat: Partial<ServiceCategory>) => {
+    const newCat: ServiceCategory = {
+      id: cat.id || `cat_${Date.now()}`,
+      name: cat.name || 'New Category',
+      icon: cat.icon || '🏷️',
+      description: cat.description || '',
+      subServices: cat.subServices || [],
+      displayOrder: cat.displayOrder || 99,
+      isActive: true
+    };
+    setServiceCategories((prev) => [...prev, newCat]);
+    try {
+      await api.saveServiceCategory(newCat);
+    } catch {}
+    addAuditLog('CATEGORY_ADDED', `Admin created category "${newCat.name}"`);
+    showToast(`Category "${newCat.name}" created!`);
+  };
+
+  const updateServiceCategory = async (id: string, catData: Partial<ServiceCategory>) => {
+    setServiceCategories((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...catData } : c))
+    );
+    try {
+      await api.updateServiceCategory(id, catData);
+    } catch {}
+    addAuditLog('CATEGORY_UPDATED', `Admin updated category ${id}`);
+    showToast(`Category updated.`);
+  };
+
+  const addNewService = async (serviceData: Partial<Service>) => {
+    const newSvc: Service = {
+      id: serviceData.id || `svc_${Date.now()}`,
+      title: serviceData.title || 'New Service',
+      category: serviceData.category || 'Home repairs',
+      price: Number(serviceData.price) || 299,
+      unit: serviceData.unit || 'visit & inspection',
+      pricingType: serviceData.pricingType || 'fixed',
+      rateApprovalStatus: 'pending_admin',
+      hourlyRate: serviceData.hourlyRate,
+      meteredRate: serviceData.meteredRate,
+      estimatedDurationHours: serviceData.estimatedDurationHours || 1,
+      requiresQuotation: serviceData.requiresQuotation || serviceData.pricingType === 'quotation_required',
+      subServiceName: serviceData.subServiceName,
+      categoryId: serviceData.categoryId,
+      providerId: user.id || 'prov_general_specialist_1',
+      providerName: user.name || 'NSO Verified Specialist Network',
+      providerRating: 5.0,
+      providerJobsCompleted: 0,
+      modes: serviceData.modes || ['home_visit'],
+      description: serviceData.description || 'Verified doorstep service.',
+      cancellationPolicy: serviceData.cancellationPolicy || 'Free cancellation before technician dispatch.',
+      availableSlots: serviceData.availableSlots || ['09:00 AM - 11:00 AM', '11:30 AM - 01:30 PM', '02:30 PM - 04:30 PM', '05:00 PM - 07:00 PM'],
+      approvedByAdmin: false,
+      approvalStatus: 'pending_approval'
+    };
+    setServices((prev) => [newSvc, ...prev]);
+    try {
+      await api.createService(newSvc);
+    } catch {}
+    addAuditLog('SERVICE_SUBMITTED', `Service "${newSvc.title}" submitted for Admin review`);
+    showToast(`Service submitted! Pending Admin approval.`);
+  };
+
+  const updateProviderRate = async (serviceId: string, rateData: { price?: number; hourlyRate?: number; meteredRate?: number; pricingType?: PricingType; unit?: string; estimatedDurationHours?: number }) => {
+    setServices((prev) =>
+      prev.map((s) =>
+        s.id === serviceId
+          ? {
+              ...s,
+              ...rateData,
+              price: rateData.price !== undefined ? rateData.price : s.price,
+              rateApprovalStatus: 'pending_admin'
+            }
+          : s
+      )
+    );
+    try {
+      await api.updateProviderRate(serviceId, rateData);
+    } catch {}
+    addAuditLog('RATE_UPDATE_SUBMITTED', `Provider submitted rate change for service ${serviceId}. Pending Admin review.`);
+    showToast('Rate change submitted for Admin approval.');
+  };
+
+  const approveProviderRate = async (serviceId: string, approved: boolean, adminNotes?: string) => {
+    setServices((prev) =>
+      prev.map((s) =>
+        s.id === serviceId
+          ? { ...s, rateApprovalStatus: approved ? 'approved' : 'rejected' }
+          : s
+      )
+    );
+    try {
+      await api.approveProviderRate(serviceId, approved, adminNotes);
+    } catch {}
+    addAuditLog('RATE_ADMIN_DECISION', `Admin marked rate for service ${serviceId} as ${approved ? 'APPROVED' : 'REJECTED'}`);
+    showToast(`Rate change ${approved ? 'approved' : 'rejected'}.`);
+  };
+
+  const approveServiceListing = async (serviceId: string, approved: boolean, adminNotes?: string) => {
+    setServices((prev) =>
+      prev.map((s) =>
+        s.id === serviceId
+          ? {
+              ...s,
+              approvedByAdmin: approved,
+              approvalStatus: approved ? 'approved' : 'rejected',
+              rateApprovalStatus: approved ? 'approved' : 'rejected'
+            }
+          : s
+      )
+    );
+    try {
+      await api.approveService(serviceId, approved, adminNotes);
+    } catch {}
+    addAuditLog('SERVICE_LISTING_DECISION', `Admin ${approved ? 'approved' : 'rejected'} service listing ${serviceId}`);
+    showToast(`Service listing ${approved ? 'approved' : 'rejected'}.`);
+  };
+
+  const adminReviewProviderCancellation = async (reviewId: string, adminNotes: string, status = 'reviewed') => {
+    setProviderCancellationReviews((prev) =>
+      prev.map((r) => (r.id === reviewId ? { ...r, adminNotes, status: status as any } : r))
+    );
+    try {
+      await api.reviewProviderCancellation(reviewId, adminNotes, status);
+    } catch {}
+    addAuditLog('PROVIDER_CANCELLATION_REVIEWED', `Admin reviewed provider cancellation case ${reviewId}: ${adminNotes}`);
+    showToast('Provider cancellation review saved.');
   };
 
   const submitSpecialRequest = (
@@ -1201,7 +1800,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         user,
         products,
         services,
+        serviceCategories,
         providers,
+        providerCancellationReviews,
         addresses,
         selectedAddress,
         cart,
@@ -1263,6 +1864,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitRevisedQuote,
         sendProviderQuotation,
         respondToRevisedQuote,
+        submitJobQuotation,
+        adminReviewQuotation,
+        customerDecideQuotation,
+        requestHourlyExtraTime,
+        customerDecideExtraTime,
+        updateHourlyTimeUsed,
+        markServiceComplete,
+        confirmServiceCompletion,
+        reportServiceProblem,
+        adminReviewProblem,
+        addServiceCategory,
+        updateServiceCategory,
+        addNewService,
+        updateProviderRate,
+        approveProviderRate,
+        approveServiceListing,
+        adminReviewProviderCancellation,
         submitSpecialRequest,
         updateSpecialRequest,
         approveSeller,

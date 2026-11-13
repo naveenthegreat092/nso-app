@@ -1,4 +1,16 @@
-import { Product, Order, Booking, SpecialRequest, UserProfile } from '../types';
+import {
+  Product,
+  Order,
+  Booking,
+  SpecialRequest,
+  UserProfile,
+  Service,
+  ServiceCategory,
+  JobQuotation,
+  HourlyDetails,
+  ReportedProblem,
+  ProviderCancellationReview
+} from '../types';
 
 // Dynamic API Base URL:
 // In Web dev: Uses '/api' (proxied by Vite to port 5000)
@@ -247,6 +259,122 @@ export const api = {
     }
   },
 
+  // ── Service Categories ──────────────────────────────────────────────────────
+
+  getServiceCategories: async (): Promise<ServiceCategory[] | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/service-categories`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  saveServiceCategory: async (categoryData: Partial<ServiceCategory>): Promise<ServiceCategory | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/service-categories`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(categoryData)
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  updateServiceCategory: async (id: string, categoryData: Partial<ServiceCategory>): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/service-categories/${id}`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(categoryData)
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  // ── Services & Provider Rates ───────────────────────────────────────────────
+
+  getServices: async (): Promise<Service[] | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/services`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  createService: async (serviceData: Partial<Service>): Promise<Service | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/services`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(serviceData)
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  updateProviderRate: async (serviceId: string, rateData: { price?: number; hourlyRate?: number; meteredRate?: number; pricingType?: string; unit?: string; estimatedDurationHours?: number }): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/services/${serviceId}/rate`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(rateData)
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  approveProviderRate: async (serviceId: string, approved: boolean, adminNotes?: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/services/${serviceId}/approve-rate`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ approved, adminNotes })
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  approveService: async (serviceId: string, approved: boolean, adminNotes?: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/services/${serviceId}/approve`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ approved, adminNotes })
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
   // ── Orders ──────────────────────────────────────────────────────────────────
 
   getOrders: async (): Promise<Order[] | null> => {
@@ -351,16 +479,18 @@ export const api = {
     }
   },
 
-  cancelBooking: async (bookingId: string): Promise<boolean> => {
+  cancelBooking: async (bookingId: string, cancelData?: { reason?: string; stage?: string; workCompletedCharge?: number; materialsUsedCharge?: number; breakdown?: string }): Promise<{ success: boolean; message?: string; cancellationDetails?: any }> => {
     try {
       const res = await fetch(`${API_BASE}/bookings/${bookingId}/cancel`, {
         ...defaultOpts,
-        headers: getAuthHeaders(),
-        method: 'POST'
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        method: 'POST',
+        body: JSON.stringify(cancelData || {})
       });
-      return res.ok;
+      const data = await res.json().catch(() => ({}));
+      return { success: res.ok, ...data };
     } catch {
-      return false;
+      return { success: false };
     }
   },
 
@@ -371,6 +501,202 @@ export const api = {
         method: 'PATCH',
         headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ status })
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  // ── Quotations ──────────────────────────────────────────────────────────────
+
+  submitQuotation: async (bookingId: string, quoteData: Partial<JobQuotation>): Promise<{ success: boolean; quotation?: JobQuotation; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/quotation`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(quoteData)
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false, error: 'Network error submitting quotation.' };
+    }
+  },
+
+  reviewQuotation: async (bookingId: string, decision: 'approve' | 'return' | 'request_info', adminFeedback?: string): Promise<{ success: boolean; quotation?: JobQuotation; status?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/quotation/admin-review`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ decision, adminFeedback })
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false };
+    }
+  },
+
+  decideQuotation: async (bookingId: string, decision: 'accept' | 'request_changes' | 'decline', customerFeedback?: string): Promise<{ success: boolean; quotation?: JobQuotation; totalPrice?: number; status?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/quotation/customer-decision`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ decision, customerFeedback })
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false };
+    }
+  },
+
+  // ── Hourly Work & Extra Time ────────────────────────────────────────────────
+
+  requestExtraTime: async (bookingId: string, extraData: { requestedHours: number; reason: string; extraAmount?: number }): Promise<{ success: boolean; hourlyDetails?: HourlyDetails; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/hourly/extra-time`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(extraData)
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false, error: 'Network error requesting extra time.' };
+    }
+  },
+
+  decideExtraTime: async (bookingId: string, approved: boolean): Promise<{ success: boolean; approved?: boolean; totalPrice?: number; hourlyDetails?: HourlyDetails }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/hourly/extra-time-decision`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ approved })
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false };
+    }
+  },
+
+  updateTimeUsed: async (bookingId: string, timeUsedHours: number, timerRunning?: boolean): Promise<{ success: boolean; hourlyDetails?: HourlyDetails }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/hourly/time-used`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ timeUsedHours, timerRunning })
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false };
+    }
+  },
+
+  // ── Completion & Problem Reporting ──────────────────────────────────────────
+
+  markServiceComplete: async (bookingId: string, completionNotes?: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/complete`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ completionNotes })
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false };
+    }
+  },
+
+  confirmServiceCompletion: async (bookingId: string, rating?: number, reviewComment?: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/confirm-completion`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ rating, reviewComment })
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false };
+    }
+  },
+
+  reportServiceProblem: async (bookingId: string, problemData: { problemType: string; description: string; photos?: string[] }): Promise<{ success: boolean; reportedProblem?: ReportedProblem; message?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/report-problem`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(problemData)
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false };
+    }
+  },
+
+  reviewReportedProblem: async (bookingId: string, reviewData: { siteVisitRequired?: boolean; siteVisitScheduledAt?: string; adminNotes?: string; resolved?: boolean; resolutionNotes?: string }): Promise<{ success: boolean; reportedProblem?: ReportedProblem; bookingStatus?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/problem/admin-review`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(reviewData)
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false };
+    }
+  },
+
+  getReportedProblems: async (): Promise<any[] | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/problems`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  getProviderCancellations: async (): Promise<ProviderCancellationReview[] | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/provider-cancellations`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  reviewProviderCancellation: async (reviewId: string, adminNotes: string, status?: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/provider-cancellations/${reviewId}`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ adminNotes, status })
       });
       return res.ok;
     } catch {

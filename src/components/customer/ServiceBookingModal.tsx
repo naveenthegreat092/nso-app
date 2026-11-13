@@ -40,6 +40,8 @@ export const ServiceBookingModal: React.FC<{
   const [address, setAddress] = useState(
     user.address || 'Flat 402, Orbit Towers, Indiranagar, Bengaluru - 560038'
   );
+  const [problemDescription, setProblemDescription] = useState('');
+  const [hourlyLimit, setHourlyLimit] = useState(service.estimatedDurationHours || 2);
   const [isConfirmed, setIsConfirmed] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -55,7 +57,18 @@ export const ServiceBookingModal: React.FC<{
   const handleBook = async () => {
     setIsSubmitting(true);
     try {
-      const booking = await createBooking(service.id, selectedDate, selectedSlot, serviceMode, address);
+      const booking = await createBooking(
+        service.id,
+        selectedDate,
+        selectedSlot,
+        serviceMode,
+        address,
+        problemDescription.trim() || undefined,
+        undefined,
+        service.pricingType === 'quotation_required' ? 'site_visit' : 'repair',
+        undefined,
+        service.pricingType === 'hourly' ? hourlyLimit : undefined
+      );
       if (booking) {
         setIsConfirmed(booking);
       }
@@ -156,9 +169,63 @@ export const ServiceBookingModal: React.FC<{
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-200 flex items-baseline gap-1.5">
-                <span className="text-xl font-black text-red-600">₹{service.price}</span>
-                <span className="text-xs text-slate-500">/ {service.unit}</span>
+              <div className="pt-2 border-t border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-baseline gap-1.5">
+                    {service.pricingType === 'hourly' ? (
+                      <>
+                        <span className="text-xl font-black text-red-600">₹{service.hourlyRate || service.price}</span>
+                        <span className="text-xs text-slate-500 font-bold">/ hour</span>
+                      </>
+                    ) : service.pricingType === 'quotation_required' ? (
+                      <span className="text-base font-black text-purple-900 bg-purple-100 px-2 py-0.5 rounded-lg">
+                        Inspection &amp; Quotation
+                      </span>
+                    ) : service.pricingType === 'metered' ? (
+                      <>
+                        <span className="text-xl font-black text-red-600">₹{service.meteredRate || service.price}</span>
+                        <span className="text-xs text-slate-500 font-bold">/ {service.unit}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-xl font-black text-red-600">₹{service.price}</span>
+                        <span className="text-xs text-slate-500">/ {service.unit}</span>
+                      </>
+                    )}
+                  </div>
+                  <span className="text-[10px] uppercase font-mono font-bold bg-slate-200/80 text-slate-700 px-2 py-0.5 rounded-md">
+                    {service.pricingType || 'fixed'} billing
+                  </span>
+                </div>
+
+                {service.pricingType === 'hourly' && (
+                  <div className="mt-2.5 p-2.5 bg-indigo-50 border border-indigo-200 rounded-xl space-y-1.5 text-xs">
+                    <div className="flex justify-between items-center text-indigo-950 font-bold">
+                      <span>Initial Approved Time Limit:</span>
+                      <select
+                        value={hourlyLimit}
+                        onChange={(e) => setHourlyLimit(parseInt(e.target.value) || 2)}
+                        className="bg-white border border-indigo-300 rounded-lg px-2 py-1 font-black text-indigo-700 outline-none"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 8].map((h) => (
+                          <option key={h} value={h}>{h} Hour{h > 1 ? 's' : ''} (Max ₹{(service.hourlyRate || service.price) * h})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-[10px] text-indigo-700 leading-snug">
+                      Timer runs only while specialist works. Any extension requires your separate one-tap approval.
+                    </p>
+                  </div>
+                )}
+
+                {service.pricingType === 'quotation_required' && (
+                  <div className="mt-2.5 p-2.5 bg-purple-50 border border-purple-200 rounded-xl text-[11px] text-purple-950 space-y-1">
+                    <p className="font-bold">Transparent On-Site Quotation:</p>
+                    <p className="text-purple-800 leading-snug">
+                      Specialist will inspect the job and submit a formal line-item quote (Labor + Materials) for your approval before starting work.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -283,6 +350,18 @@ export const ServiceBookingModal: React.FC<{
               </div>
             )}
 
+            {/* Describe Issue / Job Details */}
+            <div className="space-y-1">
+              <span className="text-xs font-black text-slate-800">Job Description / Specifics (Optional)</span>
+              <textarea
+                rows={2}
+                placeholder="e.g. Copper pipe leak under kitchen sink, switchboard sparking, deep clean 2 BHK..."
+                value={problemDescription}
+                onChange={(e) => setProblemDescription(e.target.value)}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </div>
+
             {/* Address */}
             {serviceMode === 'home_visit' && (
               <div className="space-y-1">
@@ -316,7 +395,15 @@ export const ServiceBookingModal: React.FC<{
               className="w-full py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-black text-sm rounded-2xl shadow-xl shadow-red-500/25 transition-transform active:scale-[0.98] flex items-center justify-center gap-2"
             >
               <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
-              <span>{isSubmitting ? 'Reserving Slot…' : `Confirm & Book Slot for ₹${service.price}`}</span>
+              <span>
+                {isSubmitting
+                  ? 'Reserving Slot…'
+                  : service.pricingType === 'quotation_required'
+                  ? 'Book Free Inspection & Assessment'
+                  : service.pricingType === 'hourly'
+                  ? `Confirm Booking (${hourlyLimit} hrs cap: ₹${(service.hourlyRate || service.price) * hourlyLimit})`
+                  : `Confirm & Book Slot for ₹${service.price}`}
+              </span>
             </button>
             <p className="text-[10px] text-slate-400 text-center mt-1.5 font-medium">
               Verified specialist arrives at your designated time slot.

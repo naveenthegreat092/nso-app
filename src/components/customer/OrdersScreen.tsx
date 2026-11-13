@@ -18,7 +18,12 @@ import {
   MessageSquare,
   FileText,
   Ban,
-  ShoppingBag
+  ShoppingBag,
+  AlertTriangle,
+  Timer,
+  Check,
+  X,
+  ShieldCheck
 } from 'lucide-react';
 
 export const OrdersScreen: React.FC = () => {
@@ -34,13 +39,23 @@ export const OrdersScreen: React.FC = () => {
     cancelOrder,
     cancelBooking,
     setActiveTab,
-    user
+    user,
+    customerDecideQuotation,
+    customerDecideExtraTime,
+    confirmServiceCompletion,
+    reportServiceProblem
   } = useApp();
   const [subTab, setSubTab] = useState<'products' | 'services'>('products');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
   const [confirmCancelType, setConfirmCancelType] = useState<'order' | 'booking'>('order');
+
+  // Quotation & Problem reporting states
+  const [quoteDecisionFeedback, setQuoteDecisionFeedback] = useState<{ [bookingId: string]: string }>({});
+  const [showProblemModalForBookingId, setShowProblemModalForBookingId] = useState<string | null>(null);
+  const [problemType, setProblemType] = useState<'poor_quality' | 'incomplete_work' | 'damage' | 'other'>('poor_quality');
+  const [problemDescription, setProblemDescription] = useState('');
 
   const handleCancelOrder = (id: string) => {
     setConfirmCancelType('order');
@@ -366,11 +381,19 @@ export const OrdersScreen: React.FC = () => {
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${
                         booking.status === 'completed'
                           ? 'bg-emerald-100 text-emerald-800'
+                          : booking.status === 'completed_pending_review'
+                          ? 'bg-amber-100 text-amber-900 animate-pulse'
+                          : booking.status === 'quotation_customer_review'
+                          ? 'bg-purple-100 text-purple-900 font-black animate-pulse'
+                          : booking.status === 'problem_reported'
+                          ? 'bg-rose-100 text-rose-900'
                           : booking.status === 'cancelled'
                           ? 'bg-red-100 text-red-800'
+                          : booking.status === 'in_progress'
+                          ? 'bg-indigo-100 text-indigo-800'
                           : 'bg-blue-100 text-blue-800'
                       }`}>
-                        {booking.status.replace('_', ' ')}
+                        {booking.status.replace(/_/g, ' ')}
                       </span>
                     </div>
 
@@ -449,15 +472,38 @@ export const OrdersScreen: React.FC = () => {
                         </span>
                       )}
                       {/* Track technician if active */}
-                      {['confirmed', 'in_progress'].includes(booking.status) && (
+                      {['confirmed', 'in_progress', 'travelling'].includes(booking.status) && (
                         <button
                           onClick={() => openTracking(booking.serviceTitle, booking.providerName, 'technician', booking.id, booking)}
-                          className="flex items-center gap-1 text-[11px] font-bold text-white bg-red-600 hover:bg-red-700 px-2.5 py-1.5 rounded-lg shadow-sm"
+                          className="flex items-center gap-1 text-[11px] font-bold text-white bg-red-600 hover:bg-red-700 px-2.5 py-1.5 rounded-lg shadow-sm active:scale-95 transition-all"
                         >
                           <Navigation className="w-3 h-3" />
-                          Track
+                          Track Specialist
                         </button>
                       )}
+
+                      {/* Confirm Completion & Release */}
+                      {booking.status === 'completed_pending_review' && (
+                        <button
+                          onClick={() => confirmServiceCompletion(booking.id)}
+                          className="flex items-center gap-1 text-[11px] font-black text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg shadow-sm active:scale-95 transition-all"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          Confirm &amp; Release Payment
+                        </button>
+                      )}
+
+                      {/* Report Problem / Dispute */}
+                      {['in_progress', 'completed_pending_review', 'completed'].includes(booking.status) && !booking.reportedProblem && (
+                        <button
+                          onClick={() => setShowProblemModalForBookingId(booking.id)}
+                          className="flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg active:scale-95 transition-all"
+                        >
+                          <AlertTriangle className="w-3 h-3 text-rose-600" />
+                          Report Problem
+                        </button>
+                      )}
+
                       {/* Rate if completed and not yet rated */}
                       {booking.status === 'completed' && !booking.rating && (
                         <button
@@ -475,6 +521,159 @@ export const OrdersScreen: React.FC = () => {
                         </span>
                       )}
                     </div>
+
+                    {/* FORMAL JOB QUOTATION CARD */}
+                    {booking.quotation && (
+                      <div className="p-3.5 rounded-2xl border border-purple-200 bg-purple-50/70 text-xs space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-purple-950 flex items-center gap-1.5">
+                            <ShieldCheck className="w-4 h-4 text-purple-700" />
+                            Official Job Quotation
+                          </span>
+                          <span className="text-[10px] bg-purple-200 text-purple-900 font-black px-2 py-0.5 rounded-full capitalize">
+                            {booking.quotation.status.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-700"><span className="font-bold">Scope:</span> {booking.quotation.proposedWork}</p>
+
+                        <div className="grid grid-cols-4 gap-2 text-center font-mono">
+                          <div className="bg-white p-1.5 rounded-lg border border-purple-100">
+                            <span className="text-[9px] text-gray-400 block">Labor</span>
+                            <span className="font-bold text-slate-800">₹{booking.quotation.laborCost}</span>
+                          </div>
+                          <div className="bg-white p-1.5 rounded-lg border border-purple-100">
+                            <span className="text-[9px] text-gray-400 block">Parts</span>
+                            <span className="font-bold text-slate-800">₹{booking.quotation.partsCost}</span>
+                          </div>
+                          <div className="bg-white p-1.5 rounded-lg border border-purple-100">
+                            <span className="text-[9px] text-gray-400 block">Fees</span>
+                            <span className="font-bold text-slate-800">₹{booking.quotation.additionalFees}</span>
+                          </div>
+                          <div className="bg-purple-900 text-white p-1.5 rounded-lg">
+                            <span className="text-[9px] text-purple-200 block">Total</span>
+                            <span className="font-black">₹{booking.quotation.totalAmount}</span>
+                          </div>
+                        </div>
+
+                        {booking.quotation.assumptions && (
+                          <p className="text-[10px] text-purple-900 italic">Notes: {booking.quotation.assumptions}</p>
+                        )}
+                        <p className="text-[10px] text-gray-500">Quotation Valid Until: <strong>{booking.quotation.expiryDate}</strong></p>
+
+                        {/* Customer Decision Actions */}
+                        {(booking.status === 'quotation_customer_review' || booking.quotation.status === 'admin_approved') && (
+                          <div className="pt-2 border-t border-purple-200/80 space-y-2">
+                            <input
+                              type="text"
+                              placeholder="Feedback / notes (optional for changes or decline)..."
+                              value={quoteDecisionFeedback[booking.id] || ''}
+                              onChange={(e) => setQuoteDecisionFeedback({ ...quoteDecisionFeedback, [booking.id]: e.target.value })}
+                              className="w-full p-2 bg-white border border-purple-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600"
+                            />
+                            <div className="grid grid-cols-3 gap-1.5">
+                              <button
+                                onClick={() => customerDecideQuotation(booking.id, 'accept')}
+                                className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] rounded-xl shadow-sm flex items-center justify-center gap-1 active:scale-95"
+                              >
+                                <Check className="w-3.5 h-3.5" /> Accept &amp; Start
+                              </button>
+                              <button
+                                onClick={() => customerDecideQuotation(booking.id, 'request_changes', quoteDecisionFeedback[booking.id])}
+                                className="py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold text-[11px] rounded-xl active:scale-95"
+                              >
+                                Request Edit
+                              </button>
+                              <button
+                                onClick={() => customerDecideQuotation(booking.id, 'decline', quoteDecisionFeedback[booking.id])}
+                                className="py-2 bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold text-[11px] rounded-xl active:scale-95"
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* HOURLY DETAILS & EXTRA TIME TRACKER */}
+                    {booking.hourlyDetails && (
+                      <div className="p-3.5 rounded-2xl border border-indigo-200 bg-indigo-50/60 text-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-indigo-950 flex items-center gap-1.5">
+                            <Timer className="w-4 h-4 text-indigo-600" />
+                            Hourly Service Billing
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            booking.hourlyDetails.timerRunning ? 'bg-indigo-600 text-white animate-pulse' : 'bg-gray-200 text-gray-700'
+                          }`}>
+                            {booking.hourlyDetails.timerRunning ? 'Timer Active' : 'Timer Paused'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 bg-white p-2.5 rounded-xl text-[11px] text-center border border-indigo-100">
+                          <div>
+                            <span className="text-[9px] text-gray-400 block uppercase font-bold">Time Used</span>
+                            <span className="font-black text-slate-800">{booking.hourlyDetails.timeUsedHours || 0} hrs</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-gray-400 block uppercase font-bold">Approved Limit</span>
+                            <span className="font-bold text-slate-700">{booking.hourlyDetails.approvedTimeLimitHours || 2} hrs</span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-gray-400 block uppercase font-bold">Calculated Fee</span>
+                            <span className="font-extrabold text-indigo-700">₹{booking.hourlyDetails.calculatedAmount || booking.totalPrice}</span>
+                          </div>
+                        </div>
+
+                        {/* Extra Time Request Banner */}
+                        {booking.hourlyDetails.extraTimeRequest?.status === 'pending_customer' && (
+                          <div className="p-2.5 bg-amber-100 rounded-xl border border-amber-300 space-y-2">
+                            <p className="text-[11px] font-bold text-amber-950">
+                              ⚠️ Provider requested +{booking.hourlyDetails.extraTimeRequest.requestedHours} hrs (₹{booking.hourlyDetails.extraTimeRequest.extraAmount}). Reason: {booking.hourlyDetails.extraTimeRequest.reason}
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                onClick={() => customerDecideExtraTime(booking.id, true)}
+                                className="py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-sm active:scale-95"
+                              >
+                                Approve Extra Time
+                              </button>
+                              <button
+                                onClick={() => customerDecideExtraTime(booking.id, false)}
+                                className="py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-lg active:scale-95"
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* REPORTED PROBLEM BANNER */}
+                    {booking.reportedProblem && (
+                      <div className="p-3 rounded-2xl border border-rose-200 bg-rose-50 text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-rose-950 flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                            Dispute Filed: {booking.reportedProblem.problemType.replace(/_/g, ' ')}
+                          </span>
+                          <span className="text-[10px] font-bold bg-rose-200 text-rose-900 px-2 py-0.5 rounded-full capitalize">
+                            {booking.reportedProblem.adminReviewStatus.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-700">{booking.reportedProblem.description}</p>
+                        {booking.reportedProblem.siteVisitScheduledAt && (
+                          <p className="text-[10px] font-bold text-indigo-700 pt-1">
+                            📅 Site inspection visit scheduled: {new Date(booking.reportedProblem.siteVisitScheduledAt).toLocaleString('en-IN')}
+                          </p>
+                        )}
+                        {booking.reportedProblem.resolutionNotes && (
+                          <p className="text-[10px] font-bold text-emerald-700 pt-1">
+                            Resolution: {booking.reportedProblem.resolutionNotes}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     {/* REVISED QUOTE GUARDRAIL SECTION (Page 6 Brief) */}
                     {booking.revisedQuote && (
@@ -538,6 +737,89 @@ export const OrdersScreen: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* Problem / Dispute Reporting Modal */}
+      {showProblemModalForBookingId && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-3 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-rose-700 font-extrabold text-sm">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Report Service Issue</span>
+              </div>
+              <button
+                onClick={() => {
+                  setShowProblemModalForBookingId(null);
+                  setProblemDescription('');
+                }}
+                className="p-1 rounded-full text-gray-400 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-[11px] text-gray-600">
+              NSO Protection ensures quality. We will mediate, inspect on-site, or issue a full refund if standards are not met.
+            </p>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">Issue Category</label>
+                <select
+                  value={problemType}
+                  onChange={(e) => setProblemType(e.target.value as any)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500"
+                >
+                  <option value="poor_quality">Poor Quality Work</option>
+                  <option value="incomplete_work">Work Left Incomplete</option>
+                  <option value="damage">Property Damage</option>
+                  <option value="other">Other Concern</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">Detailed Description</label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="Describe what went wrong so Admin can schedule an inspection or resolve..."
+                  value={problemDescription}
+                  onChange={(e) => setProblemDescription(e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowProblemModalForBookingId(null);
+                    setProblemDescription('');
+                  }}
+                  className="py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl active:scale-95"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!problemDescription.trim()) {
+                      showToast('Please provide a description of the issue');
+                      return;
+                    }
+                    await reportServiceProblem(showProblemModalForBookingId, problemType, problemDescription.trim());
+                    setShowProblemModalForBookingId(null);
+                    setProblemDescription('');
+                  }}
+                  className="py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-md active:scale-95"
+                >
+                  Submit Dispute
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Invoice Modal */}
       {selectedInvoice && (

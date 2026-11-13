@@ -37,12 +37,12 @@ export const INITIAL_ADDRESSES: SavedAddress[] = [
   }
 ];
 
-// Clean slate: ZERO fake demo products or services!
-// Real products only appear when an approved seller or admin creates them.
-// Real services only appear when approved providers apply.
-export const MOCK_PROVIDERS: ProviderDetail[] = [];
+import { INITIAL_SERVICE_CATALOG, INITIAL_VERIFIED_PROVIDERS } from './serviceCatalog';
+
+// Initial verified provider network and catalog for all 16 candidate categories
+export const MOCK_PROVIDERS: ProviderDetail[] = INITIAL_VERIFIED_PROVIDERS;
 export const MOCK_PRODUCTS: Product[] = [];
-export const MOCK_SERVICES: Service[] = [];
+export const MOCK_SERVICES: Service[] = INITIAL_SERVICE_CATALOG;
 
 export const INITIAL_ORDERS: Order[] = [];
 export const INITIAL_BOOKINGS: Booking[] = [];

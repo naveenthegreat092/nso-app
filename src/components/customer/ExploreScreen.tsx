@@ -21,6 +21,7 @@ export const ExploreScreen: React.FC<{
   const {
     products,
     services,
+    serviceCategories: appServiceCategories,
     addToCart,
     updateCartQuantity,
     cart,
@@ -34,8 +35,8 @@ export const ExploreScreen: React.FC<{
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
   const productCategories = ['Electronics', 'Fashion', 'Home & Living', 'Groceries'];
-  const serviceCategories = ['Plumbing', 'Electrical', 'Cleaning', 'Salon & Spa'];
-  const allCategories = ['All', ...productCategories, ...serviceCategories];
+  const dynamicServiceCatNames = appServiceCategories?.map((c) => c.name) || ['Home repairs', 'Home care', 'Moving and delivery'];
+  const allCategories = ['All', ...productCategories, ...dynamicServiceCatNames];
 
   const getProductCartQuantity = (productId: string) => {
     const item = cart.find((c) => c.product.id === productId);
@@ -280,8 +281,21 @@ export const ExploreScreen: React.FC<{
                 </div>
 
                 <div className="text-right flex flex-col items-end flex-shrink-0">
-                  <span className="text-base font-black text-slate-900">₹{s.price}</span>
-                  <p className="text-[10px] text-slate-400">{s.unit}</p>
+                  {s.pricingType === 'hourly' ? (
+                    <>
+                      <span className="text-base font-black text-slate-900">₹{s.hourlyRate || s.price}</span>
+                      <p className="text-[10px] text-indigo-700 font-bold">/ hour</p>
+                    </>
+                  ) : s.pricingType === 'quotation_required' ? (
+                    <span className="text-[11px] font-black text-purple-900 bg-purple-100 px-2 py-0.5 rounded-md">
+                      Free Quote
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-base font-black text-slate-900">₹{s.price}</span>
+                      <p className="text-[10px] text-slate-400">{s.unit}</p>
+                    </>
+                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

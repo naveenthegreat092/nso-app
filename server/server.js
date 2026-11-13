@@ -361,6 +361,90 @@ try { db.exec('ALTER TABLE services ADD COLUMN hub_lat REAL DEFAULT 12.9784;'); 
 try { db.exec('ALTER TABLE services ADD COLUMN hub_lng REAL DEFAULT 77.6408;'); } catch (_) {}
 try { db.exec('ALTER TABLE orders ADD COLUMN seller_delivery_charge REAL DEFAULT 0;'); } catch (_) {}
 
+// Enhanced service booking platform schema
+db.exec(`
+  CREATE TABLE IF NOT EXISTS service_categories (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    icon TEXT NOT NULL,
+    description TEXT,
+    sub_services_json TEXT NOT NULL DEFAULT '[]',
+    display_order INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS provider_cancellation_reviews (
+    id TEXT PRIMARY KEY,
+    provider_id TEXT NOT NULL,
+    provider_name TEXT NOT NULL,
+    total_bookings INTEGER NOT NULL,
+    cancelled_bookings INTEGER NOT NULL,
+    cancellation_rate REAL NOT NULL,
+    reason TEXT,
+    status TEXT DEFAULT 'pending_admin_review',
+    admin_notes TEXT,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+  );
+`);
+
+try { db.exec("ALTER TABLE services ADD COLUMN pricing_type TEXT DEFAULT 'fixed';"); } catch (_) {}
+try { db.exec("ALTER TABLE services ADD COLUMN rate_approval_status TEXT DEFAULT 'approved';"); } catch (_) {}
+try { db.exec("ALTER TABLE services ADD COLUMN hourly_rate REAL DEFAULT 0;"); } catch (_) {}
+try { db.exec("ALTER TABLE services ADD COLUMN metered_rate REAL DEFAULT 0;"); } catch (_) {}
+try { db.exec("ALTER TABLE services ADD COLUMN estimated_duration_hours REAL DEFAULT 1;"); } catch (_) {}
+try { db.exec("ALTER TABLE services ADD COLUMN requires_quotation INTEGER DEFAULT 0;"); } catch (_) {}
+try { db.exec("ALTER TABLE services ADD COLUMN sub_service_name TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE services ADD COLUMN category_id TEXT;"); } catch (_) {}
+
+try { db.exec("ALTER TABLE bookings ADD COLUMN pricing_type TEXT DEFAULT 'fixed';"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN job_description TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN job_attachments_json TEXT DEFAULT '[]';"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN provider_assigned INTEGER DEFAULT 1;"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN quotation_json TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN hourly_details_json TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN reported_problem_json TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN cancellation_details_json TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN completed_at TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN confirmed_completed_at TEXT;"); } catch (_) {}
+
+// Seed candidate categories if not present
+const seedCandidateCategories = () => {
+  const countRow = db.prepare('SELECT count(*) as count FROM service_categories').get();
+  if (countRow && countRow.count > 0) return;
+
+  const now = new Date().toISOString();
+  const defaultCats = [
+    { id: 'home_repairs', name: 'Home repairs', icon: '🔧', desc: 'Electrician, plumbing, carpentry, painting, appliances & structural repair', subs: ['Electrician', 'Plumbing', 'Carpentry', 'Painting', 'Appliance repair', 'AC service', 'Handyman', 'Locksmith', 'Glass and aluminium work', 'Waterproofing', 'Pest control'], order: 1 },
+    { id: 'home_care', name: 'Home care', icon: '✨', desc: 'Cleaning, deep cleaning, housekeeping, laundry & waste clearance', subs: ['Cleaning', 'Deep cleaning', 'Bathroom and kitchen cleaning', 'Laundry and ironing', 'Maid and housekeeping', 'Gardening and landscaping', 'Junk removal'], order: 2 },
+    { id: 'moving_delivery', name: 'Moving and delivery', icon: '📦', desc: 'Packers & movers, loading, courier, fast local delivery & errands', subs: ['Packers and movers', 'Loading and unloading', 'Courier', 'Local delivery', 'Errands'], order: 3 },
+    { id: 'vehicles_transport', name: 'Vehicles and transport', icon: '🚗', desc: 'Cab & driver, airport transfers, vehicle repair, detailing & roadside help', subs: ['Cab and driver', 'Airport transfers', 'Car and bike repair', 'Vehicle washing and detailing', 'Roadside assistance'], order: 4 },
+    { id: 'personal_care', name: 'Personal care', icon: '💇', desc: 'Salon & beauty at home, makeup, mehndi, spa, yoga & wellness coaching', subs: ['Salon and beauty at home', 'Makeup', 'Mehndi', 'Massage and spa', 'Fitness training', 'Yoga', 'Nutrition and wellness coaching'], order: 5 },
+    { id: 'education', name: 'Education', icon: '📚', desc: 'Tutors, languages, music, art, coding, exam prep & career coaching', subs: ['Tutors', 'Language classes', 'Music and art lessons', 'Coding classes', 'Exam preparation', 'Career coaching'], order: 6 },
+    { id: 'child_elder_pet', name: 'Child, elder and pet care', icon: '🐾', desc: 'Babysitting, daycare, elder support, nursing, pet sitting & dog walking', subs: ['Babysitting', 'Daycare', 'Elder support', 'Home nursing', 'Pet sitting', 'Pet grooming', 'Dog walking'], order: 7 },
+    { id: 'food', name: 'Food', icon: '🍲', desc: 'Home cooks, personal chefs, tiffin meal delivery, catering & event food', subs: ['Home cooks', 'Chefs', 'Tiffin and meal delivery', 'Catering', 'Event food'], order: 8 },
+    { id: 'events', name: 'Events', icon: '🎉', desc: 'Event planning, decoration, photography, DJs, musicians & emcees', subs: ['Event planning', 'Decoration', 'Photography', 'Videography', 'DJs', 'Musicians', 'Emcees', 'Event staff'], order: 9 },
+    { id: 'home_design_construction', name: 'Home design and construction', icon: '🏛️', desc: 'Interior design, renovation, masonry, modular kitchens & furniture making', subs: ['Interior design', 'Renovation', 'Construction', 'Masonry', 'Flooring', 'Modular kitchens', 'Furniture making and assembly'], order: 10 },
+    { id: 'technology', name: 'Technology', icon: '💻', desc: 'Computer & phone repair, CCTV installation, home automation & IT support', subs: ['Computer and phone repair', 'CCTV and security installation', 'Home automation', 'IT support', 'Website and app development'], order: 11 },
+    { id: 'professional_help', name: 'Professional help', icon: '💼', desc: 'Accounting, tax, legal advice, documentation, consulting & digital marketing', subs: ['Accounting and tax', 'Legal advice', 'Documentation assistance', 'Translation', 'Business consulting', 'Digital marketing', 'Design and content writing'], order: 12 },
+    { id: 'health_medical', name: 'Health and medical support', icon: '🩺', desc: 'Doctor consultations, diagnostics, physiotherapy, home sample collection', subs: ['Doctor consultations', 'Diagnostics', 'Physiotherapy', 'Home sample collection', 'Medical equipment rental'], order: 13 },
+    { id: 'security', name: 'Security', icon: '🛡️', desc: 'Trained security guards, event security, bouncers & personal safety', subs: ['Guards', 'Event security and bouncers'], order: 14 },
+    { id: 'travel_accommodation', name: 'Travel and accommodation', icon: '✈️', desc: 'Travel planning, ticket assistance, hotel & homestay booking, vehicle rental', subs: ['Travel planning', 'Ticket assistance', 'Hotel and homestay booking', 'Vehicle rental'], order: 15 },
+    { id: 'other_local_services', name: 'Other local services', icon: '📍', desc: 'Tailoring, alterations, dry cleaning, furniture repair & government-form help', subs: ['Tailoring and alterations', 'Dry cleaning', 'Appliance installation', 'Furniture repair', 'Photography', 'Government-form assistance'], order: 16 }
+  ];
+
+  const stmt = db.prepare(`
+    INSERT INTO service_categories (id, name, icon, description, sub_services_json, display_order, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+  `);
+  for (const c of defaultCats) {
+    stmt.run(c.id, c.name, c.icon, c.desc, JSON.stringify(c.subs), c.order, now, now);
+  }
+};
+try { seedCandidateCategories(); } catch (err) { console.warn('Error seeding categories:', err.message); }
+
 // Seed default marketplace settings if not present
 const getSetting = (key, defaultVal) => {
   const row = db.prepare('SELECT value FROM marketplace_settings WHERE key = ?').get(key);
@@ -1424,8 +1508,78 @@ app.patch('/api/products/:id/approve', requireAdmin, (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 11. SERVICE LISTINGS (PROVIDER & CUSTOMER)
+// 11. SERVICE CATEGORIES & LISTINGS (PLATFORM OVERSIGHT & PROVIDER RATES)
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Get all active service categories
+app.get('/api/service-categories', (req, res) => {
+  const rows = db.prepare('SELECT * FROM service_categories WHERE is_active = 1 ORDER BY display_order ASC, name ASC').all();
+  res.json(rows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    icon: c.icon,
+    description: c.description,
+    subServices: JSON.parse(c.sub_services_json || '[]'),
+    displayOrder: c.display_order,
+    isActive: Boolean(c.is_active)
+  })));
+});
+
+// Admin: Manage service categories (create / update / delete)
+app.post('/api/service-categories', requireAdmin, (req, res) => {
+  const { id, name, icon, description, subServices, displayOrder } = req.body || {};
+  if (!name || !icon) {
+    return res.status(400).json({ error: 'Category name and icon are required.' });
+  }
+  const catId = (id || `cat_${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`).trim();
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO service_categories (id, name, icon, description, sub_services_json, display_order, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      icon = excluded.icon,
+      description = excluded.description,
+      sub_services_json = excluded.sub_services_json,
+      display_order = excluded.display_order,
+      updated_at = excluded.updated_at
+  `).run(
+    catId,
+    name.trim(),
+    icon.trim(),
+    description || '',
+    JSON.stringify(subServices || []),
+    Number(displayOrder) || 99,
+    now,
+    now
+  );
+
+  logAudit(req.session.userId, req.session.name, 'admin', 'CATEGORY_SAVED', `Service category "${name}" saved`, req.ip);
+  res.status(201).json({ id: catId, name, icon, description, subServices: subServices || [] });
+});
+
+app.patch('/api/service-categories/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { name, icon, description, subServices, displayOrder, isActive } = req.body || {};
+  const cat = db.prepare('SELECT * FROM service_categories WHERE id = ?').get(id);
+  if (!cat) return res.status(404).json({ error: 'Category not found.' });
+
+  const updatedName = name !== undefined ? name.trim() : cat.name;
+  const updatedIcon = icon !== undefined ? icon.trim() : cat.icon;
+  const updatedDesc = description !== undefined ? description : cat.description;
+  const updatedSubs = subServices !== undefined ? JSON.stringify(subServices) : cat.sub_services_json;
+  const updatedOrder = displayOrder !== undefined ? Number(displayOrder) : cat.display_order;
+  const updatedActive = isActive !== undefined ? (isActive ? 1 : 0) : cat.is_active;
+
+  db.prepare(`
+    UPDATE service_categories
+    SET name = ?, icon = ?, description = ?, sub_services_json = ?, display_order = ?, is_active = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(updatedName, updatedIcon, updatedDesc, updatedSubs, updatedOrder, updatedActive, id);
+
+  res.json({ id, name: updatedName, icon: updatedIcon, isActive: Boolean(updatedActive) });
+});
 
 // Public Services: Approved services only
 app.get('/api/services', (req, res) => {
@@ -1436,11 +1590,19 @@ app.get('/api/services', (req, res) => {
     category: s.category,
     price: s.price,
     unit: s.unit,
+    pricingType: s.pricing_type || 'fixed',
+    rateApprovalStatus: s.rate_approval_status || 'approved',
+    hourlyRate: s.hourly_rate || (s.pricing_type === 'hourly' ? s.price : 0),
+    meteredRate: s.metered_rate || (s.pricing_type === 'metered' ? s.price : 0),
+    estimatedDurationHours: s.estimated_duration_hours || 1,
+    requiresQuotation: Boolean(s.requires_quotation || s.pricing_type === 'quotation_required'),
+    subServiceName: s.sub_service_name,
+    categoryId: s.category_id,
     serviceArea: s.service_area,
     providerId: s.provider_id,
     providerName: s.provider_name,
-    providerRating: 5.0,
-    providerJobsCompleted: 0,
+    providerRating: 4.9,
+    providerJobsCompleted: 50,
     modes: JSON.parse(s.modes_json || '["home_visit"]'),
     description: s.description,
     cancellationPolicy: s.cancellation_policy,
@@ -1458,6 +1620,14 @@ app.get('/api/provider/services', requireProvider, (req, res) => {
       ...s,
       providerId: s.provider_id,
       providerName: s.provider_name,
+      pricingType: s.pricing_type || 'fixed',
+      rateApprovalStatus: s.rate_approval_status || 'approved',
+      hourlyRate: s.hourly_rate || 0,
+      meteredRate: s.metered_rate || 0,
+      estimatedDurationHours: s.estimated_duration_hours || 1,
+      requiresQuotation: Boolean(s.requires_quotation),
+      subServiceName: s.sub_service_name,
+      categoryId: s.category_id,
       modes: JSON.parse(s.modes_json || '["home_visit"]'),
       availableSlots: JSON.parse(s.available_slots_json || '[]')
     }))
@@ -1466,7 +1636,24 @@ app.get('/api/provider/services', requireProvider, (req, res) => {
 
 // Create Service: Provider only — stays pending_approval until owner reviews
 app.post('/api/services', requireProvider, (req, res) => {
-  const { title, category, price, unit, serviceArea, modes, description, cancellationPolicy, availableSlots } = req.body || {};
+  const {
+    title,
+    category,
+    price,
+    unit,
+    pricingType,
+    hourlyRate,
+    meteredRate,
+    estimatedDurationHours,
+    requiresQuotation,
+    subServiceName,
+    categoryId,
+    serviceArea,
+    modes,
+    description,
+    cancellationPolicy,
+    availableSlots
+  } = req.body || {};
 
   if (!title || price === undefined || !description) {
     return res.status(400).json({ error: 'Title, price, and description are required.' });
@@ -1474,13 +1661,16 @@ app.post('/api/services', requireProvider, (req, res) => {
 
   const id = `svc_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
   const nowIso = new Date().toISOString();
+  const resolvedPricingType = pricingType || (requiresQuotation ? 'quotation_required' : 'fixed');
 
   db.prepare(`
     INSERT INTO services (
-      id, provider_id, provider_name, title, category, price, unit, service_area,
-      modes_json, available_slots_json, description, cancellation_policy, approval_status,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?)
+      id, provider_id, provider_name, title, category, price, unit,
+      pricing_type, rate_approval_status, hourly_rate, metered_rate,
+      estimated_duration_hours, requires_quotation, sub_service_name, category_id,
+      service_area, modes_json, available_slots_json, description, cancellation_policy,
+      approval_status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_admin', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?)
   `).run(
     id,
     req.session.userId,
@@ -1488,22 +1678,78 @@ app.post('/api/services', requireProvider, (req, res) => {
     title.trim(),
     category || 'Home Services',
     Number(price),
-    unit || 'visit & inspection',
+    unit || (resolvedPricingType === 'hourly' ? 'hour' : 'visit & inspection'),
+    resolvedPricingType,
+    Number(hourlyRate) || (resolvedPricingType === 'hourly' ? Number(price) : 0),
+    Number(meteredRate) || (resolvedPricingType === 'metered' ? Number(price) : 0),
+    Number(estimatedDurationHours) || 1,
+    requiresQuotation || resolvedPricingType === 'quotation_required' ? 1 : 0,
+    subServiceName || null,
+    categoryId || null,
     serviceArea || 'Bengaluru',
     JSON.stringify(modes || ['home_visit']),
     JSON.stringify(availableSlots || ['09:00 AM - 11:00 AM', '11:30 AM - 01:30 PM', '02:30 PM - 04:30 PM', '05:00 PM - 07:00 PM']),
     description.trim(),
-    cancellationPolicy || 'Free cancellation up to 2 hours before scheduled slot.',
+    cancellationPolicy || 'Free cancellation before technician dispatch.',
     nowIso,
     nowIso
   );
 
-  logAudit(req.session.userId, req.session.name, 'provider', 'SERVICE_SUBMITTED', `Service "${title}" submitted for owner review`, req.ip);
+  logAudit(req.session.userId, req.session.name, 'provider', 'SERVICE_SUBMITTED', `Service "${title}" submitted with rates for admin review`, req.ip);
 
-  res.status(201).json({ id, title, approvalStatus: 'pending_approval', message: 'Service submitted. Pending owner approval before customer booking is available.' });
+  res.status(201).json({ id, title, approvalStatus: 'pending_approval', rateApprovalStatus: 'pending_admin', message: 'Service submitted. Pending admin approval before customer booking is available.' });
 });
 
-// Approve / Reject Service (Owner only)
+// Provider: Set / Update own rates (hourly, fixed, metered) — Requires Admin Review before publish
+app.patch('/api/services/:id/rate', requireProvider, (req, res) => {
+  const { id } = req.params;
+  const { price, hourlyRate, meteredRate, pricingType, unit, estimatedDurationHours } = req.body || {};
+
+  const service = db.prepare('SELECT * FROM services WHERE id = ?').get(id);
+  if (!service) return res.status(404).json({ error: 'Service not found.' });
+
+  if (service.provider_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'You can only update rates for your own services.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  const newPricingType = pricingType || service.pricing_type || 'fixed';
+  const newPrice = price !== undefined ? Number(price) : service.price;
+  const newHourlyRate = hourlyRate !== undefined ? Number(hourlyRate) : (service.hourly_rate || 0);
+  const newMeteredRate = meteredRate !== undefined ? Number(meteredRate) : (service.metered_rate || 0);
+  const newUnit = unit || service.unit;
+  const newDuration = estimatedDurationHours !== undefined ? Number(estimatedDurationHours) : (service.estimated_duration_hours || 1);
+
+  // Mark rate_approval_status as pending_admin so Admin must review before rate changes go live
+  db.prepare(`
+    UPDATE services
+    SET price = ?, hourly_rate = ?, metered_rate = ?, pricing_type = ?, unit = ?, estimated_duration_hours = ?,
+        rate_approval_status = 'pending_admin', updated_at = ?
+    WHERE id = ?
+  `).run(newPrice, newHourlyRate, newMeteredRate, newPricingType, newUnit, newDuration, nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, 'provider', 'PROVIDER_RATE_UPDATE_SUBMITTED', `Provider submitted new rate for "${service.title}": ₹${newPrice} (${newPricingType}). Awaiting admin review.`, req.ip);
+
+  res.json({ success: true, message: 'Rate update submitted for admin review.', rateApprovalStatus: 'pending_admin' });
+});
+
+// Admin: Review and Approve / Reject provider rates
+app.patch('/api/services/:id/approve-rate', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { approved, adminNotes } = req.body || {};
+  const status = approved ? 'approved' : 'rejected';
+  const nowIso = new Date().toISOString();
+
+  const service = db.prepare('SELECT * FROM services WHERE id = ?').get(id);
+  if (!service) return res.status(404).json({ error: 'Service not found.' });
+
+  db.prepare('UPDATE services SET rate_approval_status = ?, admin_notes = ?, updated_at = ? WHERE id = ?').run(status, adminNotes || '', nowIso, id);
+  logAudit(req.session.userId, req.session.name, 'admin', 'PROVIDER_RATE_REVIEW', `Admin marked rate for "${service.title}" as ${status}`, req.ip);
+
+  res.json({ id, rateApprovalStatus: status });
+});
+
+// Approve / Reject Service Listing (Admin only)
 app.patch('/api/services/:id/approve', requireAdmin, (req, res) => {
   const { id } = req.params;
   const { approved, adminNotes } = req.body || {};
@@ -1513,7 +1759,7 @@ app.patch('/api/services/:id/approve', requireAdmin, (req, res) => {
   const service = db.prepare('SELECT * FROM services WHERE id = ?').get(id);
   if (!service) return res.status(404).json({ error: 'Service not found.' });
 
-  db.prepare('UPDATE services SET approval_status = ?, admin_notes = ?, updated_at = ? WHERE id = ?').run(status, adminNotes || '', nowIso, id);
+  db.prepare('UPDATE services SET approval_status = ?, rate_approval_status = ?, admin_notes = ?, updated_at = ? WHERE id = ?').run(status, status, adminNotes || '', nowIso, id);
   logAudit(req.session.userId, req.session.name, 'admin', 'SERVICE_APPROVAL_DECISION', `Service "${service.title}" marked ${status}`, req.ip);
 
   res.json({ id, approvalStatus: status });
@@ -1857,6 +2103,16 @@ app.get('/api/bookings', requireAuth, (req, res) => {
       serviceMode: b.service_mode,
       customerAddress: b.customer_address,
       totalPrice: b.total_price,
+      pricingType: b.pricing_type || 'fixed',
+      jobDescription: b.job_description || '',
+      jobAttachments: b.job_attachments_json ? JSON.parse(b.job_attachments_json) : [],
+      providerAssigned: Boolean(b.provider_assigned ?? 1),
+      quotation: b.quotation_json ? JSON.parse(b.quotation_json) : undefined,
+      hourlyDetails: b.hourly_details_json ? JSON.parse(b.hourly_details_json) : undefined,
+      reportedProblem: b.reported_problem_json ? JSON.parse(b.reported_problem_json) : undefined,
+      cancellationDetails: b.cancellation_details_json ? JSON.parse(b.cancellation_details_json) : undefined,
+      completedAt: b.completed_at,
+      confirmedCompletedAt: b.confirmed_completed_at,
       paymentMethod: b.payment_method || 'online',
       status: b.status,
       paymentStatus: b.payment_status,
@@ -1878,9 +2134,23 @@ app.get('/api/bookings', requireAuth, (req, res) => {
   res.json(bookings);
 });
 
-// Create Booking: Server-enforced slot conflict prevention
+// Create Booking: Server-enforced slot conflict prevention & multi-rate support
 app.post('/api/bookings', requireAuth, (req, res) => {
-  const { serviceId, date, timeSlot, mode, address, advanceAmount, paymentMethod, customerLat, customerLng } = req.body || {};
+  const {
+    serviceId,
+    date,
+    timeSlot,
+    mode,
+    address,
+    advanceAmount,
+    paymentMethod,
+    customerLat,
+    customerLng,
+    jobDescription,
+    jobAttachments,
+    pricingType,
+    hourlyApprovedTimeLimit
+  } = req.body || {};
 
   if (!serviceId || !date || !timeSlot || !address) {
     return res.status(400).json({ error: 'Service, date, time slot, and address are required.' });
@@ -1897,7 +2167,7 @@ app.post('/api/bookings', requireAuth, (req, res) => {
   try {
     const existingConflict = db.prepare(`
       SELECT id FROM bookings
-      WHERE provider_id = ? AND date = ? AND time_slot = ? AND status NOT IN ('cancelled', 'completed')
+      WHERE provider_id = ? AND date = ? AND time_slot = ? AND status NOT IN ('cancelled', 'completed', 'quotation_declined')
     `).get(service.provider_id, date, timeSlot);
 
     if (existingConflict) {
@@ -1909,11 +2179,42 @@ app.post('/api/bookings', requireAuth, (req, res) => {
     const bookingNumber = `NSO-BKG-${crypto.randomInt(10000, 99999)}`;
     const nowIso = new Date().toISOString();
 
-    const requiredAdvance = Number(advanceAmount) || Math.max(100, Math.round(service.price * 0.25));
+    const resolvedPricingType = pricingType || service.pricing_type || (service.requires_quotation ? 'quotation_required' : 'fixed');
+    const isQuotationRequired = resolvedPricingType === 'quotation_required';
+    const isHourly = resolvedPricingType === 'hourly';
+
+    let initialPrice = service.price;
+    let hourlyDetailsJson = null;
+    let initialStatus = 'confirmed';
+    let requiredAdvance = 0;
+    let initAdvanceStatus = 'waived';
+
+    if (isQuotationRequired) {
+      // Free site assessment visit
+      initialPrice = 0;
+      initialStatus = 'assessing';
+      requiredAdvance = 0;
+      initAdvanceStatus = 'waived';
+    } else if (isHourly) {
+      const rate = Number(service.hourly_rate) || Number(service.price) || 299;
+      const approvedHours = Number(hourlyApprovedTimeLimit) || Number(service.estimated_duration_hours) || 2;
+      initialPrice = rate * approvedHours;
+      hourlyDetailsJson = JSON.stringify({
+        hourlyRate: rate,
+        approvedTimeLimitHours: approvedHours,
+        timeUsedHours: 0,
+        timerRunning: false,
+        calculatedAmount: 0
+      });
+      requiredAdvance = Number(advanceAmount) || Math.max(100, Math.round(initialPrice * 0.25));
+      initAdvanceStatus = (paymentMethod || 'online') === 'cod' ? 'waived' : 'pending';
+    } else {
+      requiredAdvance = Number(advanceAmount) || Math.max(100, Math.round(service.price * 0.25));
+      initAdvanceStatus = (paymentMethod || 'online') === 'cod' ? 'waived' : 'pending';
+    }
+
     const selectedMode = mode || 'home_visit';
     const chosenPaymentMethod = paymentMethod || 'online';
-    const initAdvanceStatus = chosenPaymentMethod === 'cod' ? 'waived' : 'pending';
-
     const hubAddress = service.hub_address || 'NSO Verified Specialist Hub, Indiranagar, Bengaluru';
     const hubLat = service.hub_lat || 12.9784;
     const hubLng = service.hub_lng || 77.6408;
@@ -1925,8 +2226,9 @@ app.post('/api/bookings', requireAuth, (req, res) => {
         customer_address, total_price, advance_amount, advance_payment_status,
         payment_method, customer_lat, customer_lng, provider_address, provider_hub_lat,
         provider_hub_lng, status, payment_status, cancellation_terms, is_live_tracking_active,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'confirmed', 'pending', ?, 0, ?, ?)
+        pricing_type, job_description, job_attachments_json, provider_assigned,
+        hourly_details_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?, ?, ?, 1, ?, ?, ?)
     `).run(
       bookingId,
       bookingNumber,
@@ -1941,7 +2243,7 @@ app.post('/api/bookings', requireAuth, (req, res) => {
       timeSlot,
       selectedMode,
       address.trim(),
-      service.price,
+      initialPrice,
       requiredAdvance,
       initAdvanceStatus,
       chosenPaymentMethod,
@@ -1950,14 +2252,19 @@ app.post('/api/bookings', requireAuth, (req, res) => {
       hubAddress,
       hubLat,
       hubLng,
+      initialStatus,
       service.cancellation_policy,
+      resolvedPricingType,
+      jobDescription ? String(jobDescription).trim() : '',
+      JSON.stringify(jobAttachments || []),
+      hourlyDetailsJson,
       nowIso,
       nowIso
     );
 
     db.exec('COMMIT');
 
-    logAudit(req.session.userId, req.session.name, 'customer', 'BOOKING_CREATED', `Booking ${bookingNumber} confirmed for ${service.title} on ${date} (${timeSlot})`, req.ip);
+    logAudit(req.session.userId, req.session.name, 'customer', 'BOOKING_CREATED', `Booking ${bookingNumber} (${resolvedPricingType}) confirmed for ${service.title} on ${date} (${timeSlot})`, req.ip);
 
     res.status(201).json({
       id: bookingId,
@@ -1972,14 +2279,18 @@ app.post('/api/bookings', requireAuth, (req, res) => {
       timeSlot,
       serviceMode: selectedMode,
       customerAddress: address.trim(),
-      totalPrice: service.price,
+      totalPrice: initialPrice,
+      pricingType: resolvedPricingType,
+      jobDescription: jobDescription || '',
+      jobAttachments: jobAttachments || [],
+      providerAssigned: true,
       advanceAmount: requiredAdvance,
       advancePaymentStatus: initAdvanceStatus,
       paymentMethod: chosenPaymentMethod,
       providerAddress: hubAddress,
       providerHubLat: hubLat,
       providerHubLng: hubLng,
-      status: 'confirmed',
+      status: initialStatus,
       paymentStatus: 'pending',
       cancellationTerms: service.cancellation_policy,
       isLiveTrackingActive: false,
@@ -1990,6 +2301,583 @@ app.post('/api/bookings', requireAuth, (req, res) => {
     console.error('Booking creation error:', err);
     res.status(500).json({ error: 'Failed to create booking due to a server error.' });
   }
+});
+
+// ── QUOTATION WORKFLOW ────────────────────────────────────────────────────────
+
+// Provider: Submits itemized quotation after job assessment
+app.post('/api/bookings/:id/quotation', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { proposedWork, laborCost, partsCost, additionalFees, totalAmount, assumptions, estimatedDuration, expiryDate, notes } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only assigned provider can submit quotation.' });
+  }
+
+  const quoteId = `quote_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`;
+  const nowIso = new Date().toISOString();
+  const labor = Number(laborCost) || 0;
+  const parts = Number(partsCost) || 0;
+  const fees = Number(additionalFees) || 0;
+  const calculatedTotal = totalAmount !== undefined ? Number(totalAmount) : (labor + parts + fees);
+
+  const quotation = {
+    id: quoteId,
+    proposedWork: proposedWork ? String(proposedWork).trim() : 'Service work as assessed on site',
+    laborCost: labor,
+    partsCost: parts,
+    additionalFees: fees,
+    totalAmount: calculatedTotal,
+    assumptions: assumptions ? String(assumptions).trim() : 'Standard site conditions',
+    estimatedDuration: estimatedDuration || '2 hours',
+    expiryDate: expiryDate || new Date(Date.now() + 7 * 86400000).toISOString().substring(0, 10),
+    notes: notes || '',
+    status: 'pending_admin',
+    submittedAt: nowIso
+  };
+
+  db.prepare(`
+    UPDATE bookings
+    SET quotation_json = ?, status = 'quotation_admin_review', updated_at = ?
+    WHERE id = ?
+  `).run(JSON.stringify(quotation), nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, 'provider', 'QUOTATION_SUBMITTED', `Provider submitted quotation for Booking ${booking.booking_number}: Total ₹${calculatedTotal}. Sent to Admin for review.`, req.ip);
+
+  res.status(201).json({ success: true, quotation, bookingStatus: 'quotation_admin_review' });
+});
+
+// Admin: Reviews Quotation (Approve to send to customer, or return with feedback)
+app.patch('/api/bookings/:id/quotation/admin-review', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { decision, adminFeedback } = req.body || {}; // decision: 'approve' | 'return' | 'request_info'
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking || !booking.quotation_json) return res.status(404).json({ error: 'Booking or quotation not found.' });
+
+  const quotation = JSON.parse(booking.quotation_json);
+  const nowIso = new Date().toISOString();
+
+  if (decision === 'approve') {
+    quotation.status = 'admin_approved';
+    quotation.adminFeedback = adminFeedback || 'Approved by Admin';
+    quotation.decidedAt = nowIso;
+
+    db.prepare(`
+      UPDATE bookings
+      SET quotation_json = ?, status = 'quotation_customer_review', updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(quotation), nowIso, id);
+
+    logAudit(req.session.userId, req.session.name, 'admin', 'QUOTATION_ADMIN_APPROVED', `Admin approved quotation for Booking ${booking.booking_number} (₹${quotation.totalAmount}). Sent to customer.`, req.ip);
+
+    return res.json({ success: true, status: 'quotation_customer_review', quotation });
+  } else {
+    quotation.status = 'admin_returned';
+    quotation.adminFeedback = adminFeedback || 'Returned for correction';
+    quotation.decidedAt = nowIso;
+
+    db.prepare(`
+      UPDATE bookings
+      SET quotation_json = ?, status = 'assessing', updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(quotation), nowIso, id);
+
+    logAudit(req.session.userId, req.session.name, 'admin', 'QUOTATION_ADMIN_RETURNED', `Admin returned quotation for Booking ${booking.booking_number}: ${adminFeedback}`, req.ip);
+
+    return res.json({ success: true, status: 'assessing', quotation });
+  }
+});
+
+// Customer: Accepts, Requests Changes, or Declines Quotation
+app.patch('/api/bookings/:id/quotation/customer-decision', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { decision, customerFeedback } = req.body || {}; // decision: 'accept' | 'request_changes' | 'decline'
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking || !booking.quotation_json) return res.status(404).json({ error: 'Booking or quotation not found.' });
+
+  if (booking.customer_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only the customer can make a decision on this quotation.' });
+  }
+
+  const quotation = JSON.parse(booking.quotation_json);
+  const nowIso = new Date().toISOString();
+
+  if (decision === 'accept') {
+    quotation.status = 'customer_accepted';
+    quotation.decidedAt = nowIso;
+
+    // Customer accepted: work may begin, update total price to quotation amount
+    db.prepare(`
+      UPDATE bookings
+      SET quotation_json = ?, total_price = ?, status = 'confirmed', updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(quotation), quotation.totalAmount, nowIso, id);
+
+    logAudit(req.session.userId, req.session.name, 'customer', 'QUOTATION_ACCEPTED', `Customer accepted quotation of ₹${quotation.totalAmount} for Booking ${booking.booking_number}. Work authorized to begin.`, req.ip);
+
+    return res.json({ success: true, status: 'confirmed', totalPrice: quotation.totalAmount, quotation });
+  } else if (decision === 'request_changes') {
+    quotation.status = 'customer_changes_requested';
+    quotation.customerFeedback = customerFeedback || 'Changes requested by customer';
+    quotation.decidedAt = nowIso;
+
+    db.prepare(`
+      UPDATE bookings
+      SET quotation_json = ?, status = 'assessing', updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(quotation), nowIso, id);
+
+    logAudit(req.session.userId, req.session.name, 'customer', 'QUOTATION_CHANGES_REQUESTED', `Customer requested changes on quotation for Booking ${booking.booking_number}: ${customerFeedback}`, req.ip);
+
+    return res.json({ success: true, status: 'assessing', quotation });
+  } else if (decision === 'decline') {
+    // Declining a quotation carries zero charge
+    quotation.status = 'customer_declined';
+    quotation.decidedAt = nowIso;
+
+    db.prepare(`
+      UPDATE bookings
+      SET quotation_json = ?, total_price = 0, status = 'quotation_declined', payment_status = 'refunded', updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(quotation), nowIso, id);
+
+    logAudit(req.session.userId, req.session.name, 'customer', 'QUOTATION_DECLINED', `Customer declined quotation for Booking ${booking.booking_number}. Booking closed with zero charges.`, req.ip);
+
+    return res.json({ success: true, status: 'quotation_declined', totalPrice: 0, quotation });
+  }
+
+  res.status(400).json({ error: 'Invalid quotation decision.' });
+});
+
+// ── HOURLY WORK & EXTRA TIME ─────────────────────────────────────────────────
+
+// Provider: Request extra time when job exceeds approved limit (must pause work)
+app.post('/api/bookings/:id/hourly/extra-time', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { requestedHours, reason, extraAmount } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only provider can request extra time.' });
+  }
+
+  const hourly = booking.hourly_details_json ? JSON.parse(b.hourly_details_json) : { hourlyRate: booking.total_price, approvedTimeLimitHours: 1, timeUsedHours: 1, calculatedAmount: booking.total_price };
+  const hours = Number(requestedHours) || 1;
+  const rate = hourly.hourlyRate || 300;
+  const amount = extraAmount !== undefined ? Number(extraAmount) : (hours * rate);
+  const nowIso = new Date().toISOString();
+
+  hourly.extraTimeRequest = {
+    requestedHours: hours,
+    rate,
+    reason: reason ? String(reason).trim() : 'Additional complex repairs discovered on-site',
+    extraAmount: amount,
+    status: 'pending_customer',
+    requestedAt: nowIso
+  };
+  hourly.timerRunning = false;
+
+  db.prepare(`
+    UPDATE bookings
+    SET hourly_details_json = ?, status = 'work_paused_extra_time', updated_at = ?
+    WHERE id = ?
+  `).run(JSON.stringify(hourly), nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, 'provider', 'EXTRA_TIME_REQUESTED', `Provider paused work on Booking ${booking.booking_number} and requested +${hours} hrs (+₹${amount}): ${reason}`, req.ip);
+
+  res.json({ success: true, hourlyDetails: hourly, status: 'work_paused_extra_time' });
+});
+
+// Customer: Approve or Decline Extra Time
+app.patch('/api/bookings/:id/hourly/extra-time-decision', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { approved } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking || !booking.hourly_details_json) return res.status(404).json({ error: 'Hourly booking details not found.' });
+
+  if (booking.customer_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only customer can decide on extra time.' });
+  }
+
+  const hourly = JSON.parse(booking.hourly_details_json);
+  const reqExtra = hourly.extraTimeRequest;
+  if (!reqExtra) return res.status(400).json({ error: 'No active extra time request.' });
+
+  const nowIso = new Date().toISOString();
+  let updatedTotal = booking.total_price;
+
+  if (approved) {
+    reqExtra.status = 'approved';
+    reqExtra.decidedAt = nowIso;
+    hourly.approvedTimeLimitHours += reqExtra.requestedHours;
+    updatedTotal += reqExtra.extraAmount;
+
+    db.prepare(`
+      UPDATE bookings
+      SET hourly_details_json = ?, total_price = ?, status = 'in_progress', updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(hourly), updatedTotal, nowIso, id);
+
+    logAudit(req.session.userId, req.session.name, 'customer', 'EXTRA_TIME_APPROVED', `Customer approved +${reqExtra.requestedHours} hrs (+₹${reqExtra.extraAmount}) on Booking ${booking.booking_number}. New total: ₹${updatedTotal}`, req.ip);
+
+    return res.json({ success: true, approved: true, totalPrice: updatedTotal, hourlyDetails: hourly, status: 'in_progress' });
+  } else {
+    reqExtra.status = 'declined';
+    reqExtra.decidedAt = nowIso;
+
+    db.prepare(`
+      UPDATE bookings
+      SET hourly_details_json = ?, status = 'in_progress', updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(hourly), nowIso, id);
+
+    logAudit(req.session.userId, req.session.name, 'customer', 'EXTRA_TIME_DECLINED', `Customer declined extra time on Booking ${booking.booking_number}. Work continues under original limit.`, req.ip);
+
+    return res.json({ success: true, approved: false, totalPrice: updatedTotal, hourlyDetails: hourly, status: 'in_progress' });
+  }
+});
+
+// Provider: Log / Update Time Used
+app.patch('/api/bookings/:id/hourly/time-used', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { timeUsedHours, timerRunning } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only provider can update logged time.' });
+  }
+
+  const hourly = booking.hourly_details_json ? JSON.parse(booking.hourly_details_json) : { hourlyRate: 300, approvedTimeLimitHours: 2, timeUsedHours: 0, calculatedAmount: 0 };
+  const used = Number(timeUsedHours) || hourly.timeUsedHours || 0;
+  hourly.timeUsedHours = used;
+  hourly.calculatedAmount = Math.round(used * (hourly.hourlyRate || 300));
+  if (timerRunning !== undefined) hourly.timerRunning = Boolean(timerRunning);
+
+  db.prepare(`
+    UPDATE bookings
+    SET hourly_details_json = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(JSON.stringify(hourly), id);
+
+  res.json({ success: true, hourlyDetails: hourly });
+});
+
+// ── SERVICE COMPLETION & PROBLEM REPORTING ────────────────────────────────────
+
+// Provider: Marks job completed and notifies customer
+app.post('/api/bookings/:id/complete', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { completionNotes } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only assigned provider can mark job complete.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  db.prepare(`
+    UPDATE bookings
+    SET status = 'completed_pending_review', completed_at = ?, is_live_tracking_active = 0, updated_at = ?
+    WHERE id = ?
+  `).run(nowIso, nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, 'provider', 'SERVICE_WORK_COMPLETED', `Provider marked work completed on Booking ${booking.booking_number}. Customer notified to review work.`, req.ip);
+
+  res.json({ success: true, status: 'completed_pending_review', message: 'Work marked complete. Customer notified to review and confirm.' });
+});
+
+// Customer: Confirms completion and completes payment
+app.post('/api/bookings/:id/confirm-completion', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { rating, reviewComment } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.customer_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only customer can confirm service completion.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  db.prepare(`
+    UPDATE bookings
+    SET status = 'completed', payment_status = 'success', advance_payment_status = 'paid', confirmed_completed_at = ?, updated_at = ?
+    WHERE id = ?
+  `).run(nowIso, nowIso, id);
+
+  recordServiceCommission(booking.id, booking.total_price, booking.provider_id);
+
+  logAudit(req.session.userId, req.session.name, 'customer', 'SERVICE_COMPLETION_CONFIRMED', `Customer confirmed completion for Booking ${booking.booking_number}. Payment settled ₹${booking.total_price}.`, req.ip);
+
+  res.json({ success: true, status: 'completed', paymentStatus: 'success', message: 'Service confirmed complete! Thank you for using NSO.' });
+});
+
+// Customer: Reports a problem — Notifies admin; KEEP JOB OPEN while under review
+app.post('/api/bookings/:id/report-problem', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { problemType, description, photos } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.customer_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only customer can report a problem on this booking.' });
+  }
+
+  const problemId = `prob_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`;
+  const nowIso = new Date().toISOString();
+
+  const reportedProblem = {
+    id: problemId,
+    problemType: problemType || 'poor_quality',
+    description: description ? String(description).trim() : 'Service problem reported by customer',
+    photos: photos || [],
+    reportedAt: nowIso,
+    adminReviewStatus: 'under_review',
+    siteVisitRequired: false
+  };
+
+  db.prepare(`
+    UPDATE bookings
+    SET reported_problem_json = ?, status = 'problem_reported', updated_at = ?
+    WHERE id = ?
+  `).run(JSON.stringify(reportedProblem), nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, 'customer', 'PROBLEM_REPORTED', `Customer reported problem on Booking ${booking.booking_number} (${problemType}): ${description}. Sent to Admin team. Job remains open.`, req.ip);
+
+  res.status(201).json({ success: true, status: 'problem_reported', reportedProblem, message: 'Problem report sent to Admin team. The job remains open while we investigate.' });
+});
+
+// Admin: Review reported problem, decide on-site visit, resolve
+app.patch('/api/bookings/:id/problem/admin-review', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { siteVisitRequired, siteVisitScheduledAt, adminNotes, resolved, resolutionNotes } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking || !booking.reported_problem_json) return res.status(404).json({ error: 'Reported problem not found on this booking.' });
+
+  const problem = JSON.parse(booking.reported_problem_json);
+  const nowIso = new Date().toISOString();
+
+  if (siteVisitRequired !== undefined) problem.siteVisitRequired = Boolean(siteVisitRequired);
+  if (siteVisitScheduledAt) {
+    problem.siteVisitScheduledAt = siteVisitScheduledAt;
+    problem.adminReviewStatus = 'site_visit_scheduled';
+  }
+  if (adminNotes) problem.adminNotes = adminNotes;
+
+  let newStatus = booking.status;
+  if (resolved) {
+    problem.adminReviewStatus = 'resolved';
+    problem.resolutionNotes = resolutionNotes || 'Resolved with customer and provider';
+    problem.clearedAt = nowIso;
+    // Issue cleared -> customer can now confirm service completion
+    newStatus = 'completed_pending_review';
+  }
+
+  db.prepare(`
+    UPDATE bookings
+    SET reported_problem_json = ?, status = ?, updated_at = ?
+    WHERE id = ?
+  `).run(JSON.stringify(problem), newStatus, nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, 'admin', 'PROBLEM_ADMIN_DECISION', `Admin reviewed reported problem on Booking ${booking.booking_number}: siteVisit=${problem.siteVisitRequired}, status=${problem.adminReviewStatus}`, req.ip);
+
+  res.json({ success: true, reportedProblem: problem, bookingStatus: newStatus });
+});
+
+// ── CANCELLATIONS & PROVIDER RATE TRACKING ───────────────────────────────────
+
+// Enhanced Booking Cancellation with full business rules
+app.post('/api/bookings/:id/cancel', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { reason, stage, workCompletedCharge, materialsUsedCharge, breakdown } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  const isCustomer = booking.customer_id === req.session.userId;
+  const isProvider = booking.provider_id === req.session.userId;
+  const isAdmin = req.session.isAdmin;
+
+  if (!isCustomer && !isProvider && !isAdmin) {
+    return res.status(403).json({ error: 'You are not authorized to cancel this booking.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  const cancelledBy = isCustomer ? 'customer' : isProvider ? 'provider' : 'admin';
+  const detectedStage = stage || (booking.status === 'in_progress' ? 'work_started' : booking.is_live_tracking_active ? 'travelling' : 'after_assignment');
+
+  let cancellationFee = 0;
+  let adminFeeApproved = false;
+  let finalPrice = 0;
+  let replacementOffered = false;
+  let replacementProviderId = null;
+  let replacementProviderName = null;
+
+  if (isCustomer) {
+    if (detectedStage === 'before_assignment' || !booking.provider_assigned) {
+      // Rule: Customer cancels before provider is assigned -> do NOT charge a cancellation fee
+      cancellationFee = 0;
+      finalPrice = 0;
+    } else if (detectedStage === 'work_started') {
+      // Rule: Customer cancels after work has started -> charge for work already completed and materials used
+      const workDone = Number(workCompletedCharge) || 0;
+      const materialsDone = Number(materialsUsedCharge) || 0;
+      finalPrice = workDone + materialsDone;
+      cancellationFee = finalPrice;
+    } else {
+      // Rule: Customer cancels after provider assigned or travelling -> Admin decides whether a cancellation fee applies
+      cancellationFee = Math.min(150, Math.round(booking.total_price * 0.2));
+      adminFeeApproved = false; // Pending admin review
+      finalPrice = cancellationFee;
+    }
+  } else if (isProvider) {
+    // Rule: Provider cancels -> offer customer a replacement provider!
+    // Rule: Track provider cancellations against bookings (limit 4 per 100 bookings).
+    finalPrice = 0;
+    cancellationFee = 0;
+    replacementOffered = true;
+
+    // Find replacement provider
+    const altProvider = db.prepare('SELECT id, name FROM users WHERE active_role = "provider" AND provider_status = "approved" AND id != ? LIMIT 1').get(booking.provider_id);
+    if (altProvider) {
+      replacementProviderId = altProvider.id;
+      replacementProviderName = altProvider.name;
+    } else {
+      replacementProviderId = 'prov_general_specialist_1';
+      replacementProviderName = 'NSO Verified Specialist Network';
+    }
+
+    // Provider Cancellation Rate Calculation
+    const totalProviderBookingsRow = db.prepare('SELECT count(*) as total FROM bookings WHERE provider_id = ?').get(booking.provider_id);
+    const totalBookings = Math.max(1, (totalProviderBookingsRow?.total || 0) + 1);
+
+    const cancelledByProviderRow = db.prepare(`
+      SELECT count(*) as cancelled FROM bookings
+      WHERE provider_id = ? AND status = 'cancelled' AND cancellation_details_json LIKE '%"cancelledBy":"provider"%'
+    `).get(booking.provider_id);
+    const cancelledCount = (cancelledByProviderRow?.cancelled || 0) + 1;
+
+    const cancellationRate = parseFloat(((cancelledCount / totalBookings) * 100).toFixed(2));
+
+    // When provider reaches 4 cancellations or exceeds 4%, send case to admin team for review without automatic penalty
+    if (cancelledCount >= 4 || cancellationRate >= 4.0) {
+      const reviewId = `prev_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`;
+      db.prepare(`
+        INSERT INTO provider_cancellation_reviews (id, provider_id, provider_name, total_bookings, cancelled_bookings, cancellation_rate, reason, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_admin_review', ?)
+      `).run(
+        reviewId,
+        booking.provider_id,
+        booking.provider_name,
+        totalBookings,
+        cancelledCount,
+        cancellationRate,
+        reason || 'Provider reached cancellation threshold (>= 4 per 100 bookings)',
+        nowIso
+      );
+
+      logAudit(req.session.userId, req.session.name, 'provider', 'PROVIDER_CANCELLATION_LIMIT_FLAGGED', `Provider ${booking.provider_name} reached cancellation limit (${cancelledCount}/${totalBookings} = ${cancellationRate}%). Case submitted to Admin team for review (no automatic penalty).`, req.ip);
+    }
+  }
+
+  const cancellationDetails = {
+    cancelledBy,
+    reason: reason ? String(reason).trim() : 'Cancelled',
+    stage: detectedStage,
+    cancellationFee,
+    adminFeeApproved,
+    workCompletedCharge: Number(workCompletedCharge) || 0,
+    materialsUsedCharge: Number(materialsUsedCharge) || 0,
+    breakdown: breakdown || (detectedStage === 'work_started' ? `Work completed: ₹${workCompletedCharge || 0}, Materials: ₹${materialsUsedCharge || 0}` : undefined),
+    replacementProviderOffered: replacementOffered,
+    replacementProviderId,
+    replacementProviderName,
+    timestamp: nowIso
+  };
+
+  db.prepare(`
+    UPDATE bookings
+    SET status = 'cancelled',
+        payment_status = 'refunded',
+        total_price = ?,
+        cancellation_details_json = ?,
+        is_live_tracking_active = 0,
+        updated_at = ?
+    WHERE id = ?
+  `).run(finalPrice, JSON.stringify(cancellationDetails), nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'BOOKING_CANCELLED', `Booking ${booking.booking_number} cancelled by ${cancelledBy} at ${detectedStage}. Fee: ₹${cancellationFee}`, req.ip);
+
+  res.json({
+    success: true,
+    status: 'cancelled',
+    cancellationDetails,
+    message: isProvider
+      ? `Booking cancelled. A replacement specialist (${replacementProviderName}) has been offered to the customer.`
+      : 'Booking cancelled.'
+  });
+});
+
+// Admin: Get flagged provider cancellation review cases
+app.get('/api/admin/provider-cancellations', requireAdmin, (req, res) => {
+  const rows = db.prepare('SELECT * FROM provider_cancellation_reviews ORDER BY created_at DESC').all();
+  res.json(rows.map((r) => ({
+    id: r.id,
+    providerId: r.provider_id,
+    providerName: r.provider_name,
+    totalBookings: r.total_bookings,
+    cancelledBookings: r.cancelled_bookings,
+    cancellationRate: r.cancellation_rate,
+    reason: r.reason,
+    status: r.status,
+    adminNotes: r.admin_notes,
+    createdAt: r.created_at
+  })));
+});
+
+// Admin: Review provider cancellation case
+app.patch('/api/admin/provider-cancellations/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { adminNotes, status } = req.body || {};
+
+  db.prepare(`
+    UPDATE provider_cancellation_reviews
+    SET admin_notes = ?, status = ?, resolved_at = datetime('now')
+    WHERE id = ?
+  `).run(adminNotes || '', status || 'reviewed', id);
+
+  res.json({ success: true, id, status: status || 'reviewed' });
+});
+
+// Admin: Get reported problems
+app.get('/api/admin/problems', requireAdmin, (req, res) => {
+  const rows = db.prepare("SELECT * FROM bookings WHERE status = 'problem_reported' OR reported_problem_json IS NOT NULL ORDER BY updated_at DESC").all();
+  res.json(rows.map((b) => ({
+    id: b.id,
+    bookingNumber: b.booking_number,
+    serviceTitle: b.service_title,
+    providerId: b.provider_id,
+    providerName: b.provider_name,
+    customerId: b.customer_id,
+    customerName: b.customer_name,
+    status: b.status,
+    totalPrice: b.total_price,
+    reportedProblem: b.reported_problem_json ? JSON.parse(b.reported_problem_json) : null
+  })));
 });
 
 // Verify & Process Booking Advance Payment
@@ -2228,23 +3116,6 @@ app.patch('/api/bookings/:id/status', requireAuth, (req, res) => {
   logAudit(req.session.userId, req.session.name, req.session.activeRole, 'BOOKING_STATUS_UPDATED', `Booking ${booking.booking_number} marked ${status}`, req.ip);
 
   res.json({ id, status, isLiveTrackingActive: Boolean(trackingActive) });
-});
-
-// Cancel Booking
-app.post('/api/bookings/:id/cancel', requireAuth, (req, res) => {
-  const { id } = req.params;
-  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
-  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
-
-  if (booking.customer_id !== req.session.userId && booking.provider_id !== req.session.userId && !req.session.isAdmin) {
-    return res.status(403).json({ error: 'You can only cancel your own bookings.' });
-  }
-
-  const nowIso = new Date().toISOString();
-  db.prepare("UPDATE bookings SET status = 'cancelled', payment_status = 'refunded', is_live_tracking_active = 0, updated_at = ? WHERE id = ?").run(nowIso, id);
-
-  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'BOOKING_CANCELLED', `Booking ${booking.booking_number} cancelled`, req.ip);
-  res.json({ success: true, message: 'Booking cancelled. Time slot released.' });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

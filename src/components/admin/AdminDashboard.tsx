@@ -33,7 +33,14 @@ import {
   Clock,
   IndianRupee,
   RefreshCw,
-  Package
+  Package,
+  Layers,
+  AlertTriangle,
+  Plus,
+  Send,
+  Calendar,
+  CheckSquare,
+  Tag
 } from 'lucide-react';
 
 interface Application {
@@ -82,7 +89,17 @@ export const AdminDashboard: React.FC = () => {
     approveUserRegistration,
     approveProviderWithId,
     approveProduct,
-    user
+    user,
+    services,
+    serviceCategories,
+    addServiceCategory,
+    updateServiceCategory,
+    approveServiceListing,
+    approveProviderRate,
+    adminReviewQuotation,
+    adminReviewProblem,
+    providerCancellationReviews,
+    adminReviewProviderCancellation
   } = useApp();
 
   // Live applications from backend only (no fake demo applications)
@@ -92,8 +109,21 @@ export const AdminDashboard: React.FC = () => {
   const [merchantUpi, setMerchantUpi] = useState('8310421121@ybl');
   const [upiSaving, setUpiSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'analytics' | 'payments' | 'special_requests' | 'quotes' | 'approvals' | 'audit' | 'settings'
+    'analytics' | 'payments' | 'special_requests' | 'quotes' | 'approvals' | 'services_rates' | 'disputes' | 'cancellations' | 'audit' | 'settings'
   >('analytics');
+
+  // New admin interaction states
+  const [quoteFeedbackInputs, setQuoteFeedbackInputs] = useState<{ [bookingId: string]: string }>({});
+  const [problemAdminNotes, setProblemAdminNotes] = useState<{ [bookingId: string]: string }>({});
+  const [siteVisitDates, setSiteVisitDates] = useState<{ [bookingId: string]: string }>({});
+  const [cancellationReviewNotes, setCancellationReviewNotes] = useState<{ [reviewId: string]: string }>({});
+
+  // Category addition modal state
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatIcon, setNewCatIcon] = useState('🛠️');
+  const [newCatDesc, setNewCatDesc] = useState('');
+  const [newCatSubServices, setNewCatSubServices] = useState('');
 
   const rawEnv = (import.meta as any).env?.VITE_API_URL;
   const API = rawEnv && rawEnv.trim() ? `${rawEnv.replace(/\/+$/, '')}/api` : '/api';
@@ -181,6 +211,37 @@ export const AdminDashboard: React.FC = () => {
 
   const pendingSpecialRequests = specialRequests.filter((r) => r.status === 'submitted' || r.status === 'under_review');
   const pendingRevisedQuotes = bookings.filter((b) => b.revisedQuote?.status === 'pending_admin');
+  const pendingJobQuotes = bookings.filter((b) => b.quotation?.status === 'pending_admin');
+  const pendingRateApprovals = services.filter(
+    (s) => s.rateApprovalStatus === 'pending_admin' || s.approvalStatus === 'pending_approval'
+  );
+  const pendingDisputes = bookings.filter(
+    (b) => b.reportedProblem && b.reportedProblem.adminReviewStatus !== 'resolved'
+  );
+  const pendingCancellationReviews = providerCancellationReviews.filter(
+    (r) => r.status === 'pending_admin_review'
+  );
+
+  const handleCreateCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatName.trim()) return;
+    const subs = newCatSubServices
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    await addServiceCategory({
+      name: newCatName.trim(),
+      icon: newCatIcon || '🛠️',
+      description: newCatDesc.trim() || 'Verified doorstep service category',
+      subServices: subs.length > 0 ? subs : ['General service'],
+      isActive: true,
+      displayOrder: serviceCategories.length + 1
+    });
+    setNewCatName('');
+    setNewCatDesc('');
+    setNewCatSubServices('');
+    setShowAddCategoryModal(false);
+  };
 
   const pendingPaymentsCount =
     orders.filter((o) => o.paymentStatus === 'pending').length +
@@ -357,10 +418,58 @@ export const AdminDashboard: React.FC = () => {
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            <span>Quotes</span>
-            {pendingRevisedQuotes.length > 0 && (
+            <span>Job Quotes</span>
+            {(pendingJobQuotes.length + pendingRevisedQuotes.length) > 0 && (
               <span className="bg-amber-200 text-amber-900 text-[9px] px-1.5 rounded-full font-black">
-                {pendingRevisedQuotes.length}
+                {pendingJobQuotes.length + pendingRevisedQuotes.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('services_rates')}
+            className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all flex items-center gap-1 ${
+              activeTab === 'services_rates'
+                ? 'bg-purple-900 text-white shadow-sm font-black'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Categories & Rates</span>
+            {pendingRateApprovals.length > 0 && (
+              <span className="bg-indigo-200 text-indigo-900 text-[9px] px-1.5 rounded-full font-black animate-pulse">
+                {pendingRateApprovals.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('disputes')}
+            className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all flex items-center gap-1 ${
+              activeTab === 'disputes'
+                ? 'bg-purple-900 text-white shadow-sm font-black'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>Disputes & Issues</span>
+            {pendingDisputes.length > 0 && (
+              <span className="bg-rose-200 text-rose-900 text-[9px] px-1.5 rounded-full font-black animate-pulse">
+                {pendingDisputes.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('cancellations')}
+            className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all flex items-center gap-1 ${
+              activeTab === 'cancellations'
+                ? 'bg-purple-900 text-white shadow-sm font-black'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <span>Cancellations</span>
+            {pendingCancellationReviews.length > 0 && (
+              <span className="bg-red-200 text-red-900 text-[9px] px-1.5 rounded-full font-black">
+                {pendingCancellationReviews.length}
               </span>
             )}
           </button>
@@ -530,51 +639,431 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Revised Quotes Queue (Brief Page 6) */}
+        {/* Job Quotes Queue */}
         {activeTab === 'quotes' && (
           <div className="space-y-3">
-            <div className="text-xs text-gray-500">
-              Provider revised quote submissions requiring Admin sign-off before customer confirmation:
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>Formal Job Quotations & Revised Quotes requiring Admin sign-off</span>
+              <span className="font-bold text-gray-700">
+                {pendingJobQuotes.length + pendingRevisedQuotes.length} pending
+              </span>
             </div>
 
-            {pendingRevisedQuotes.length === 0 ? (
-              <div className="text-center py-8 text-gray-400">
+            {/* Pending Formal Job Quotations */}
+            {pendingJobQuotes.map((b) => (
+              <div key={b.id} className="bg-white rounded-2xl border border-purple-100 p-4 shadow-sm space-y-3 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="font-mono font-bold text-gray-900">{b.bookingNumber}</span>
+                  <span className="text-[10px] bg-purple-100 text-purple-900 font-black px-2 py-0.5 rounded-full">
+                    Job Quotation Vetting
+                  </span>
+                </div>
+
+                <div>
+                  <h4 className="font-extrabold text-sm text-gray-900">{b.serviceTitle}</h4>
+                  <p className="text-[11px] text-gray-500">Provider: <strong>{b.providerName}</strong> • Customer: <strong>{b.customerName}</strong></p>
+                </div>
+
+                {b.quotation && (
+                  <div className="bg-purple-50/70 border border-purple-200/80 rounded-xl p-3 space-y-2">
+                    <p className="text-[11px] text-purple-950 font-bold"><span className="text-gray-500 font-normal">Scope:</span> {b.quotation.proposedWork}</p>
+                    <div className="grid grid-cols-4 gap-2 pt-1 border-t border-purple-200/60 text-center font-mono">
+                      <div className="bg-white p-1.5 rounded-lg border border-purple-100">
+                        <span className="text-[9px] text-gray-500 block">Labor</span>
+                        <span className="font-bold text-slate-800">₹{b.quotation.laborCost}</span>
+                      </div>
+                      <div className="bg-white p-1.5 rounded-lg border border-purple-100">
+                        <span className="text-[9px] text-gray-500 block">Parts</span>
+                        <span className="font-bold text-slate-800">₹{b.quotation.partsCost}</span>
+                      </div>
+                      <div className="bg-white p-1.5 rounded-lg border border-purple-100">
+                        <span className="text-[9px] text-gray-500 block">Fees</span>
+                        <span className="font-bold text-slate-800">₹{b.quotation.additionalFees}</span>
+                      </div>
+                      <div className="bg-purple-900 text-white p-1.5 rounded-lg">
+                        <span className="text-[9px] text-purple-200 block">Total</span>
+                        <span className="font-extrabold">₹{b.quotation.totalAmount}</span>
+                      </div>
+                    </div>
+                    {b.quotation.assumptions && (
+                      <p className="text-[10px] text-purple-900 italic">Assumptions: {b.quotation.assumptions}</p>
+                    )}
+                    <div className="flex justify-between text-[10px] text-gray-500 pt-1">
+                      <span>Est. Duration: <strong>{b.quotation.estimatedDuration || '1-2 Days'}</strong></span>
+                      <span>Valid Until: <strong>{b.quotation.expiryDate}</strong></span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2 pt-1">
+                  <input
+                    type="text"
+                    placeholder="Admin vetting notes (optional, e.g. Labor rate adjusted for local norm)..."
+                    value={quoteFeedbackInputs[b.id] || ''}
+                    onChange={(e) => setQuoteFeedbackInputs({ ...quoteFeedbackInputs, [b.id]: e.target.value })}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => adminReviewQuotation(b.id, 'approve', quoteFeedbackInputs[b.id] || 'Approved by Admin')}
+                      className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-sm flex items-center justify-center gap-1 active:scale-95"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Approve &amp; Send to Customer
+                    </button>
+                    <button
+                      onClick={() => adminReviewQuotation(b.id, 'return', quoteFeedbackInputs[b.id] || 'Please revise quote')}
+                      className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-black text-xs rounded-xl border border-rose-200 flex items-center justify-center gap-1 active:scale-95"
+                    >
+                      <XCircle className="w-3.5 h-3.5" /> Return for Revision
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Legacy Revised Quotes */}
+            {pendingRevisedQuotes.map((b) => (
+              <div key={b.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-2.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="font-mono font-bold text-gray-900">{b.bookingNumber}</span>
+                  <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
+                    Extra Work Vetting
+                  </span>
+                </div>
+
+                <div>
+                  <h4 className="font-bold text-gray-800">{b.serviceTitle}</h4>
+                  <p className="text-[11px] text-gray-500">Provider: {b.providerName} • Customer: {b.customerName}</p>
+                  <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 mt-2">
+                    <span className="font-bold text-amber-900 block">Requested Extra Charge: +₹{b.revisedQuote?.amount}</span>
+                    <p className="text-[11px] text-gray-700 mt-0.5">{b.revisedQuote?.reason}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+                  <button
+                    onClick={() => respondToRevisedQuote(b.id, true)}
+                    className="py-1.5 bg-purple-700 text-white font-bold text-xs rounded-xl shadow-sm"
+                  >
+                    Admin Approve
+                  </button>
+                  <button
+                    onClick={() => respondToRevisedQuote(b.id, false)}
+                    className="py-1.5 bg-gray-100 text-gray-700 font-bold text-xs rounded-xl"
+                  >
+                    Reject Extra Charge
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {pendingJobQuotes.length === 0 && pendingRevisedQuotes.length === 0 && (
+              <div className="text-center py-8 text-gray-400 bg-white rounded-2xl border border-dashed border-gray-200 p-6">
                 <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-400 mb-1" />
-                <p className="text-xs font-medium">No pending revised quotes to vet</p>
+                <p className="text-xs font-bold text-gray-700">All Quotations Up to Date</p>
+                <p className="text-[11px] text-gray-400 mt-0.5">No pending provider job quotes awaiting admin review.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Categories & Service Rates Queue */}
+        {activeTab === 'services_rates' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-black text-sm text-gray-900">Service Categories &amp; Rate Governance</h4>
+                <p className="text-[11px] text-gray-500">Govern categories, sub-services, and approve provider hourly/fixed rates</p>
+              </div>
+              <button
+                onClick={() => setShowAddCategoryModal(true)}
+                className="px-3 py-1.5 bg-purple-900 hover:bg-purple-800 text-white text-xs font-black rounded-xl shadow-sm flex items-center gap-1 active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Category
+              </button>
+            </div>
+
+            {/* Provider Rate & Listing Approvals Queue */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider block">
+                Pending Provider Rate &amp; Listing Submissions ({pendingRateApprovals.length})
+              </span>
+
+              {pendingRateApprovals.length === 0 ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center text-xs">
+                  <CheckCircle2 className="w-6 h-6 mx-auto text-emerald-600 mb-1" />
+                  <p className="font-bold text-emerald-950">All Provider Rates &amp; Listings Approved</p>
+                  <p className="text-[11px] text-emerald-700 mt-0.5">No new service rate changes pending admin authorization.</p>
+                </div>
+              ) : (
+                pendingRateApprovals.map((svc) => (
+                  <div key={svc.id} className="bg-white rounded-2xl border border-indigo-100 p-4 shadow-sm space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-slate-900">{svc.title}</span>
+                      <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full capitalize">
+                        {svc.pricingType || 'fixed'} • Pending Admin
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl text-[11px]">
+                      <div>
+                        <span className="text-slate-500 block text-[9px] uppercase font-bold">Category</span>
+                        <span className="font-bold text-slate-800">{svc.category}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[9px] uppercase font-bold">Proposed Price</span>
+                        <span className="font-extrabold text-emerald-700">₹{svc.price} {svc.unit ? `/${svc.unit}` : ''}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[9px] uppercase font-bold">Hourly Rate</span>
+                        <span className="font-bold text-indigo-700">{svc.hourlyRate ? `₹${svc.hourlyRate}/hr` : 'N/A'}</span>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-gray-600">{svc.description}</p>
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
+                      <button
+                        onClick={() => {
+                          approveServiceListing(svc.id, true);
+                          approveProviderRate(svc.id, true);
+                        }}
+                        className="py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center justify-center gap-1 active:scale-95"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Approve Rate &amp; Listing
+                      </button>
+                      <button
+                        onClick={() => approveProviderRate(svc.id, false, 'Rate rejected by Admin')}
+                        className="py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 flex items-center justify-center gap-1 active:scale-95"
+                      >
+                        <XCircle className="w-3.5 h-3.5" /> Reject Rate
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Existing Service Categories Grid */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider block">
+                Active Marketplace Categories ({serviceCategories.length})
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {serviceCategories.map((cat) => (
+                  <div key={cat.id} className="bg-white rounded-2xl border border-gray-100 p-3.5 shadow-sm space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{cat.icon}</span>
+                        <div>
+                          <h5 className="font-bold text-xs text-gray-900">{cat.name}</h5>
+                          <span className="text-[10px] text-gray-400">Order: {cat.displayOrder || 1}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => updateServiceCategory(cat.id, { isActive: !cat.isActive })}
+                        className={`text-[10px] font-black px-2.5 py-1 rounded-full border transition-all ${
+                          cat.isActive !== false
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : 'bg-gray-100 text-gray-500 border-gray-200'
+                        }`}
+                      >
+                        {cat.isActive !== false ? 'Active' : 'Disabled'}
+                      </button>
+                    </div>
+                    {cat.description && (
+                      <p className="text-[10px] text-gray-500 leading-snug">{cat.description}</p>
+                    )}
+                    {cat.subServices && cat.subServices.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {cat.subServices.slice(0, 5).map((sub) => (
+                          <span key={sub} className="text-[9px] bg-slate-100 text-slate-700 font-semibold px-1.5 py-0.5 rounded-md">
+                            {sub}
+                          </span>
+                        ))}
+                        {cat.subServices.length > 5 && (
+                          <span className="text-[9px] text-gray-400 px-1 py-0.5">
+                            +{cat.subServices.length - 5} more
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Disputes & Reported Problems */}
+        {activeTab === 'disputes' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>Customer disputes, poor quality complaints &amp; site visit dispatch</span>
+              <span className="font-bold text-gray-700">{pendingDisputes.length} active</span>
+            </div>
+
+            {pendingDisputes.length === 0 ? (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center text-xs">
+                <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-600 mb-1" />
+                <p className="font-black text-emerald-950">Zero Active Disputes</p>
+                <p className="text-[11px] text-emerald-700 mt-0.5">No customer reported problems or disputed jobs require mediation.</p>
               </div>
             ) : (
-              pendingRevisedQuotes.map((b) => (
-                <div key={b.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-2.5 text-xs">
-                  <div className="flex justify-between">
-                    <span className="font-mono font-bold text-gray-900">{b.bookingNumber}</span>
-                    <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
-                      Vetting Required
+              pendingDisputes.map((b) => {
+                const prob = b.reportedProblem!;
+                return (
+                  <div key={b.id} className="bg-white rounded-2xl border border-rose-100 p-4 shadow-sm space-y-3 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-slate-900">{b.bookingNumber}</span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full capitalize ${
+                        prob.adminReviewStatus === 'site_visit_scheduled'
+                          ? 'bg-amber-100 text-amber-900'
+                          : 'bg-rose-100 text-rose-900'
+                      }`}>
+                        {prob.adminReviewStatus.replace('_', ' ')}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="font-black text-slate-900">{b.serviceTitle}</h4>
+                      <p className="text-[11px] text-gray-500">Customer: <strong>{b.customerName}</strong> ({b.customerPhone || 'N/A'}) • Provider: <strong>{b.providerName}</strong></p>
+                      <div className="mt-2 p-3 bg-rose-50 rounded-xl border border-rose-200 space-y-1">
+                        <span className="text-[10px] font-black uppercase text-rose-800 tracking-wider">
+                          Reported Issue: {prob.problemType.replace('_', ' ')}
+                        </span>
+                        <p className="text-gray-800 text-[11px]">{prob.description}</p>
+                      </div>
+                      {prob.siteVisitScheduledAt && (
+                        <p className="text-[11px] text-indigo-700 font-bold mt-2">
+                          📅 Site visit inspection scheduled: {new Date(prob.siteVisitScheduledAt).toLocaleString('en-IN')}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-gray-100">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-gray-600 block mb-0.5">Schedule Site Inspection Visit</label>
+                          <input
+                            type="datetime-local"
+                            value={siteVisitDates[b.id] || ''}
+                            onChange={(e) => setSiteVisitDates({ ...siteVisitDates, [b.id]: e.target.value })}
+                            className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-gray-600 block mb-0.5">Admin Resolution Notes</label>
+                          <input
+                            type="text"
+                            placeholder="Resolution notes or remediation details..."
+                            value={problemAdminNotes[b.id] || ''}
+                            onChange={(e) => setProblemAdminNotes({ ...problemAdminNotes, [b.id]: e.target.value })}
+                            className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <button
+                          onClick={() => {
+                            const dateVal = siteVisitDates[b.id] || new Date().toISOString();
+                            adminReviewProblem(b.id, {
+                              siteVisitRequired: true,
+                              siteVisitScheduledAt: dateVal,
+                              adminNotes: 'Inspector dispatched for physical quality assessment.'
+                            });
+                          }}
+                          className="py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs rounded-xl shadow-sm flex items-center justify-center gap-1 active:scale-95"
+                        >
+                          <Calendar className="w-3.5 h-3.5" /> Dispatch Site Visit
+                        </button>
+                        <button
+                          onClick={() => {
+                            adminReviewProblem(b.id, {
+                              resolved: true,
+                              resolutionNotes: problemAdminNotes[b.id] || 'Mediated and resolved with customer satisfaction.'
+                            });
+                          }}
+                          className="py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-sm flex items-center justify-center gap-1 active:scale-95"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Resolve &amp; Close Dispute
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* Provider Cancellation Audits */}
+        {activeTab === 'cancellations' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>Automated monitoring for providers with high cancellation rates or late dropouts</span>
+              <span className="font-bold text-gray-700">{providerCancellationReviews.length} records</span>
+            </div>
+
+            {providerCancellationReviews.length === 0 ? (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 text-center text-xs">
+                <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-600 mb-1" />
+                <p className="font-black text-emerald-950">Reliability Index Normal</p>
+                <p className="text-[11px] text-emerald-700 mt-0.5">All service specialists meet platform cancellation rate thresholds (&lt;10%).</p>
+              </div>
+            ) : (
+              providerCancellationReviews.map((rev) => (
+                <div key={rev.id} className="bg-white rounded-2xl border border-rose-100 p-4 shadow-sm space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-black text-slate-900">{rev.providerName}</h4>
+                      <p className="text-[10px] text-gray-500 font-mono">Provider ID: {rev.providerId}</p>
+                    </div>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full capitalize ${
+                      rev.status === 'reviewed' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      {rev.status.replace('_', ' ')}
                     </span>
                   </div>
 
-                  <div>
-                    <h4 className="font-bold text-gray-800">{b.serviceTitle}</h4>
-                    <p className="text-[11px] text-gray-500">Provider: {b.providerName} • Customer: {b.customerName}</p>
-                    <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 mt-2">
-                      <span className="font-bold text-amber-900 block">Requested Extra Charge: +₹{b.revisedQuote?.amount}</span>
-                      <p className="text-[11px] text-gray-700 mt-0.5">{b.revisedQuote?.reason}</p>
+                  <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl text-[11px] text-center">
+                    <div>
+                      <span className="text-[9px] text-gray-500 block uppercase font-bold">Total Jobs</span>
+                      <span className="font-bold text-slate-800">{rev.totalBookings}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-gray-500 block uppercase font-bold">Cancelled</span>
+                      <span className="font-bold text-rose-600">{rev.cancelledBookings}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-gray-500 block uppercase font-bold">Cancel Rate</span>
+                      <span className="font-black text-rose-700">{rev.cancellationRate}%</span>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100">
-                    <button
-                      onClick={() => respondToRevisedQuote(b.id, true)}
-                      className="py-1.5 bg-purple-700 text-white font-bold text-xs rounded-xl shadow-sm"
-                    >
-                      Admin Approve
-                    </button>
-                    <button
-                      onClick={() => respondToRevisedQuote(b.id, false)}
-                      className="py-1.5 bg-gray-100 text-gray-700 font-bold text-xs rounded-xl"
-                    >
-                      Reject Extra Charge
-                    </button>
-                  </div>
+                  <p className="text-[11px] text-gray-700"><span className="font-bold">Trigger Reason:</span> {rev.reason}</p>
+
+                  {rev.adminNotes && (
+                    <p className="text-[11px] text-purple-900 bg-purple-50 p-2 rounded-lg font-medium">
+                      Admin Audit Note: {rev.adminNotes}
+                    </p>
+                  )}
+
+                  {rev.status === 'pending_admin_review' && (
+                    <div className="pt-2 border-t border-gray-100 space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Audit notes or corrective counseling warning..."
+                        value={cancellationReviewNotes[rev.id] || ''}
+                        onChange={(e) => setCancellationReviewNotes({ ...cancellationReviewNotes, [rev.id]: e.target.value })}
+                        className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600"
+                      />
+                      <button
+                        onClick={() => adminReviewProviderCancellation(rev.id, cancellationReviewNotes[rev.id] || 'Audited by Admin. Provider notified.', 'reviewed')}
+                        className="w-full py-2 bg-purple-900 hover:bg-purple-800 text-white font-black text-xs rounded-xl shadow-sm flex items-center justify-center gap-1 active:scale-95"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Mark Audited &amp; Acknowledge
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -919,6 +1408,82 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+        {/* Add Category Modal */}
+        {showAddCategoryModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🛠️</span>
+                  <h4 className="font-extrabold text-sm text-gray-900">Add Service Category</h4>
+                </div>
+                <button onClick={() => setShowAddCategoryModal(false)} className="p-1 rounded-full text-gray-400 hover:text-gray-700">
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateCategory} className="space-y-3 text-xs">
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">Category Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Appliance Care"
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-1">
+                    <label className="font-bold text-gray-700 block mb-1">Icon Emoji</label>
+                    <input
+                      type="text"
+                      value={newCatIcon}
+                      onChange={(e) => setNewCatIcon(e.target.value)}
+                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold text-center text-lg focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="font-bold text-gray-700 block mb-1">Description</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Repairs & maintenance"
+                      value={newCatDesc}
+                      onChange={(e) => setNewCatDesc(e.target.value)}
+                      className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">Sub-Services (comma separated)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Refrigerator, Washing Machine, Microwave, Chimney"
+                    value={newCatSubServices}
+                    onChange={(e) => setNewCatSubServices(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-purple-600"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCategoryModal(false)}
+                    className="py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl active:scale-95"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="py-2.5 bg-purple-900 hover:bg-purple-800 text-white font-bold rounded-xl shadow-md active:scale-95"
+                  >
+                    Save Category
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </div>
