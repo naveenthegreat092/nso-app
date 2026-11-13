@@ -1304,5 +1304,61 @@ export const api = {
     } catch {
       return [];
     }
+  },
+
+  // Push Notifications (FCM)
+  registerPushToken: async (token: string, deviceType: string = 'android', platform: string = 'capacitor'): Promise<any> => {
+    try {
+      const res = await fetch(`${API_BASE}/notifications/register-token`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ token, deviceType, platform })
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  unregisterPushToken: async (token: string): Promise<any> => {
+    try {
+      const res = await fetch(`${API_BASE}/notifications/unregister-token`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ token })
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  getNotificationStatus: async (): Promise<{ enabled: boolean; registeredTokens?: number; serviceAccountConfigured?: boolean } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/notifications/status`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  sendTestNotification: async (title?: string, body?: string): Promise<any> => {
+    try {
+      const res = await fetch(`${API_BASE}/notifications/test-push`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ title, body })
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
   }
 };

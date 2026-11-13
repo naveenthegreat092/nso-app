@@ -13,6 +13,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { DatabaseSync } from 'node:sqlite';
 import crypto from 'node:crypto';
+import { initFCM, sendPush, isFCMEnabled } from './fcm.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,6 +81,9 @@ const db = new DatabaseSync(DB_PATH);
 // Optimize SQLite for high-performance concurrent reads & ACID writes
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA foreign_keys = ON;');
+
+// Initialize Firebase Cloud Messaging for Push Notifications
+initFCM();
 
 // Run schema migrations
 db.exec(`
@@ -448,6 +452,18 @@ db.exec(`
     started_at TEXT NOT NULL,
     ended_at TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS device_tokens (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    device_type TEXT DEFAULT 'android',
+    platform TEXT DEFAULT 'capacitor',
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
 `);
 
 // Clean out fake, sample, and demo pilot products and services from database
@@ -733,6 +749,31 @@ function logAudit(actorId, actorName, role, action, details, ip) {
     console.error('Audit log failure:', err.message);
   }
 }
+
+// FCM Push Notification Dispatchers
+const sendNotificationToUser = async (userId, title, body, data = {}) => {
+  if (!isFCMEnabled() || !userId) return;
+  try {
+    const rows = db.prepare('SELECT token FROM device_tokens WHERE user_id = ?').all(userId);
+    if (!rows || rows.length === 0) return;
+    const tokens = rows.map((r) => r.token);
+    await sendPush(tokens, title, body, data);
+  } catch (err) {
+    console.warn(`[FCM] Push to user ${userId} failed:`, err.message);
+  }
+};
+
+const sendNotificationToAdmin = async (title, body, data = {}) => {
+  if (!isFCMEnabled()) return;
+  try {
+    const adminRows = db.prepare('SELECT id FROM users WHERE is_admin = 1 OR phone = ?').all(ADMIN_PHONE);
+    for (const admin of adminRows) {
+      await sendNotificationToUser(admin.id, title, body, data);
+    }
+  } catch (err) {
+    console.warn('[FCM] Push to admin failed:', err.message);
+  }
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 7. AUTHORIZATION MIDDLEWARE
@@ -2349,6 +2390,16 @@ app.patch('/api/orders/:id/clear-payment', requireAdmin, (req, res) => {
 
   logAudit(req.session.userId, req.session.name, 'admin', 'ORDER_PAYMENT_CLEARED', `Admin verified and cleared payment for Order ${order.order_number} (₹${order.total}). Order marked COMPLETED.`, req.ip);
 
+  // FCM Push Notifications
+  try {
+    const items = JSON.parse(order.items_json);
+    const sellerIds = [...new Set(items.map((it) => it.sellerId).filter(Boolean))];
+    for (const sId of sellerIds) {
+      sendNotificationToUser(sId, '💵 Payment Cleared!', `Payment for order #${order.order_number} has been released.`, { type: 'order_payment', orderId: id });
+    }
+    sendNotificationToUser(order.customer_id, '🎉 Order Completed!', `Order #${order.order_number} has been completed. Thank you for shopping with NSO Orbit!`, { type: 'order_completed', orderId: id });
+  } catch (_) {}
+
   res.json({
     success: true,
     orderStatus: 'completed',
@@ -2460,6 +2511,28 @@ app.post('/api/orders', requireAuth, (req, res) => {
 
     logAudit(req.session.userId, req.session.name, 'customer', 'ORDER_PLACED', `Order ${orderNumber} placed for ₹${total}`, req.ip);
 
+    // FCM Push Notifications
+    sendNotificationToUser(
+      req.session.userId,
+      '🛍️ Order Confirmed!',
+      `Your order #${orderNumber} for ₹${total} has been confirmed.`,
+      { type: 'order', orderId, orderNumber }
+    );
+    const orderSellerIds = [...new Set(validatedItems.map((item) => item.sellerId).filter(Boolean))];
+    for (const sId of orderSellerIds) {
+      sendNotificationToUser(
+        sId,
+        '📦 New Order Received!',
+        `You have a new order #${orderNumber} waiting to be processed.`,
+        { type: 'seller_order', orderId, orderNumber }
+      );
+    }
+    sendNotificationToAdmin(
+      '💰 New Customer Order',
+      `Order #${orderNumber} (₹${total}) placed by ${req.session.name}.`,
+      { type: 'admin_order', orderId, orderNumber }
+    );
+
     res.status(201).json({
       id: orderId,
       orderNumber,
@@ -2517,6 +2590,14 @@ app.patch('/api/orders/:id/status', requireAuth, (req, res) => {
   }
 
   logAudit(req.session.userId, req.session.name, req.session.activeRole, 'ORDER_STATUS_UPDATED', `Order ${order.order_number} marked ${status}`, req.ip);
+
+  // FCM Push Notification to Customer
+  sendNotificationToUser(
+    order.customer_id,
+    '📦 Order Update',
+    `Your order #${order.order_number} is now ${status.replace(/_/g, ' ')}.`,
+    { type: 'order', orderId: id, status }
+  );
 
   res.json({ id, orderStatus: status });
 });
@@ -2812,6 +2893,25 @@ app.post('/api/bookings', requireAuth, (req, res) => {
     db.exec('COMMIT');
 
     logAudit(req.session.userId, req.session.name, 'customer', 'BOOKING_CREATED', `Booking ${bookingNumber} (${resolvedPricingType}) confirmed for ${service.title} on ${date} (${timeSlot})`, req.ip);
+
+    // FCM Push Notifications
+    sendNotificationToUser(
+      req.session.userId,
+      '🔧 Booking Confirmed!',
+      `Your booking for ${service.title} on ${date} (${timeSlot}) has been confirmed.`,
+      { type: 'booking', bookingId, bookingNumber }
+    );
+    sendNotificationToUser(
+      service.provider_id,
+      '⚡ New Service Booking!',
+      `You have a new booking for ${service.title} from ${req.session.name} on ${date} (${timeSlot}).`,
+      { type: 'provider_booking', bookingId, bookingNumber }
+    );
+    sendNotificationToAdmin(
+      '🛠️ New Service Booking',
+      `${service.title} booked by ${req.session.name} with ${service.provider_name}.`,
+      { type: 'admin_booking', bookingId, bookingNumber }
+    );
 
     res.status(201).json({
       id: bookingId,
@@ -3142,6 +3242,14 @@ app.post('/api/bookings/:id/complete', requireAuth, (req, res) => {
 
   logAudit(req.session.userId, req.session.name, 'provider', 'SERVICE_WORK_COMPLETED', `Provider marked work completed on Booking ${booking.booking_number}. Customer notified to review work.`, req.ip);
 
+  // FCM Push Notification to Customer
+  sendNotificationToUser(
+    booking.customer_id,
+    '🛠️ Service Work Completed',
+    `Specialist marked work completed for ${booking.service_title}. Please review and confirm completion.`,
+    { type: 'booking', bookingId: id, status: 'completed_pending_review' }
+  );
+
   res.json({ success: true, status: 'completed_pending_review', message: 'Work marked complete. Customer notified to review and confirm.' });
 });
 
@@ -3171,6 +3279,19 @@ app.post('/api/bookings/:id/confirm-completion', requireAuth, (req, res) => {
   `).run(nowIso, nowIso, id);
 
   logAudit(req.session.userId, req.session.name, 'customer', 'SERVICE_COMPLETION_CONFIRMED', `Customer confirmed completion for Booking ${booking.booking_number}. Awaiting Admin Payment Clearance.`, req.ip);
+
+  // FCM Push Notification to Provider & Admin
+  sendNotificationToUser(
+    booking.provider_id,
+    '✅ Completion Confirmed!',
+    `Customer confirmed completion for booking #${booking.booking_number}. Awaiting Admin payment clearance.`,
+    { type: 'booking', bookingId: id, status: 'completed_pending_payment' }
+  );
+  sendNotificationToAdmin(
+    '⚖️ Escrow Clearance Needed',
+    `Customer confirmed completion for #${booking.booking_number} (₹${booking.total_price}). Ready for payout clearance.`,
+    { type: 'admin_escrow', bookingId: id }
+  );
 
   res.json({
     success: true,
@@ -3202,6 +3323,20 @@ app.patch('/api/bookings/:id/clear-payment', requireAdmin, (req, res) => {
   recordServiceCommission(booking.id, booking.total_price, booking.provider_id);
 
   logAudit(req.session.userId, req.session.name, 'admin', 'BOOKING_PAYMENT_CLEARED', `Admin verified and cleared payment for Booking ${booking.booking_number} (₹${booking.total_price}). Booking marked COMPLETED.`, req.ip);
+
+  // FCM Push Notifications
+  sendNotificationToUser(
+    booking.provider_id,
+    '💰 Payment Released!',
+    `Payment of ₹${booking.total_price} for booking #${booking.booking_number} has been released to your account.`,
+    { type: 'booking_payment', bookingId: id }
+  );
+  sendNotificationToUser(
+    booking.customer_id,
+    '🎉 Booking Completed!',
+    `Booking #${booking.booking_number} (${booking.service_title}) settled. Thank you for using NSO Orbit!`,
+    { type: 'booking_completed', bookingId: id }
+  );
 
   res.json({
     success: true,
@@ -3702,6 +3837,14 @@ app.patch('/api/bookings/:id/status', requireAuth, (req, res) => {
   }
 
   logAudit(req.session.userId, req.session.name, req.session.activeRole, 'BOOKING_STATUS_UPDATED', `Booking ${booking.booking_number} marked ${status}`, req.ip);
+
+  // FCM Push Notification to Customer
+  sendNotificationToUser(
+    booking.customer_id,
+    '🛠️ Service Booking Update',
+    `Your booking for ${booking.service_title} is now ${status.replace(/_/g, ' ')}.`,
+    { type: 'booking', bookingId: id, status }
+  );
 
   res.json({ id, status, isLiveTrackingActive: Boolean(trackingActive) });
 });
@@ -4252,6 +4395,95 @@ app.post('/api/calls/:id/end', requireAuth, (req, res) => {
 app.get('/api/admin/calls', requireAdmin, (req, res) => {
   const rows = db.prepare('SELECT * FROM call_logs ORDER BY started_at DESC LIMIT 300').all();
   res.json(rows);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUSH NOTIFICATIONS (FCM)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Register Device Token
+app.post('/api/notifications/register-token', (req, res) => {
+  const { token, deviceType, platform, userId: clientUserId } = req.body || {};
+  if (!token || !token.trim()) {
+    return res.status(400).json({ error: 'Device token is required.' });
+  }
+
+  const userId = req.session?.userId || clientUserId;
+  if (!userId) {
+    return res.status(401).json({ error: 'User must be authenticated to register device token.' });
+  }
+
+  const cleanToken = token.trim();
+  const dType = deviceType || 'android';
+  const plt = platform || 'capacitor';
+  const nowIso = new Date().toISOString();
+  const tokenId = `dtk_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+
+  try {
+    db.prepare(`
+      INSERT INTO device_tokens (id, user_id, token, device_type, platform, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(token) DO UPDATE SET
+        user_id = excluded.user_id,
+        device_type = excluded.device_type,
+        platform = excluded.platform,
+        updated_at = excluded.updated_at
+    `).run(tokenId, userId, cleanToken, dType, plt, nowIso);
+
+    res.json({ success: true, message: 'Device token registered successfully.' });
+  } catch (err) {
+    console.error('[FCM] Failed to register token:', err);
+    res.status(500).json({ error: 'Failed to register device token.' });
+  }
+});
+
+// Unregister Device Token
+app.post('/api/notifications/unregister-token', (req, res) => {
+  const { token } = req.body || {};
+  if (!token) {
+    return res.status(400).json({ error: 'Device token is required.' });
+  }
+
+  try {
+    db.prepare('DELETE FROM device_tokens WHERE token = ?').run(token.trim());
+    res.json({ success: true, message: 'Device token unregistered successfully.' });
+  } catch (err) {
+    console.error('[FCM] Failed to unregister token:', err);
+    res.status(500).json({ error: 'Failed to unregister device token.' });
+  }
+});
+
+// Notification Status
+app.get('/api/notifications/status', (req, res) => {
+  let count = 0;
+  try {
+    const row = db.prepare('SELECT count(*) as count FROM device_tokens').get();
+    count = row?.count || 0;
+  } catch (_) {}
+
+  res.json({
+    enabled: isFCMEnabled(),
+    registeredTokens: count,
+    serviceAccountConfigured: Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_PATH || fs.existsSync(path.join(__dirname, 'firebase-service-account.json')))
+  });
+});
+
+// Test Push Notification (for Owner or authenticated user)
+app.post('/api/notifications/test-push', requireAuth, async (req, res) => {
+  const { title, body, token } = req.body || {};
+  const pushTitle = title || '🔔 NSO Orbit Test Notification';
+  const pushBody = body || 'Push notifications are working smoothly on NSO Orbit!';
+
+  try {
+    if (token) {
+      await sendPush(token, pushTitle, pushBody, { type: 'test' });
+    } else {
+      await sendNotificationToUser(req.session.userId, pushTitle, pushBody, { type: 'test' });
+    }
+    res.json({ success: true, message: 'Test notification triggered.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
