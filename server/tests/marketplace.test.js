@@ -324,3 +324,91 @@ describe('7. Payment Webhook Idempotency & Tamper Protection', () => {
     assert.equal(res.status, 400);
   });
 });
+
+describe('8. FCM Push Notifications & Device Token Lifecycle', () => {
+  let customerCookie;
+
+  before(async () => {
+    // Authenticate a test customer
+    const phone = '9876543299';
+    await req('/api/auth/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone })
+    });
+    const otpRow = db.prepare('SELECT code FROM otp_verifications WHERE phone = ?').get(phone);
+    const verifyRes = await req('/api/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone, otp: otpRow.code, name: 'Notification Test User' })
+    });
+    customerCookie = verifyRes.headers.get('set-cookie');
+  });
+
+  test('GET /api/notifications/status returns configuration and token stats', async () => {
+    const res = await req('/api/notifications/status');
+    assert.equal(res.status, 200);
+    assert.ok(typeof res.data.enabled === 'boolean');
+    assert.ok(typeof res.data.registeredTokens === 'number');
+  });
+
+  test('POST /api/notifications/register-token rejects missing token with 400', async () => {
+    const res = await req('/api/notifications/register-token', {
+      method: 'POST',
+      headers: { Cookie: customerCookie },
+      body: JSON.stringify({})
+    });
+    assert.equal(res.status, 400);
+  });
+
+  test('POST /api/notifications/register-token successfully registers device token', async () => {
+    const testFcmToken = 'fcm_test_device_token_' + Date.now();
+    const res = await req('/api/notifications/register-token', {
+      method: 'POST',
+      headers: { Cookie: customerCookie },
+      body: JSON.stringify({
+        token: testFcmToken,
+        deviceType: 'android',
+        platform: 'capacitor'
+      })
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.data.success, true);
+
+    // Verify token exists in database
+    const row = db.prepare('SELECT * FROM device_tokens WHERE token = ?').get(testFcmToken);
+    assert.ok(row !== undefined);
+    assert.equal(row.device_type, 'android');
+  });
+
+  test('POST /api/notifications/test-push triggers test notification', async () => {
+    const res = await req('/api/notifications/test-push', {
+      method: 'POST',
+      headers: { Cookie: customerCookie },
+      body: JSON.stringify({
+        title: '🔔 Test Notification',
+        body: 'Unit test payload'
+      })
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.data.success, true);
+  });
+
+  test('POST /api/notifications/unregister-token removes token from database', async () => {
+    const testTokenToRemove = 'fcm_remove_token_' + Date.now();
+    // Register first
+    await req('/api/notifications/register-token', {
+      method: 'POST',
+      headers: { Cookie: customerCookie },
+      body: JSON.stringify({ token: testTokenToRemove })
+    });
+    // Unregister
+    const res = await req('/api/notifications/unregister-token', {
+      method: 'POST',
+      body: JSON.stringify({ token: testTokenToRemove })
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.data.success, true);
+
+    const row = db.prepare('SELECT * FROM device_tokens WHERE token = ?').get(testTokenToRemove);
+    assert.equal(row, undefined);
+  });
+});
