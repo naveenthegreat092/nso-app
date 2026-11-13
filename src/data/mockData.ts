@@ -39,10 +39,10 @@ export const INITIAL_ADDRESSES: SavedAddress[] = [
 
 import { INITIAL_SERVICE_CATALOG, INITIAL_VERIFIED_PROVIDERS } from './serviceCatalog';
 
-// Initial verified provider network and catalog for all 16 candidate categories
-export const MOCK_PROVIDERS: ProviderDetail[] = INITIAL_VERIFIED_PROVIDERS;
+// Initial verified provider network and catalog - Empty by default (Only real admin-approved submissions shown)
+export const MOCK_PROVIDERS: ProviderDetail[] = [];
 export const MOCK_PRODUCTS: Product[] = [];
-export const MOCK_SERVICES: Service[] = INITIAL_SERVICE_CATALOG;
+export const MOCK_SERVICES: Service[] = [];
 
 export const INITIAL_ORDERS: Order[] = [];
 export const INITIAL_BOOKINGS: Booking[] = [];

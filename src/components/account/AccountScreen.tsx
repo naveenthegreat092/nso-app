@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api } from '../../api/client';
 import { PolicyModal } from '../common/PolicyModal';
 import { ApplicationModal } from '../auth/ApplicationModal';
 import {
@@ -34,11 +35,30 @@ export const AccountScreen: React.FC<{
     openWishlist,
     orders,
     bookings,
-    addresses
+    addresses,
+    showToast
   } = useApp();
 
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
   const [appModalType, setAppModalType] = useState<'provider' | 'seller' | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword.trim()) return;
+    setSavingPassword(true);
+    const res = await api.setPassword(newPassword.trim());
+    setSavingPassword(false);
+    if (res.success) {
+      showToast('✅ Password updated successfully!');
+      setShowPasswordModal(false);
+      setNewPassword('');
+    } else {
+      showToast(res.error || 'Failed to update password');
+    }
+  };
 
   const getProviderStatusBadge = () => {
     if (user.providerStatus === 'approved') return <span className="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 className="w-2.5 h-2.5" />Approved</span>;
@@ -71,13 +91,23 @@ export const AccountScreen: React.FC<{
 
   return (
     <div className="space-y-4 pb-28 px-4 pt-3 animate-in fade-in duration-200">
-      {/* 1. Clean User Profile Card */}
+      {/* 1. Clean User Profile Card with Account ID */}
       <div className="bg-white rounded-3xl p-5 border border-slate-200/60 shadow-xs flex items-center gap-4">
         <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-red-600 to-rose-600 text-white font-black text-xl flex items-center justify-center shadow-md shadow-red-500/25 flex-shrink-0">
           {user.name.charAt(0)}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-black text-base text-slate-900 truncate">{user.name}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-black text-base text-slate-900 truncate">{user.name}</h3>
+            {user.accountId && (
+              <span className="text-[10px] bg-slate-100 text-slate-700 font-mono font-bold px-2 py-0.5 rounded-full border border-slate-200">
+                {user.accountId}
+              </span>
+            )}
+          </div>
+          {user.username && (
+            <p className="text-[11px] text-slate-500 font-semibold">@{user.username}</p>
+          )}
           <p className="text-xs text-slate-500 font-medium flex items-center gap-1.5 mt-0.5">
             <Phone className="w-3.5 h-3.5 text-slate-400" />
             <span>{user.phone || '+91 ••••• •••••'}</span>
@@ -229,6 +259,22 @@ export const AccountScreen: React.FC<{
           </div>
 
           <div
+            onClick={() => setShowPasswordModal(true)}
+            className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
+          >
+            <div className="flex items-center gap-3 text-slate-800 font-bold text-xs">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Lock className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="block text-slate-900 font-black">Account Security & Password</span>
+                <span className="text-[11px] text-slate-400 font-medium">Set or update account password</span>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          </div>
+
+          <div
             onClick={() => setIsPolicyModalOpen(true)}
             className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
           >
@@ -298,6 +344,38 @@ export const AccountScreen: React.FC<{
       </div>
 
       {/* Modals */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in">
+          <div className="w-full max-w-sm bg-white rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-black text-slate-900 text-base">Set Account Password</h3>
+              <button onClick={() => setShowPasswordModal(false)} className="p-1 rounded-full bg-slate-100 text-slate-500">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">
+              Set a secure password so you can log in directly using your phone or username without needing SMS OTP.
+            </p>
+            <form onSubmit={handleSavePassword} className="space-y-4">
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password"
+                required
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+              <button
+                type="submit"
+                disabled={savingPassword}
+                className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-black text-xs rounded-2xl shadow-md transition-all active:scale-98"
+              >
+                {savingPassword ? 'Saving...' : 'Save Password'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
       <PolicyModal isOpen={isPolicyModalOpen} onClose={() => setIsPolicyModalOpen(false)} />
       {appModalType && (
         <ApplicationModal

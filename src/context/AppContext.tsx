@@ -149,8 +149,15 @@ interface AppContextType {
   approveProviderRate: (serviceId: string, approved: boolean, adminNotes?: string) => Promise<void>;
   approveServiceListing: (serviceId: string, approved: boolean, adminNotes?: string) => Promise<void>;
   adminReviewProviderCancellation: (reviewId: string, adminNotes: string, status?: string) => Promise<void>;
-  submitSpecialRequest: (title: string, category: string, description: string, budget: number, timeline: string) => SpecialRequest;
+  submitSpecialRequest: (title: string, category: string, description: string, budget: number, timeline: string) => Promise<SpecialRequest>;
   updateSpecialRequest: (requestId: string, status: SpecialRequest['status'], adminNotes?: string, adminQuotation?: number) => void;
+  removeUser: (userId: string) => Promise<boolean>;
+  adminClearBookingPayment: (bookingId: string) => Promise<boolean>;
+  adminClearOrderPayment: (orderId: string) => Promise<boolean>;
+  confirmOrderReceipt: (orderId: string) => Promise<boolean>;
+  resubmitSellerApp: (id: string, data: any) => Promise<boolean>;
+  resubmitProviderApp: (id: string, data: any) => Promise<boolean>;
+  refreshAdminData: () => Promise<void>;
   approveSeller: (sellerId: string, approved: boolean) => void;
   approveProviderCategory: (providerId: string, categoryId: string, approved: boolean) => void;
   applyForSeller: (app: { storeName: string; businessType: string; gstin?: string; address: string; productCategory?: string; storeLogo?: string }) => Promise<void>;
@@ -159,8 +166,10 @@ interface AppContextType {
     experienceYears: number;
     hourlyRate: number;
     serviceArea?: string;
+    resumeUrl?: string;
     resumeText?: string;
     previousWork?: string;
+    previousWorkSamples?: { id?: string; title: string; image?: string; description?: string }[];
     idProofType?: string;
     idProofNumber?: string;
     profilePhoto?: string;
@@ -277,22 +286,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const syncCloudData = async () => {
       const cloudProducts = await api.getProducts();
-      if (cloudProducts && cloudProducts.length > 0) setProducts(cloudProducts);
+      if (Array.isArray(cloudProducts)) setProducts(cloudProducts);
 
       const cloudOrders = await api.getOrders();
-      if (cloudOrders && cloudOrders.length > 0) setOrders(cloudOrders);
+      if (Array.isArray(cloudOrders)) setOrders(cloudOrders);
 
       const cloudBookings = await api.getBookings();
-      if (cloudBookings && cloudBookings.length > 0) setBookings(cloudBookings);
+      if (Array.isArray(cloudBookings)) setBookings(cloudBookings);
 
       const cloudCategories = await api.getServiceCategories();
-      if (cloudCategories && cloudCategories.length > 0) setServiceCategories(cloudCategories);
+      if (Array.isArray(cloudCategories)) setServiceCategories(cloudCategories);
 
       const cloudServices = await api.getServices();
-      if (cloudServices && cloudServices.length > 0) setServices(cloudServices);
+      if (Array.isArray(cloudServices)) setServices(cloudServices);
 
       const cloudCancellations = await api.getProviderCancellations();
-      if (cloudCancellations && cloudCancellations.length > 0) setProviderCancellationReviews(cloudCancellations);
+      if (Array.isArray(cloudCancellations)) setProviderCancellationReviews(cloudCancellations);
+
+      const cloudRequests = await api.getSpecialRequests();
+      if (Array.isArray(cloudRequests)) setSpecialRequests(cloudRequests);
     };
     syncCloudData();
   }, []);
@@ -301,12 +313,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const fetchUsers = async () => {
       const cloudUsers = await api.getUsers();
-      if (Array.isArray(cloudUsers) && cloudUsers.length > 0) {
+      if (Array.isArray(cloudUsers)) {
         setRegisteredUsers(cloudUsers);
       }
     };
     fetchUsers();
   }, []);
+
+  // ── Real-time Admin Synchronization (Polls every 3 seconds) ───────────────
+  const refreshAdminData = async () => {
+    try {
+      const [o, b, p, s, sr, u] = await Promise.all([
+        api.getOrders(),
+        api.getBookings(),
+        api.getAdminProducts(),
+        api.getAdminServices(),
+        api.getSpecialRequests(),
+        api.getUsers()
+      ]);
+      if (Array.isArray(o)) setOrders(o);
+      if (Array.isArray(b)) setBookings(b);
+      if (Array.isArray(p)) setProducts(p);
+      if (Array.isArray(s)) setServices(s);
+      if (Array.isArray(sr)) setSpecialRequests(sr);
+      if (Array.isArray(u)) setRegisteredUsers(u);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (user.activeRole !== 'admin') return;
+    refreshAdminData();
+    const timer = setInterval(refreshAdminData, 3000);
+    return () => clearInterval(timer);
+  }, [user.activeRole]);
 
   const showToast = (msg: string) => {
     setNotification(msg);
@@ -505,6 +544,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setUser((prev) => ({ ...prev, activeRole: newRole }));
+    localStorage.setItem('nso_active_role', newRole);
+    api.switchRole(newRole).catch(() => {});
     addAuditLog('ROLE_SWITCH', `Switched active role from ${user.activeRole} to ${newRole}`, newRole);
     showToast(`Switched view to ${newRole.toUpperCase()}`);
     return true;
@@ -766,8 +807,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     experienceYears: number;
     hourlyRate: number;
     serviceArea?: string;
+    resumeUrl?: string;
     resumeText?: string;
     previousWork?: string;
+    previousWorkSamples?: { id?: string; title: string; image?: string; description?: string }[];
     idProofType?: string;
     idProofNumber?: string;
     profilePhoto?: string;
@@ -1630,13 +1673,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Provider cancellation review saved.');
   };
 
-  const submitSpecialRequest = (
+  const submitSpecialRequest = async (
     title: string,
     category: string,
     description: string,
     budget: number,
     timeline: string
-  ): SpecialRequest => {
+  ): Promise<SpecialRequest> => {
     const newReq: SpecialRequest = {
       id: `req_${Date.now()}`,
       requestNumber: `NSO-SRQ-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -1652,9 +1695,149 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setSpecialRequests((prev) => [newReq, ...prev]);
+
+    try {
+      const res = await api.createSpecialRequest({ title, category, description, budget, timeline });
+      if (res?.ticketNumber) {
+        newReq.requestNumber = res.ticketNumber;
+      }
+    } catch {}
+
     addAuditLog('SPECIAL_REQUEST_SUBMITTED', `Special request ${newReq.requestNumber} submitted: ${title}`);
     showToast(`Request Submitted to Admin! Ref: ${newReq.requestNumber}`);
     return newReq;
+  };
+
+  const removeUser = async (userId: string): Promise<boolean> => {
+    try {
+      const res = await api.deleteUser(userId);
+      if (res.success) {
+        setRegisteredUsers((prev) => prev.filter((u) => u.id !== userId));
+        showToast(res.message || 'User removed successfully.');
+        addAuditLog('USER_REMOVED', `Admin removed user ID ${userId}`);
+        return true;
+      } else {
+        showToast(res.error || 'Failed to remove user.');
+        return false;
+      }
+    } catch {
+      showToast('Error removing user.');
+      return false;
+    }
+  };
+
+  const adminClearBookingPayment = async (bookingId: string): Promise<boolean> => {
+    try {
+      const res = await api.clearBookingPayment(bookingId);
+      if (res.success) {
+        setBookings((prev) =>
+          prev.map((b) =>
+            b.id === bookingId
+              ? { ...b, status: 'completed', paymentStatus: 'cleared', adminPaymentCleared: true }
+              : b
+          )
+        );
+        showToast('Payment verified & cleared! Booking completed.');
+        addAuditLog('PAYMENT_CLEARED', `Admin cleared payment for Booking ${bookingId}`);
+        return true;
+      } else {
+        showToast(res.error || 'Failed to clear payment.');
+        return false;
+      }
+    } catch {
+      showToast('Error clearing payment.');
+      return false;
+    }
+  };
+
+  const adminClearOrderPayment = async (orderId: string): Promise<boolean> => {
+    try {
+      const res = await api.clearOrderPayment(orderId);
+      if (res.success) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? { ...o, orderStatus: 'completed', paymentStatus: 'cleared', adminPaymentCleared: true }
+              : o
+          )
+        );
+        showToast('Payment verified & cleared! Order completed.');
+        addAuditLog('PAYMENT_CLEARED', `Admin cleared payment for Order ${orderId}`);
+        return true;
+      } else {
+        showToast(res.error || 'Failed to clear payment.');
+        return false;
+      }
+    } catch {
+      showToast('Error clearing payment.');
+      return false;
+    }
+  };
+
+  const confirmOrderReceipt = async (orderId: string): Promise<boolean> => {
+    try {
+      const res = await api.confirmOrderReceipt(orderId);
+      if (res.success) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? { ...o, orderStatus: 'delivered_pending_payment', paymentStatus: 'pending_admin_clearance', customerConfirmed: true }
+              : o
+          )
+        );
+        showToast('Delivery receipt confirmed! Pending admin payment clearance.');
+        addAuditLog('ORDER_RECEIPT_CONFIRMED', `Customer confirmed receipt of Order ${orderId}`);
+        return true;
+      } else {
+        showToast(res.error || 'Failed to confirm receipt.');
+        return false;
+      }
+    } catch {
+      showToast('Error confirming receipt.');
+      return false;
+    }
+  };
+
+  const resubmitSellerApp = async (id: string, data: any): Promise<boolean> => {
+    try {
+      const res = await api.resubmitSellerApplication(id, data);
+      if (res.success) {
+        setUser((prev) => ({
+          ...prev,
+          sellerStatus: 'pending',
+          sellerApplication: prev.sellerApplication ? { ...prev.sellerApplication, ...data, status: 'pending' } : undefined
+        }));
+        showToast('Seller application resubmitted for admin review!');
+        return true;
+      } else {
+        showToast(res.error || 'Failed to resubmit application.');
+        return false;
+      }
+    } catch {
+      showToast('Error resubmitting application.');
+      return false;
+    }
+  };
+
+  const resubmitProviderApp = async (id: string, data: any): Promise<boolean> => {
+    try {
+      const res = await api.resubmitProviderApplication(id, data);
+      if (res.success) {
+        setUser((prev) => ({
+          ...prev,
+          providerStatus: 'pending',
+          providerApplication: prev.providerApplication ? { ...prev.providerApplication, ...data, status: 'pending' } : undefined
+        }));
+        showToast('Provider application resubmitted for admin review!');
+        return true;
+      } else {
+        showToast(res.error || 'Failed to resubmit application.');
+        return false;
+      }
+    } catch {
+      showToast('Error resubmitting application.');
+      return false;
+    }
   };
 
   const updateSpecialRequest = (
@@ -1883,6 +2066,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         adminReviewProviderCancellation,
         submitSpecialRequest,
         updateSpecialRequest,
+        removeUser,
+        adminClearBookingPayment,
+        adminClearOrderPayment,
+        confirmOrderReceipt,
+        resubmitSellerApp,
+        resubmitProviderApp,
+        refreshAdminData,
         approveSeller,
         approveProviderCategory,
         applyForSeller,

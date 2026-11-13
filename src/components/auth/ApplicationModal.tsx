@@ -23,7 +23,7 @@ const BUSINESS_TYPES = [
 ];
 
 export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => {
-  const { user, applyForProvider, applyForSeller, showToast } = useApp();
+  const { user, applyForProvider, applyForSeller, resubmitProviderApp, resubmitSellerApp, showToast } = useApp();
   const [step, setStep] = useState<'form' | 'submitted'>('form');
 
   // Provider form state
@@ -36,11 +36,17 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
   const [idProofNumber, setIdProofNumber] = useState('');
   const [serviceArea, setServiceArea] = useState('');
   const [resumeText, setResumeText] = useState('');
+  const [resumeUrl, setResumeUrl] = useState('');
   const [previousWork, setPreviousWork] = useState('');
+  const [workSamples, setWorkSamples] = useState<{ id: string; title: string; image: string; description?: string }[]>([]);
+  const [sampleTitle, setSampleTitle] = useState('');
+  const [sampleImg, setSampleImg] = useState('');
   const [profilePhoto, setProfilePhoto] = useState('https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=200&auto=format&fit=crop&q=80');
   const [idDocumentPhoto, setIdDocumentPhoto] = useState('');
   const profileInputRef = useRef<HTMLInputElement>(null);
   const idDocInputRef = useRef<HTMLInputElement>(null);
+  const resumeInputRef = useRef<HTMLInputElement>(null);
+  const sampleInputRef = useRef<HTMLInputElement>(null);
 
   // Seller form state
   const [storeName, setStoreName] = useState('');
@@ -102,7 +108,30 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
                 <XCircle className="w-8 h-8 text-red-500" />
               </div>
               <h3 className="font-black text-slate-900 text-lg mb-2">Application Not Approved</h3>
-              <p className="text-slate-500 text-sm">Your application was not approved this time. Please contact support for more details.</p>
+              {user.providerApplication?.adminNotes && (
+                <div className="bg-red-50 border border-red-200 text-red-800 text-xs p-3 rounded-2xl mb-4 text-left">
+                  <span className="font-black block mb-0.5">Admin Feedback:</span>
+                  <span>{user.providerApplication.adminNotes}</span>
+                </div>
+              )}
+              <p className="text-slate-500 text-xs mb-5">You can update your credentials, resume, or work samples and resubmit for review.</p>
+              <button
+                onClick={() => {
+                  if (user.providerApplication) {
+                    setTradeCategory(user.providerApplication.tradeCategory || 'Plumber');
+                    setExperience(String(user.providerApplication.experienceYears || ''));
+                    setHourlyRate(String(user.providerApplication.hourlyRate || ''));
+                    setServiceArea(user.providerApplication.serviceArea || '');
+                    setResumeText(user.providerApplication.resumeText || '');
+                    setPreviousWork(user.providerApplication.previousWork || '');
+                  }
+                  // Allow editing form
+                  user.providerStatus = 'none';
+                }}
+                className="w-full py-3.5 rounded-2xl bg-slate-900 text-white font-black text-xs hover:bg-black transition-all"
+              >
+                Edit & Resubmit Application
+              </button>
             </div>
           )}
         </div>
@@ -132,6 +161,36 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
               <button onClick={onClose} className="w-full py-3 rounded-2xl bg-green-500 text-white font-black text-sm mt-4">Open Seller Dashboard</button>
             </div>
           )}
+          {user.sellerStatus === 'rejected' && (
+            <div className="text-center py-6">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <XCircle className="w-8 h-8 text-red-500" />
+              </div>
+              <h3 className="font-black text-slate-900 text-lg mb-2">Store Application Not Approved</h3>
+              {user.sellerApplication?.adminNotes && (
+                <div className="bg-red-50 border border-red-200 text-red-800 text-xs p-3 rounded-2xl mb-4 text-left">
+                  <span className="font-black block mb-0.5">Admin Feedback:</span>
+                  <span>{user.sellerApplication.adminNotes}</span>
+                </div>
+              )}
+              <p className="text-slate-500 text-xs mb-5">You can update your business details or GSTIN and resubmit for approval.</p>
+              <button
+                onClick={() => {
+                  if (user.sellerApplication) {
+                    setStoreName(user.sellerApplication.storeName || '');
+                    setBusinessType(user.sellerApplication.businessType || 'Retail Store');
+                    setGstin(user.sellerApplication.gstin || '');
+                    setSellerAddress(user.sellerApplication.address || '');
+                    setProductCategory(user.sellerApplication.productCategory || '');
+                  }
+                  user.sellerStatus = 'none';
+                }}
+                className="w-full py-3.5 rounded-2xl bg-slate-900 text-white font-black text-xs hover:bg-black transition-all"
+              >
+                Edit & Resubmit Application
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -153,8 +212,10 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
         experienceYears: parseInt(experience),
         hourlyRate: parseFloat(hourlyRate),
         serviceArea,
+        resumeUrl: resumeUrl || undefined,
         resumeText,
         previousWork,
+        previousWorkSamples: workSamples.length > 0 ? workSamples : undefined,
         idProofType,
         idProofNumber,
         profilePhoto,
@@ -285,7 +346,7 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
                 <input value={serviceArea} onChange={e => setServiceArea(e.target.value)} required placeholder="e.g. Koramangala, Bengaluru" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400" />
               </div>
 
-              {/* Resume / Background Summary */}
+              {/* Resume / Background Summary & Resume Document */}
               <div>
                 <label className="text-xs font-black text-slate-700 mb-1.5 block">Your Resume / Qualifications & Background *</label>
                 <textarea
@@ -294,8 +355,35 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
                   value={resumeText}
                   onChange={e => setResumeText(e.target.value)}
                   placeholder="e.g. Certified technician, 5 years at HomeCraft, ITI Electrical diploma, trained in safety standards."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs font-medium text-slate-900 outline-none placeholder:text-slate-400 resize-none"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs font-medium text-slate-900 outline-none placeholder:text-slate-400 resize-none mb-2"
                 />
+
+                {/* Optional Resume Document / PDF upload */}
+                <input
+                  type="file"
+                  accept=".pdf,image/*"
+                  ref={resumeInputRef}
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    try {
+                      const b64 = await resizeImageFile(f, 1200, 1200, 0.85);
+                      setResumeUrl(b64);
+                      showToast('📄 Resume document attached!');
+                    } catch {
+                      showToast('Failed to attach file');
+                    }
+                  }}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => resumeInputRef.current?.click()}
+                  className="w-full py-2 px-3 border border-dashed border-slate-300 hover:border-slate-400 rounded-xl bg-slate-50 text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Upload className="w-3.5 h-3.5 text-slate-500" />
+                  <span>{resumeUrl ? '✓ Resume Document Attached (Click to Replace)' : 'Attach Resume Document / Certificate (Optional)'}</span>
+                </button>
               </div>
 
               {/* Previous Work & Projects */}
@@ -307,8 +395,84 @@ export const ApplicationModal: React.FC<Props> = ({ type, isOpen, onClose }) => 
                   value={previousWork}
                   onChange={e => setPreviousWork(e.target.value)}
                   placeholder="e.g. Completed 200+ residential tap replacements, pipeline repairs, commercial apartment drainage systems."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs font-medium text-slate-900 outline-none placeholder:text-slate-400 resize-none"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs font-medium text-slate-900 outline-none placeholder:text-slate-400 resize-none mb-2"
                 />
+
+                {/* Work Samples Portfolio Photos */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black text-slate-800 flex items-center gap-1.5">
+                      <ImageIcon className="w-3.5 h-3.5 text-indigo-600" />
+                      Work Samples Portfolio ({workSamples.length})
+                    </span>
+                    <span className="text-[10px] text-slate-400">Photos of jobs you completed</span>
+                  </div>
+
+                  {workSamples.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 pt-1">
+                      {workSamples.map((ws, i) => (
+                        <div key={ws.id || i} className="relative rounded-xl overflow-hidden border border-slate-200 bg-white">
+                          <img src={ws.image} alt={ws.title} className="w-full h-16 object-cover" />
+                          <div className="p-1 text-[9px] font-bold truncate text-slate-700">{ws.title}</div>
+                          <button
+                            type="button"
+                            onClick={() => setWorkSamples(prev => prev.filter((_, idx) => idx !== i))}
+                            className="absolute top-1 right-1 p-0.5 rounded-full bg-black/60 text-white"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 items-center pt-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      ref={sampleInputRef}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        try {
+                          const b64 = await resizeImageFile(file, 800, 800, 0.85);
+                          setSampleImg(b64);
+                        } catch {
+                          showToast('Could not load image');
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <input
+                      type="text"
+                      value={sampleTitle}
+                      onChange={e => setSampleTitle(e.target.value)}
+                      placeholder="Sample title (e.g. Bathroom fitting)"
+                      className="flex-1 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-medium"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => sampleInputRef.current?.click()}
+                      className="px-2.5 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-xl text-xs font-bold whitespace-nowrap"
+                    >
+                      {sampleImg ? 'Photo Selected' : 'Choose Photo'}
+                    </button>
+                    {sampleImg && sampleTitle && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWorkSamples(prev => [...prev, { id: `ws_${Date.now()}`, title: sampleTitle.trim(), image: sampleImg }]);
+                          setSampleTitle('');
+                          setSampleImg('');
+                          showToast('Work sample added!');
+                        }}
+                        className="px-2.5 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold"
+                      >
+                        Add
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Specialist Profile Photo Upload */}

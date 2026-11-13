@@ -40,7 +40,11 @@ import {
   Send,
   Calendar,
   CheckSquare,
-  Tag
+  Tag,
+  Trash2,
+  Image as ImageIcon,
+  PhoneCall,
+  MessageSquare
 } from 'lucide-react';
 
 interface Application {
@@ -53,8 +57,11 @@ interface Application {
   experienceYears?: number;
   hourlyRate?: number;
   serviceArea?: string;
+  resumeUrl?: string;
   resumeText?: string;
   previousWork?: string;
+  previousWorkSamples?: { id?: string; title: string; image?: string; description?: string }[];
+  adminNotes?: string;
   issuedProviderId?: string;
   idProofType?: string;
   idProofNumber?: string;
@@ -99,7 +106,11 @@ export const AdminDashboard: React.FC = () => {
     adminReviewQuotation,
     adminReviewProblem,
     providerCancellationReviews,
-    adminReviewProviderCancellation
+    adminReviewProviderCancellation,
+    adminClearBookingPayment,
+    adminClearOrderPayment,
+    removeUser,
+    refreshAdminData
   } = useApp();
 
   // Live applications from backend only (no fake demo applications)
@@ -109,8 +120,13 @@ export const AdminDashboard: React.FC = () => {
   const [merchantUpi, setMerchantUpi] = useState('8310421121@ybl');
   const [upiSaving, setUpiSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'analytics' | 'payments' | 'special_requests' | 'quotes' | 'approvals' | 'services_rates' | 'disputes' | 'cancellations' | 'audit' | 'settings'
+    'analytics' | 'payments' | 'special_requests' | 'quotes' | 'approvals' | 'services_rates' | 'disputes' | 'cancellations' | 'calls_chats' | 'audit' | 'settings'
   >('analytics');
+
+  // Communications states
+  const [adminChats, setAdminChats] = useState<any[]>([]);
+  const [adminCalls, setAdminCalls] = useState<any[]>([]);
+  const [selectedWorkSampleImg, setSelectedWorkSampleImg] = useState<{ url: string; title: string } | null>(null);
 
   // New admin interaction states
   const [quoteFeedbackInputs, setQuoteFeedbackInputs] = useState<{ [bookingId: string]: string }>({});
@@ -164,12 +180,28 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const fetchChatsAndCalls = async () => {
+    try {
+      const [c, cl] = await Promise.all([api.getAdminChats(), api.getCallLogs()]);
+      setAdminChats(Array.isArray(c) ? c : []);
+      setAdminCalls(Array.isArray(cl) ? cl : []);
+    } catch {
+      setAdminChats([]);
+      setAdminCalls([]);
+    }
+  };
+
   useEffect(() => {
     fetchApplications();
     fetchCommission();
     fetchMerchantUpi();
     if (activeTab === 'approvals') {
       const timer = setInterval(fetchApplications, 6000);
+      return () => clearInterval(timer);
+    }
+    if (activeTab === 'calls_chats') {
+      fetchChatsAndCalls();
+      const timer = setInterval(fetchChatsAndCalls, 5000);
       return () => clearInterval(timer);
     }
   }, [activeTab]);
@@ -484,6 +516,22 @@ export const AdminDashboard: React.FC = () => {
             Approvals
           </button>
           <button
+            onClick={() => setActiveTab('calls_chats')}
+            className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all flex items-center gap-1.5 ${
+              activeTab === 'calls_chats'
+                ? 'bg-purple-900 text-white shadow-sm font-black'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            <span>Calls & Chats</span>
+            {(adminChats.length + adminCalls.length) > 0 && (
+              <span className="bg-purple-200 text-purple-900 text-[9px] px-1.5 rounded-full font-black">
+                {adminChats.length + adminCalls.length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setActiveTab('audit')}
             className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all ${
               activeTab === 'audit'
@@ -514,13 +562,100 @@ export const AdminDashboard: React.FC = () => {
 
         {/* Payment Tracking Tab */}
         {activeTab === 'payments' && (
-          <PaymentTracker
-            orders={orders}
-            bookings={bookings}
-            onUpdateOrderPayment={updateOrderPaymentStatus}
-            onUpdateBookingPayment={updateBookingPaymentStatus}
-            showToast={showToast}
-          />
+          <div className="space-y-4">
+            <PaymentTracker
+              orders={orders}
+              bookings={bookings}
+              onUpdateOrderPayment={updateOrderPaymentStatus}
+              onUpdateBookingPayment={updateBookingPaymentStatus}
+              showToast={showToast}
+            />
+
+            {/* Escrow Payout Clearance Section */}
+            <div className="bg-white rounded-2xl p-4 border border-indigo-200 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
+                    <CheckSquare className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900">Two-Step Escrow Payout Clearance</h4>
+                    <p className="text-[10px] text-slate-500">Customer confirmed delivery receipt — Admin verifies and releases merchant payment</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-black bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">
+                  {orders.filter(o => o.orderStatus === 'delivered_pending_payment' || (o.customerConfirmed && !o.adminPaymentCleared)).length +
+                   bookings.filter(b => b.status === 'completed_pending_payment' || (b.customerConfirmed && !b.adminPaymentCleared)).length} Pending
+                </span>
+              </div>
+
+              {/* Pending Orders Clearance */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
+                  Product Orders Awaiting Payment Clearance
+                </span>
+                {orders.filter(o => o.orderStatus === 'delivered_pending_payment' || (o.customerConfirmed && !o.adminPaymentCleared)).length === 0 ? (
+                  <p className="text-xs text-slate-400 py-1 font-medium">No order payments currently pending escrow clearance.</p>
+                ) : (
+                  orders.filter(o => o.orderStatus === 'delivered_pending_payment' || (o.customerConfirmed && !o.adminPaymentCleared)).map(ord => (
+                    <div key={ord.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3 text-xs">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-slate-900">{ord.orderNumber}</span>
+                          <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold">
+                            Customer Confirmed
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Customer: {ord.customerName} • Payout: <strong className="text-slate-900">₹{ord.total}</strong>
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => adminClearOrderPayment(ord.id)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1 active:scale-95 transition-all whitespace-nowrap"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Verify & Release Payout</span>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Pending Bookings Clearance */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
+                  Service Bookings Awaiting Payment Clearance
+                </span>
+                {bookings.filter(b => b.status === 'completed_pending_payment' || (b.customerConfirmed && !b.adminPaymentCleared)).length === 0 ? (
+                  <p className="text-xs text-slate-400 py-1 font-medium">No service payouts currently pending escrow clearance.</p>
+                ) : (
+                  bookings.filter(b => b.status === 'completed_pending_payment' || (b.customerConfirmed && !b.adminPaymentCleared)).map(bk => (
+                    <div key={bk.id} className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3 text-xs">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-slate-900">{bk.bookingNumber}</span>
+                          <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold">
+                            Job Completed
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Provider: {bk.providerName} • Customer: {bk.customerName} • Amount: <strong className="text-slate-900">₹{bk.totalPrice}</strong>
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => adminClearBookingPayment(bk.id)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-xs flex items-center gap-1 active:scale-95 transition-all whitespace-nowrap"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Release Provider Payout</span>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         )}
         {/* Settings Tab: Server & Security */}
         {activeTab === 'settings' && (
@@ -1172,15 +1307,37 @@ export const AdminDashboard: React.FC = () => {
                     <div key={u.id || u.phone} className="bg-white rounded-xl p-3 border border-slate-200 shadow-xs space-y-1.5">
                       <div className="flex items-start justify-between">
                         <div>
-                          <h5 className="font-black text-slate-900 text-xs">{u.name}</h5>
-                          <p className="text-[11px] text-slate-500 font-semibold">{u.phone}</p>
+                          <div className="flex items-center gap-1.5">
+                            <h5 className="font-black text-slate-900 text-xs">{u.name}</h5>
+                            {u.accountId && (
+                              <span className="text-[9px] bg-slate-100 text-slate-700 font-mono font-bold px-1.5 py-0.2 rounded-md border border-slate-200">
+                                {u.accountId}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-500 font-semibold">
+                            {u.phone} {u.username ? `• @${u.username}` : ''}
+                          </p>
                         </div>
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-                          u.approvalStatus === 'approved' ? 'bg-green-100 text-green-700' :
-                          u.approvalStatus === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                        }`}>
-                          {u.approvalStatus ? u.approvalStatus.toUpperCase() : 'PENDING'}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                            u.approvalStatus === 'approved' ? 'bg-green-100 text-green-700' :
+                            u.approvalStatus === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                          }`}>
+                            {u.approvalStatus ? u.approvalStatus.toUpperCase() : 'PENDING'}
+                          </span>
+                          <button
+                            onClick={async () => {
+                              if (window.confirm(`Are you sure you want to delete user ${u.name}?`)) {
+                                await removeUser(u.id);
+                              }
+                            }}
+                            className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Remove User"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                       <div className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded-lg space-y-0.5">
                         <p><span className="font-bold">House / Flat:</span> {u.houseNumber || 'N/A'}</p>
@@ -1323,7 +1480,17 @@ export const AdminDashboard: React.FC = () => {
 
                     {appl.resumeText && (
                       <div className="bg-white p-2.5 rounded-lg border border-slate-200">
-                        <p className="font-bold text-slate-700 text-[11px] mb-0.5">📄 Resume & Background:</p>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <p className="font-bold text-slate-700 text-[11px]">📄 Resume & Background:</p>
+                          {appl.resumeUrl && (
+                            <button
+                              onClick={() => setSelectedWorkSampleImg({ url: appl.resumeUrl!, title: `${appl.applicantName} - Resume Document` })}
+                              className="text-[10px] font-bold text-blue-600 hover:text-blue-800"
+                            >
+                              View Attached Document →
+                            </button>
+                          )}
+                        </div>
                         <p className="text-[11px] text-slate-600 leading-relaxed whitespace-pre-line">{appl.resumeText}</p>
                       </div>
                     )}
@@ -1332,6 +1499,31 @@ export const AdminDashboard: React.FC = () => {
                       <div className="bg-white p-2.5 rounded-lg border border-slate-200">
                         <p className="font-bold text-slate-700 text-[11px] mb-0.5">🛠️ Previous Work & Projects Done:</p>
                         <p className="text-[11px] text-slate-600 leading-relaxed whitespace-pre-line">{appl.previousWork}</p>
+                      </div>
+                    )}
+
+                    {appl.previousWorkSamples && appl.previousWorkSamples.length > 0 && (
+                      <div className="bg-white p-2.5 rounded-lg border border-slate-200">
+                        <p className="font-bold text-slate-700 text-[11px] mb-1.5 flex items-center gap-1">
+                          <ImageIcon className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Work Samples Gallery ({appl.previousWorkSamples.length}):</span>
+                        </p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {appl.previousWorkSamples.map((ws, i) => (
+                            <div
+                              key={ws.id || i}
+                              onClick={() => ws.image && setSelectedWorkSampleImg({ url: ws.image, title: ws.title })}
+                              className="cursor-pointer group relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50"
+                            >
+                              {ws.image && (
+                                <img src={ws.image} alt={ws.title} className="w-full h-14 object-cover group-hover:scale-105 transition-transform" />
+                              )}
+                              <div className="p-1 text-[9px] font-bold truncate text-slate-700 bg-white">
+                                {ws.title}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
 
@@ -1387,6 +1579,97 @@ export const AdminDashboard: React.FC = () => {
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Calls & Chats Monitoring Tab */}
+        {activeTab === 'calls_chats' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold">
+                    <Smartphone className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900">In-App Calls &amp; Encrypted Chats</h4>
+                    <p className="text-[10px] text-slate-400">Real-time audit log of communications between users, providers &amp; stores</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full">
+                    {adminCalls.length} Calls
+                  </span>
+                  <span className="text-[9px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full">
+                    {adminChats.length} Messages
+                  </span>
+                </div>
+              </div>
+
+              {/* In-App Masked Voice Calls Section */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider block flex items-center gap-1">
+                  <PhoneCall className="w-3.5 h-3.5 text-emerald-600" />
+                  Voice Calls Log ({adminCalls.length})
+                </span>
+                {adminCalls.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-1 font-medium">No recorded in-app voice calls yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {adminCalls.map((call) => (
+                      <div key={call.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs flex items-center justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2 font-bold text-slate-900">
+                            <span>{call.caller_name || 'Caller'}</span>
+                            <span className="text-slate-400">→</span>
+                            <span>{call.receiver_name || 'Recipient'}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            Started: {new Date(call.started_at).toLocaleString('en-IN')}
+                          </p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                            call.status === 'completed' ? 'bg-emerald-100 text-emerald-800' :
+                            call.status === 'active' ? 'bg-blue-100 text-blue-800 animate-pulse' :
+                            'bg-amber-100 text-amber-800'
+                          }`}>
+                            {call.status.toUpperCase()} ({call.duration_seconds}s)
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Chat Messages Section */}
+              <div className="space-y-2 pt-3 border-t border-slate-100">
+                <span className="text-[11px] font-black text-slate-700 uppercase tracking-wider block flex items-center gap-1">
+                  <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
+                  Chat Messages Audit ({adminChats.length})
+                </span>
+                {adminChats.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-1 font-medium">No recorded in-app chat messages yet.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                    {adminChats.map((msg) => (
+                      <div key={msg.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                        <div className="flex items-center justify-between text-[10px] text-slate-500">
+                          <span className="font-bold text-slate-800">
+                            {msg.sender_name || msg.sender_id} → {msg.receiver_name || msg.receiver_id}
+                          </span>
+                          <span className="font-mono">{new Date(msg.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                        <p className="text-slate-900 font-medium bg-white p-2 rounded-lg border border-slate-100">
+                          {msg.text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -1483,6 +1766,29 @@ export const AdminDashboard: React.FC = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+        {/* Work Sample & Document Lightbox Modal */}
+        {selectedWorkSampleImg && (
+          <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-white rounded-3xl p-4 max-w-lg w-full space-y-3 shadow-2xl">
+              <div className="flex items-center justify-between border-b pb-2">
+                <h4 className="font-black text-sm text-slate-900 truncate">{selectedWorkSampleImg.title}</h4>
+                <button
+                  onClick={() => setSelectedWorkSampleImg(null)}
+                  className="p-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="rounded-2xl overflow-hidden bg-slate-900 flex items-center justify-center max-h-[70vh]">
+                <img
+                  src={selectedWorkSampleImg.url}
+                  alt={selectedWorkSampleImg.title}
+                  className="max-w-full max-h-[70vh] object-contain"
+                />
+              </div>
             </div>
           </div>
         )}

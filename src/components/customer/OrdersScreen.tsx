@@ -43,7 +43,8 @@ export const OrdersScreen: React.FC = () => {
     customerDecideQuotation,
     customerDecideExtraTime,
     confirmServiceCompletion,
-    reportServiceProblem
+    reportServiceProblem,
+    confirmOrderReceipt
   } = useApp();
   const [subTab, setSubTab] = useState<'products' | 'services'>('products');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -93,6 +94,10 @@ export const OrdersScreen: React.FC = () => {
         return <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">Out for Delivery</span>;
       case 'delivered':
         return <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">Delivered</span>;
+      case 'delivered_pending_payment':
+        return <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">Delivered (Pending Release)</span>;
+      case 'completed':
+        return <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">Completed & Cleared</span>;
       case 'cancelled':
         return <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-full">Cancelled (Refunded)</span>;
       default:
@@ -316,6 +321,30 @@ export const OrdersScreen: React.FC = () => {
                                 <Navigation className="w-3 h-3" />
                                 Track
                               </button>
+                            )}
+                            {order.orderStatus === 'delivered' && !order.customerConfirmed && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  confirmOrderReceipt(order.id);
+                                }}
+                                className="flex items-center gap-1 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg shadow-sm active:scale-95 transition-all"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Confirm Received</span>
+                              </button>
+                            )}
+                            {(order.orderStatus === 'delivered_pending_payment' || (order.customerConfirmed && !order.adminPaymentCleared)) && (
+                              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200 flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-indigo-600" />
+                                Confirmed • Pending Admin Release
+                              </span>
+                            )}
+                            {(order.orderStatus === 'completed' || order.adminPaymentCleared) && (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                Completed & Cleared
+                              </span>
                             )}
                             {order.orderStatus === 'delivered' && !order.rating && (
                               <button

@@ -1005,5 +1005,304 @@ export const api = {
     } catch {
       return null;
     }
+  },
+
+  // ── Password Auth & Registration ──────────────────────────────────────────
+
+  registerCustomerWithPassword: async (data: {
+    name: string;
+    phone: string;
+    password: string;
+    username?: string;
+    houseNumber?: string;
+    streetNumber?: string;
+    landmark?: string;
+    city?: string;
+    pincode?: string;
+    address?: string;
+  }): Promise<{ success: boolean; user?: UserProfile; token?: string; signedToken?: string; error?: string } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/register-customer`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(data)
+      });
+      const resData = await res.json();
+      if (!res.ok) {
+        return { success: false, error: resData.error || 'Failed to complete registration.' };
+      }
+      if (resData.token) localStorage.setItem('nso_auth_token', resData.token);
+      else if (resData.signedToken) localStorage.setItem('nso_auth_token', resData.signedToken);
+      const clean = data.phone.replace(/\D/g, '').slice(-10);
+      localStorage.setItem('nso_user_phone', clean);
+      return resData;
+    } catch {
+      return null;
+    }
+  },
+
+  loginWithPassword: async (data: {
+    identifier: string;
+    password: string;
+  }): Promise<{ success: boolean; user?: UserProfile; token?: string; signedToken?: string; error?: string } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/login-password`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(data)
+      });
+      const resData = await res.json();
+      if (!res.ok) {
+        return { success: false, error: resData.error || 'Invalid credentials.' };
+      }
+      if (resData.token) localStorage.setItem('nso_auth_token', resData.token);
+      else if (resData.signedToken) localStorage.setItem('nso_auth_token', resData.signedToken);
+      if (resData.user?.phone) {
+        const clean = resData.user.phone.replace(/\D/g, '').slice(-10);
+        localStorage.setItem('nso_user_phone', clean);
+        if (clean === '8310421121') localStorage.setItem('nso_admin_phone', clean);
+      }
+      return resData;
+    } catch {
+      return null;
+    }
+  },
+
+  setPassword: async (password: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/set-password`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ password })
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  switchRole: async (role: string): Promise<{ success: boolean; user?: UserProfile; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/switch-role`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ role })
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  deleteUser: async (userId: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/users/${userId}`, {
+        ...defaultOpts,
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  getAdminProducts: async (): Promise<Product[] | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/products`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  getAdminServices: async (): Promise<Service[] | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/services`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  resubmitSellerApplication: async (id: string, data: any): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/applications/seller/${id}/resubmit`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(data)
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  resubmitProviderApplication: async (id: string, data: any): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/applications/provider/${id}/resubmit`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(data)
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  confirmOrderReceipt: async (orderId: string): Promise<{ success: boolean; orderStatus?: string; paymentStatus?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/orders/${orderId}/confirm-receipt`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  clearOrderPayment: async (orderId: string): Promise<{ success: boolean; orderStatus?: string; paymentStatus?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/orders/${orderId}/clear-payment`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders()
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  clearBookingPayment: async (bookingId: string): Promise<{ success: boolean; status?: string; paymentStatus?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/clear-payment`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders()
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  createSpecialRequest: async (data: {
+    title: string;
+    category?: string;
+    description: string;
+    budget?: number;
+    timeline?: string;
+  }): Promise<{ success: boolean; ticketNumber?: string; error?: string } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/special-requests`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(data)
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  getMessages: async (otherUserId?: string): Promise<any[]> => {
+    try {
+      const url = otherUserId ? `${API_BASE}/messages?otherUserId=${encodeURIComponent(otherUserId)}` : `${API_BASE}/messages`;
+      const res = await fetch(url, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
+    }
+  },
+
+  sendMessage: async (data: { receiverId: string; receiverName?: string; text: string }): Promise<any> => {
+    try {
+      const res = await fetch(`${API_BASE}/messages`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(data)
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  startCall: async (data: { receiverId: string; receiverName?: string; callType?: string }): Promise<any> => {
+    try {
+      const res = await fetch(`${API_BASE}/calls/start`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(data)
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  endCall: async (callId: string, durationSeconds: number, status?: string): Promise<any> => {
+    try {
+      const res = await fetch(`${API_BASE}/calls/${callId}/end`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ durationSeconds, status })
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  getCallLogs: async (): Promise<any[]> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/calls`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
+    }
+  },
+
+  getAdminChats: async (): Promise<any[]> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/chats`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
+    }
   }
 };

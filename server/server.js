@@ -410,6 +410,70 @@ try { db.exec("ALTER TABLE bookings ADD COLUMN cancellation_details_json TEXT;")
 try { db.exec("ALTER TABLE bookings ADD COLUMN completed_at TEXT;"); } catch (_) {}
 try { db.exec("ALTER TABLE bookings ADD COLUMN confirmed_completed_at TEXT;"); } catch (_) {}
 
+// Schema additions for password auth, call logging, messaging, and two-step completion
+try { db.exec("ALTER TABLE users ADD COLUMN password_hash TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE users ADD COLUMN username TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE users ADD COLUMN account_id TEXT;"); } catch (_) {}
+
+try { db.exec("ALTER TABLE provider_applications ADD COLUMN resume_url TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE provider_applications ADD COLUMN resume_text TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE provider_applications ADD COLUMN previous_work_samples_json TEXT DEFAULT '[]';"); } catch (_) {}
+
+try { db.exec("ALTER TABLE bookings ADD COLUMN admin_payment_cleared INTEGER DEFAULT 0;"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN customer_confirmed INTEGER DEFAULT 0;"); } catch (_) {}
+
+try { db.exec("ALTER TABLE orders ADD COLUMN admin_payment_cleared INTEGER DEFAULT 0;"); } catch (_) {}
+try { db.exec("ALTER TABLE orders ADD COLUMN customer_confirmed INTEGER DEFAULT 0;"); } catch (_) {}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id TEXT PRIMARY KEY,
+    sender_id TEXT NOT NULL,
+    receiver_id TEXT NOT NULL,
+    sender_name TEXT,
+    receiver_name TEXT,
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS call_logs (
+    id TEXT PRIMARY KEY,
+    caller_id TEXT NOT NULL,
+    caller_name TEXT,
+    receiver_id TEXT NOT NULL,
+    receiver_name TEXT,
+    call_type TEXT DEFAULT 'voice',
+    status TEXT NOT NULL,
+    duration_seconds INTEGER DEFAULT 0,
+    started_at TEXT NOT NULL,
+    ended_at TEXT
+  );
+`);
+
+// Clean out fake, sample, and demo pilot products and services from database
+try {
+  const pilotProductIds = [
+    'prod_boat_earbuds',
+    'prod_smartwatch_pulse',
+    'prod_wildcraft_bag',
+    'prod_a2_milk',
+    'prod_alphonso_mango',
+    'prod_philips_mixer'
+  ];
+  for (const pid of pilotProductIds) {
+    db.prepare('DELETE FROM products WHERE id = ?').run(pid);
+  }
+  const pilotServiceIds = [
+    'serv_electrician_inspection',
+    'serv_plumbing_doorstep',
+    'serv_deep_cleaning_home',
+    'serv_ac_jet_service'
+  ];
+  for (const sid of pilotServiceIds) {
+    db.prepare('DELETE FROM services WHERE id = ?').run(sid);
+  }
+} catch (_) {}
+
 // Seed candidate categories if not present
 const seedCandidateCategories = () => {
   const countRow = db.prepare('SELECT count(*) as count FROM service_categories').get();
@@ -525,6 +589,20 @@ function verifyCookie(signed) {
     return val;
   }
   return null;
+}
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  if (!stored || !stored.includes(':')) return false;
+  const [salt, key] = stored.split(':');
+  const keyBuffer = Buffer.from(key, 'hex');
+  const derivedKey = crypto.scryptSync(password, salt, 64);
+  return crypto.timingSafeEqual(keyBuffer, derivedKey);
 }
 
 function parseCookies(req) {
@@ -726,11 +804,17 @@ function formatUserResponse(u) {
     }
   } catch (_) {}
 
+  const cleanPhone = u.phone ? String(u.phone).replace(/\D/g, '').slice(-10) : '';
+  const resolvedAccountId = u.account_id || (cleanPhone ? `NSO-CUST-${cleanPhone.slice(-4)}` : `NSO-USER-${u.id.slice(-4)}`);
+
   return {
     id: u.id,
     name: u.name,
     email: u.email || `${u.phone}@nso.in`,
     phone: u.phone.startsWith('+91') ? u.phone : `+91 ${u.phone}`,
+    accountId: resolvedAccountId,
+    username: u.username || cleanPhone || u.id,
+    hasPassword: Boolean(u.password_hash),
     avatar: u.avatar,
     activeRole: u.active_role,
     authorizedRoles,
@@ -746,27 +830,33 @@ function formatUserResponse(u) {
     address: u.address,
     isLoggedIn: true,
     providerApplication: providerApp ? {
+      id: providerApp.id,
       tradeCategory: providerApp.trade_category,
       experienceYears: providerApp.experience_years,
       hourlyRate: providerApp.hourly_rate,
       serviceArea: providerApp.service_area,
+      resumeUrl: providerApp.resume_url,
       resumeText: providerApp.resume_text,
       previousWork: providerApp.previous_work,
+      previousWorkSamples: JSON.parse(providerApp.previous_work_samples_json || '[]'),
       idProofType: providerApp.id_proof_type,
       idProofNumber: providerApp.id_proof_number,
       profilePhoto: providerApp.profile_photo,
       idDocumentPhoto: providerApp.id_document_photo,
       issuedProviderId: providerApp.issued_provider_id,
       status: providerApp.status,
+      adminNotes: providerApp.admin_notes,
       submittedAt: providerApp.submitted_at
     } : undefined,
     sellerApplication: sellerApp ? {
+      id: sellerApp.id,
       storeName: sellerApp.store_name,
       businessType: sellerApp.business_type,
       gstin: sellerApp.gstin,
       address: sellerApp.address,
       productCategory: sellerApp.product_category,
       status: sellerApp.status,
+      adminNotes: sellerApp.admin_notes,
       submittedAt: sellerApp.submitted_at
     } : undefined
   };
@@ -997,6 +1087,242 @@ app.post('/api/auth/logout', requireAuth, (req, res) => {
   res.json({ success: true, message: 'Logged out successfully.' });
 });
 
+// Customer Full Registration with Phone OTP verification & Password Creation
+app.post('/api/auth/register-customer', async (req, res) => {
+  const { name, phone, password, username, houseNumber, streetNumber, landmark, city, pincode, address } = req.body || {};
+  const cleanPhone = String(phone || '').replace(/\D/g, '').slice(-10);
+  if (cleanPhone.length !== 10) {
+    return res.status(400).json({ error: 'Please enter a valid 10-digit phone number.' });
+  }
+  if (!name || !name.trim()) {
+    return res.status(400).json({ error: 'Name is required.' });
+  }
+  if (!password || password.length < 4) {
+    return res.status(400).json({ error: 'Password must be at least 4 characters long.' });
+  }
+
+  const existingByPhone = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
+  if (existingByPhone && existingByPhone.password_hash) {
+    return res.status(400).json({ error: 'An account already exists for this phone number. Please sign in with your password.' });
+  }
+
+  const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
+  const fullAddress = address || [houseNumber, streetNumber, landmark, city || 'Bengaluru', pincode || '560001'].filter(Boolean).join(', ');
+  const pHash = hashPassword(password);
+  const accountId = `NSO-CUST-${cleanPhone.slice(-4)}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+  const nowIso = new Date().toISOString();
+
+  let user;
+  if (existingByPhone) {
+    db.prepare(`
+      UPDATE users SET
+        name = ?,
+        username = COALESCE(?, username, ?),
+        account_id = COALESCE(account_id, ?),
+        password_hash = ?,
+        house_number = ?,
+        street_number = ?,
+        landmark = ?,
+        city = ?,
+        pincode = ?,
+        address = ?,
+        approval_status = 'approved',
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      name.trim(),
+      username ? username.trim() : null,
+      cleanPhone,
+      accountId,
+      pHash,
+      houseNumber || '',
+      streetNumber || '',
+      landmark || '',
+      city || 'Bengaluru',
+      pincode || '560001',
+      fullAddress,
+      nowIso,
+      existingByPhone.id
+    );
+    user = db.prepare('SELECT * FROM users WHERE id = ?').get(existingByPhone.id);
+  } else {
+    const newId = `usr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+    db.prepare(`
+      INSERT INTO users (
+        id, phone, name, username, account_id, password_hash, email, avatar, active_role,
+        is_admin, approval_status, seller_status, provider_status,
+        house_number, street_number, landmark, city, pincode, address, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      newId,
+      cleanPhone,
+      name.trim(),
+      username ? username.trim() : cleanPhone,
+      accountId,
+      pHash,
+      `${cleanPhone}@nso.in`,
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      isOwner ? 'admin' : 'customer',
+      isOwner ? 1 : 0,
+      isOwner ? 'approved' : 'none',
+      isOwner ? 'approved' : 'none',
+      houseNumber || '',
+      streetNumber || '',
+      landmark || '',
+      city || 'Bengaluru',
+      pincode || '560001',
+      fullAddress,
+      nowIso,
+      nowIso
+    );
+    user = db.prepare('SELECT * FROM users WHERE id = ?').get(newId);
+  }
+
+  // Create session
+  const sessionId = crypto.randomUUID();
+  const sessionExpiresAt = Date.now() + SESSION_DURATION_MS;
+  const clientIp = req.ip || req.connection.remoteAddress;
+
+  db.prepare('UPDATE sessions SET revoked = 1 WHERE user_id = ?').run(user.id);
+  db.prepare(`
+    INSERT INTO sessions (id, user_id, phone, is_admin, created_at, expires_at, revoked, ip_address)
+    VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+  `).run(sessionId, user.id, cleanPhone, user.is_admin, Date.now(), sessionExpiresAt, clientIp);
+
+  attachSessionCookie(res, sessionId);
+  logAudit(user.id, user.name, user.active_role, 'USER_REGISTERED', `Customer registered with phone +91 ${cleanPhone} (Account ID: ${user.account_id || accountId})`, clientIp);
+
+  res.json({
+    success: true,
+    token: sessionId,
+    signedToken: signCookie(sessionId),
+    user: formatUserResponse(user)
+  });
+});
+
+// Customer Sign In with Account ID / Username / Phone + Password
+app.post('/api/auth/login-password', (req, res) => {
+  const { identifier, password } = req.body || {};
+  if (!identifier || !password) {
+    return res.status(400).json({ error: 'Please enter your Account ID, Username, or Phone number, along with your password.' });
+  }
+
+  const cleanIdent = String(identifier).trim();
+  const cleanPhone = cleanIdent.replace(/\D/g, '').slice(-10);
+
+  let user = null;
+  if (cleanPhone.length === 10) {
+    user = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
+  }
+  if (!user) {
+    user = db.prepare('SELECT * FROM users WHERE LOWER(account_id) = LOWER(?) OR LOWER(username) = LOWER(?)').get(cleanIdent, cleanIdent);
+  }
+
+  if (!user) {
+    return res.status(404).json({ error: 'Account not found. Please check your credentials or register.' });
+  }
+
+  if (!user.password_hash) {
+    return res.status(400).json({ error: 'No password has been set for this account yet. Please log in using OTP to set your password.' });
+  }
+
+  if (!verifyPassword(password, user.password_hash)) {
+    return res.status(401).json({ error: 'Incorrect password. Please try again.' });
+  }
+
+  // Invalidate previous sessions
+  db.prepare('UPDATE sessions SET revoked = 1 WHERE user_id = ?').run(user.id);
+
+  const sessionId = crypto.randomUUID();
+  const sessionExpiresAt = Date.now() + SESSION_DURATION_MS;
+  const clientIp = req.ip || req.connection.remoteAddress;
+
+  db.prepare(`
+    INSERT INTO sessions (id, user_id, phone, is_admin, created_at, expires_at, revoked, ip_address)
+    VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+  `).run(sessionId, user.id, user.phone, user.is_admin, Date.now(), sessionExpiresAt, clientIp);
+
+  attachSessionCookie(res, sessionId);
+  logAudit(user.id, user.name, user.active_role, 'USER_LOGIN_PASSWORD', `User signed in with credentials (${user.account_id || cleanIdent})`, clientIp);
+
+  res.json({
+    success: true,
+    token: sessionId,
+    signedToken: signCookie(sessionId),
+    user: formatUserResponse(user)
+  });
+});
+
+// Set / Update Password
+app.post('/api/auth/set-password', requireAuth, (req, res) => {
+  const { password } = req.body || {};
+  if (!password || password.length < 4) {
+    return res.status(400).json({ error: 'Password must be at least 4 characters.' });
+  }
+  const pHash = hashPassword(password);
+  const nowIso = new Date().toISOString();
+  db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(pHash, nowIso, req.session.userId);
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'PASSWORD_SET', 'User updated account password', req.ip);
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+  res.json({ success: true, message: 'Password updated successfully.', user: formatUserResponse(user) });
+});
+
+// Role switching
+app.post('/api/auth/switch-role', requireAuth, (req, res) => {
+  const { role } = req.body || {};
+  const validRoles = ['customer', 'seller', 'provider', 'admin'];
+  if (!validRoles.includes(role)) {
+    return res.status(400).json({ error: 'Invalid role requested.' });
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  if (role === 'seller' && user.seller_status !== 'approved') {
+    return res.status(403).json({ error: 'Seller account is not approved by admin.' });
+  }
+  if (role === 'provider' && user.provider_status !== 'approved') {
+    return res.status(403).json({ error: 'Service provider account is not approved by admin.' });
+  }
+  if (role === 'admin' && !user.is_admin) {
+    return res.status(403).json({ error: 'Admin access denied.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  db.prepare('UPDATE users SET active_role = ?, updated_at = ? WHERE id = ?').run(role, nowIso, user.id);
+  logAudit(user.id, user.name, role, 'ROLE_SWITCHED', `Switched active role from ${user.active_role} to ${role}`, req.ip);
+
+  const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+  res.json({ success: true, activeRole: role, user: formatUserResponse(updatedUser) });
+});
+
+// Admin Remove User (Customer, Seller, or Provider)
+app.delete('/api/users/:id', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  if (user.phone === ADMIN_PHONE || user.phone === '8310421121') {
+    return res.status(400).json({ error: 'Cannot remove primary owner admin account.' });
+  }
+
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);
+  db.prepare('DELETE FROM seller_applications WHERE user_id = ?').run(id);
+  db.prepare('DELETE FROM provider_applications WHERE user_id = ?').run(id);
+  db.prepare('DELETE FROM products WHERE seller_id = ?').run(id);
+  db.prepare('DELETE FROM services WHERE provider_id = ?').run(id);
+  db.prepare('DELETE FROM users WHERE id = ?').run(id);
+
+  logAudit(req.session.userId, req.session.name, 'admin', 'USER_REMOVED', `Admin removed user ${user.name} (${user.phone}, role: ${user.active_role})`, req.ip);
+  res.json({ success: true, message: `User ${user.name} removed successfully.` });
+});
+
+// Admin Get All Users
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+  const users = db.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
+  res.json(users.map(formatUserResponse));
+});
+
 // Current User Profile & Session Check
 app.get('/api/auth/me', (req, res) => {
   let userId = req.session?.userId;
@@ -1196,7 +1522,7 @@ app.post('/api/applications/provider', (req, res) => {
 
   const {
     tradeCategory, experienceYears, hourlyRate, serviceArea,
-    resumeText, previousWork, idProofType, idProofNumber,
+    resumeUrl, resumeText, previousWork, previousWorkSamples, idProofType, idProofNumber,
     profilePhoto, idDocumentPhoto
   } = req.body || {};
 
@@ -1210,9 +1536,9 @@ app.post('/api/applications/provider', (req, res) => {
   db.prepare(`
     INSERT INTO provider_applications (
       id, user_id, applicant_name, applicant_phone, trade_category, experience_years,
-      hourly_rate, service_area, resume_text, previous_work, id_proof_type, id_proof_number,
-      profile_photo, id_document_photo, status, submitted_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+      hourly_rate, service_area, resume_url, resume_text, previous_work, previous_work_samples_json,
+      id_proof_type, id_proof_number, profile_photo, id_document_photo, status, submitted_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
   `).run(
     id,
     applicant.userId,
@@ -1222,9 +1548,11 @@ app.post('/api/applications/provider', (req, res) => {
     Number(experienceYears) || 0,
     Number(hourlyRate) || 0,
     serviceArea || 'Bengaluru',
+    resumeUrl || '',
     resumeText || '',
     previousWork || '',
-    idProofType || 'Aadhaar',
+    JSON.stringify(previousWorkSamples || []),
+    idProofType || 'Aadhaar Card',
     idProofNumber || '',
     profilePhoto || null,
     idDocumentPhoto || null,
@@ -1232,9 +1560,100 @@ app.post('/api/applications/provider', (req, res) => {
   );
 
   db.prepare("UPDATE users SET provider_status = 'pending', updated_at = ? WHERE id = ?").run(nowIso, applicant.userId);
-  logAudit(applicant.userId, applicant.name, 'customer', 'PROVIDER_APPLICATION_SUBMITTED', `Trade applied: ${tradeCategory}`, req.ip);
+  logAudit(applicant.userId, applicant.name, 'customer', 'PROVIDER_APPLICATION_SUBMITTED', `Trade applied: ${tradeCategory} with resume and work samples`, req.ip);
 
   res.status(201).json({ success: true, applicationId: id, message: 'Provider application submitted for owner review.' });
+});
+
+// Resubmit Provider Application after Rejection
+app.post('/api/applications/provider/:id/resubmit', (req, res) => {
+  const { id } = req.params;
+  const appRow = db.prepare('SELECT * FROM provider_applications WHERE id = ?').get(id);
+  if (!appRow) return res.status(404).json({ error: 'Provider application not found.' });
+
+  const {
+    tradeCategory, experienceYears, hourlyRate, serviceArea,
+    resumeUrl, resumeText, previousWork, previousWorkSamples, idProofType, idProofNumber,
+    profilePhoto, idDocumentPhoto
+  } = req.body || {};
+
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    UPDATE provider_applications SET
+      trade_category = COALESCE(?, trade_category),
+      experience_years = COALESCE(?, experience_years),
+      hourly_rate = COALESCE(?, hourly_rate),
+      service_area = COALESCE(?, service_area),
+      resume_url = COALESCE(?, resume_url),
+      resume_text = COALESCE(?, resume_text),
+      previous_work = COALESCE(?, previous_work),
+      previous_work_samples_json = COALESCE(?, previous_work_samples_json),
+      id_proof_type = COALESCE(?, id_proof_type),
+      id_proof_number = COALESCE(?, id_proof_number),
+      profile_photo = COALESCE(?, profile_photo),
+      id_document_photo = COALESCE(?, id_document_photo),
+      status = 'pending',
+      admin_notes = '',
+      submitted_at = ?
+    WHERE id = ?
+  `).run(
+    tradeCategory ? tradeCategory.trim() : null,
+    experienceYears !== undefined ? Number(experienceYears) : null,
+    hourlyRate !== undefined ? Number(hourlyRate) : null,
+    serviceArea || null,
+    resumeUrl || null,
+    resumeText || null,
+    previousWork || null,
+    previousWorkSamples ? JSON.stringify(previousWorkSamples) : null,
+    idProofType || null,
+    idProofNumber || null,
+    profilePhoto || null,
+    idDocumentPhoto || null,
+    nowIso,
+    id
+  );
+
+  db.prepare("UPDATE users SET provider_status = 'pending', updated_at = ? WHERE id = ?").run(nowIso, appRow.user_id);
+  logAudit(appRow.user_id, appRow.applicant_name, 'provider', 'PROVIDER_APPLICATION_RESUBMITTED', `Application ${id} resubmitted with updated materials`, req.ip);
+
+  res.json({ success: true, message: 'Provider application updated and resubmitted for admin review.' });
+});
+
+// Resubmit Seller Application after Rejection
+app.post('/api/applications/seller/:id/resubmit', (req, res) => {
+  const { id } = req.params;
+  const appRow = db.prepare('SELECT * FROM seller_applications WHERE id = ?').get(id);
+  if (!appRow) return res.status(404).json({ error: 'Seller application not found.' });
+
+  const { storeName, businessType, gstin, address, productCategory } = req.body || {};
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    UPDATE seller_applications SET
+      store_name = COALESCE(?, store_name),
+      business_type = COALESCE(?, business_type),
+      gstin = COALESCE(?, gstin),
+      address = COALESCE(?, address),
+      product_category = COALESCE(?, product_category),
+      status = 'pending',
+      admin_notes = '',
+      submitted_at = ?
+    WHERE id = ?
+  `).run(
+    storeName ? storeName.trim() : null,
+    businessType ? businessType.trim() : null,
+    gstin ? gstin.trim() : null,
+    address ? address.trim() : null,
+    productCategory || null,
+    nowIso,
+    id
+  );
+
+  db.prepare("UPDATE users SET seller_status = 'pending', updated_at = ? WHERE id = ?").run(nowIso, appRow.user_id);
+  logAudit(appRow.user_id, appRow.applicant_name, 'seller', 'SELLER_APPLICATION_RESUBMITTED', `Application ${id} resubmitted for store ${storeName || appRow.store_name}`, req.ip);
+
+  res.json({ success: true, message: 'Seller application updated and resubmitted for admin review.' });
 });
 
 // Get Applications (Owner only)
@@ -1269,8 +1688,10 @@ app.get('/api/applications', requireAdmin, (req, res) => {
       experienceYears: a.experience_years,
       hourlyRate: a.hourly_rate,
       serviceArea: a.service_area,
+      resumeUrl: a.resume_url,
       resumeText: a.resume_text,
       previousWork: a.previous_work,
+      previousWorkSamples: JSON.parse(a.previous_work_samples_json || '[]'),
       idProofType: a.id_proof_type,
       idProofNumber: a.id_proof_number,
       profilePhoto: a.profile_photo,
@@ -1313,6 +1734,34 @@ app.patch('/api/applications/:id/approve', requireAdmin, (req, res) => {
   }
 
   res.status(404).json({ error: 'Application not found.' });
+});
+
+// Admin Get All Products (including pending_approval)
+app.get('/api/admin/products', requireAdmin, (req, res) => {
+  const rows = db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
+  const products = rows.map((p) => ({
+    id: p.id,
+    title: p.title,
+    category: p.category,
+    price: p.price,
+    originalPrice: p.original_price,
+    discountPercentage: p.discount_percentage,
+    image: p.image,
+    rating: 5.0,
+    reviewsCount: 0,
+    stock: p.stock,
+    sellerId: p.seller_id,
+    sellerName: p.seller_name,
+    deliveryEstimateDays: p.delivery_estimate_days,
+    regionalDeliveryFee: p.regional_delivery_fee,
+    variants: JSON.parse(p.variants_json || '[]'),
+    description: p.description,
+    highlights: JSON.parse(p.highlights_json || '[]'),
+    approvalStatus: p.approval_status,
+    adminNotes: p.admin_notes,
+    createdAt: p.created_at
+  }));
+  res.json(products);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1765,6 +2214,39 @@ app.patch('/api/services/:id/approve', requireAdmin, (req, res) => {
   res.json({ id, approvalStatus: status });
 });
 
+// Admin Get All Services (including pending_approval)
+app.get('/api/admin/services', requireAdmin, (req, res) => {
+  const rows = db.prepare('SELECT * FROM services ORDER BY created_at DESC').all();
+  const services = rows.map((s) => ({
+    id: s.id,
+    title: s.title,
+    category: s.category,
+    price: s.price,
+    unit: s.unit,
+    pricingType: s.pricing_type || 'fixed',
+    rateApprovalStatus: s.rate_approval_status || 'approved',
+    hourlyRate: s.hourly_rate || (s.pricing_type === 'hourly' ? s.price : 0),
+    meteredRate: s.metered_rate || (s.pricing_type === 'metered' ? s.price : 0),
+    estimatedDurationHours: s.estimated_duration_hours || 1,
+    requiresQuotation: Boolean(s.requires_quotation || s.pricing_type === 'quotation_required'),
+    subServiceName: s.sub_service_name,
+    categoryId: s.category_id,
+    serviceArea: s.service_area,
+    providerId: s.provider_id,
+    providerName: s.provider_name,
+    providerRating: 4.9,
+    providerJobsCompleted: 50,
+    modes: JSON.parse(s.modes_json || '["home_visit"]'),
+    description: s.description,
+    cancellationPolicy: s.cancellation_policy,
+    availableSlots: JSON.parse(s.available_slots_json || '[]'),
+    approvalStatus: s.approval_status,
+    adminNotes: s.admin_notes,
+    createdAt: s.created_at
+  }));
+  res.json(services);
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 12. ORDERS & ATOMIC INVENTORY FULFILLMENT
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1805,12 +2287,75 @@ app.get('/api/orders', requireAuth, (req, res) => {
     total: o.total,
     orderStatus: o.order_status,
     paymentStatus: o.payment_status,
+    adminPaymentCleared: Boolean(o.admin_payment_cleared),
+    customerConfirmed: Boolean(o.customer_confirmed),
     paymentMethod: o.payment_method,
     deliveryAddress: o.delivery_address,
     createdAt: o.created_at
   }));
 
   res.json(orders);
+});
+
+// Customer: Confirms delivery receipt of order (Step 1 of two-step completion rule)
+app.post('/api/orders/:id/confirm-receipt', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+  if (order.customer_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only the ordering customer can confirm delivery receipt.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  db.prepare(`
+    UPDATE orders SET
+      customer_confirmed = 1,
+      order_status = 'delivered_pending_payment',
+      payment_status = 'pending_admin_clearance',
+      updated_at = ?
+    WHERE id = ?
+  `).run(nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, 'customer', 'ORDER_RECEIPT_CONFIRMED', `Customer confirmed receipt of Order ${order.order_number}. Awaiting Admin Payment Clearance.`, req.ip);
+
+  res.json({
+    success: true,
+    orderStatus: 'delivered_pending_payment',
+    paymentStatus: 'pending_admin_clearance',
+    customerConfirmed: true,
+    adminPaymentCleared: false,
+    message: 'Receipt confirmed! Order is pending admin payment clearance before full completion.'
+  });
+});
+
+// Admin: Clears payment for order (Step 2 of two-step completion rule)
+app.patch('/api/orders/:id/clear-payment', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+  const nowIso = new Date().toISOString();
+  db.prepare(`
+    UPDATE orders SET
+      order_status = 'completed',
+      payment_status = 'cleared',
+      admin_payment_cleared = 1,
+      updated_at = ?
+    WHERE id = ?
+  `).run(nowIso, id);
+
+  recordProductCommission(order.id, order.total, JSON.parse(order.items_json));
+
+  logAudit(req.session.userId, req.session.name, 'admin', 'ORDER_PAYMENT_CLEARED', `Admin verified and cleared payment for Order ${order.order_number} (₹${order.total}). Order marked COMPLETED.`, req.ip);
+
+  res.json({
+    success: true,
+    orderStatus: 'completed',
+    paymentStatus: 'cleared',
+    adminPaymentCleared: true,
+    message: 'Payment verified and cleared. Order marked complete.'
+  });
 });
 
 // Place Order: Atomic transaction, server-side price calculation, inventory decrement
@@ -2116,6 +2661,8 @@ app.get('/api/bookings', requireAuth, (req, res) => {
       paymentMethod: b.payment_method || 'online',
       status: b.status,
       paymentStatus: b.payment_status,
+      adminPaymentCleared: Boolean(b.admin_payment_cleared),
+      customerConfirmed: Boolean(b.customer_confirmed),
       cancellationTerms: b.cancellation_terms,
       isLiveTrackingActive: Boolean(b.is_live_tracking_active),
       providerLat: b.provider_lat,
@@ -2598,7 +3145,9 @@ app.post('/api/bookings/:id/complete', requireAuth, (req, res) => {
   res.json({ success: true, status: 'completed_pending_review', message: 'Work marked complete. Customer notified to review and confirm.' });
 });
 
-// Customer: Confirms completion and completes payment
+// Customer: Confirms completion (Step 1 of two-step completion rule)
+// NOTE: Customer confirmation ALONE does NOT mark booking complete or clear payment.
+// Booking stays pending_admin_clearance until Admin verifies and clears payment.
 app.post('/api/bookings/:id/confirm-completion', requireAuth, (req, res) => {
   const { id } = req.params;
   const { rating, reviewComment } = req.body || {};
@@ -2613,15 +3162,54 @@ app.post('/api/bookings/:id/confirm-completion', requireAuth, (req, res) => {
   const nowIso = new Date().toISOString();
   db.prepare(`
     UPDATE bookings
-    SET status = 'completed', payment_status = 'success', advance_payment_status = 'paid', confirmed_completed_at = ?, updated_at = ?
+    SET status = 'completed_pending_payment',
+        payment_status = 'pending_admin_clearance',
+        customer_confirmed = 1,
+        confirmed_completed_at = ?,
+        updated_at = ?
     WHERE id = ?
   `).run(nowIso, nowIso, id);
 
+  logAudit(req.session.userId, req.session.name, 'customer', 'SERVICE_COMPLETION_CONFIRMED', `Customer confirmed completion for Booking ${booking.booking_number}. Awaiting Admin Payment Clearance.`, req.ip);
+
+  res.json({
+    success: true,
+    status: 'completed_pending_payment',
+    paymentStatus: 'pending_admin_clearance',
+    customerConfirmed: true,
+    adminPaymentCleared: false,
+    message: 'Service completion confirmed! Booking is pending admin payment clearance before final completion.'
+  });
+});
+
+// Admin: Clears payment for booking (Step 2 of two-step completion rule)
+app.patch('/api/bookings/:id/clear-payment', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  const nowIso = new Date().toISOString();
+  db.prepare(`
+    UPDATE bookings
+    SET status = 'completed',
+        payment_status = 'cleared',
+        admin_payment_cleared = 1,
+        advance_payment_status = 'paid',
+        updated_at = ?
+    WHERE id = ?
+  `).run(nowIso, id);
+
   recordServiceCommission(booking.id, booking.total_price, booking.provider_id);
 
-  logAudit(req.session.userId, req.session.name, 'customer', 'SERVICE_COMPLETION_CONFIRMED', `Customer confirmed completion for Booking ${booking.booking_number}. Payment settled ₹${booking.total_price}.`, req.ip);
+  logAudit(req.session.userId, req.session.name, 'admin', 'BOOKING_PAYMENT_CLEARED', `Admin verified and cleared payment for Booking ${booking.booking_number} (₹${booking.total_price}). Booking marked COMPLETED.`, req.ip);
 
-  res.json({ success: true, status: 'completed', paymentStatus: 'success', message: 'Service confirmed complete! Thank you for using NSO.' });
+  res.json({
+    success: true,
+    status: 'completed',
+    paymentStatus: 'cleared',
+    adminPaymentCleared: true,
+    message: 'Payment verified and cleared. Booking marked complete.'
+  });
 });
 
 // Customer: Reports a problem — Notifies admin; KEEP JOB OPEN while under review
@@ -3524,6 +4112,146 @@ app.post('/api/special-requests', requireAuth, (req, res) => {
   );
 
   res.status(201).json({ id, ticketNumber, status: 'submitted' });
+});
+
+// ── IN-APP MESSAGING ─────────────────────────────────────────────────────────
+
+app.get('/api/messages', requireAuth, (req, res) => {
+  const currentUserId = req.session.userId;
+  const otherUserId = req.query.otherUserId;
+
+  let rows = [];
+  if (otherUserId) {
+    rows = db.prepare(`
+      SELECT * FROM chat_messages
+      WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)
+      ORDER BY created_at ASC
+    `).all(currentUserId, otherUserId, otherUserId, currentUserId);
+  } else if (req.session.isAdmin) {
+    rows = db.prepare('SELECT * FROM chat_messages ORDER BY created_at DESC LIMIT 200').all();
+  } else {
+    rows = db.prepare(`
+      SELECT * FROM chat_messages
+      WHERE sender_id = ? OR receiver_id = ?
+      ORDER BY created_at ASC
+    `).all(currentUserId, currentUserId);
+  }
+
+  res.json(rows.map((m) => ({
+    id: m.id,
+    senderId: m.sender_id,
+    receiverId: m.receiver_id,
+    senderName: m.sender_name,
+    receiverName: m.receiver_name,
+    text: m.text,
+    createdAt: m.created_at,
+    isSelf: m.sender_id === currentUserId
+  })));
+});
+
+app.post('/api/messages', requireAuth, (req, res) => {
+  const { receiverId, receiverName, text } = req.body || {};
+  if (!receiverId || !text || !text.trim()) {
+    return res.status(400).json({ error: 'Receiver ID and message text are required.' });
+  }
+
+  const id = `msg_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO chat_messages (id, sender_id, receiver_id, sender_name, receiver_name, text, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    req.session.userId,
+    receiverId,
+    req.session.name,
+    receiverName || 'Participant',
+    text.trim(),
+    nowIso
+  );
+
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'CHAT_MESSAGE_SENT', `Sent message to ${receiverName || receiverId}`, req.ip);
+
+  res.status(201).json({
+    id,
+    senderId: req.session.userId,
+    receiverId,
+    senderName: req.session.name,
+    receiverName,
+    text: text.trim(),
+    createdAt: nowIso,
+    isSelf: true
+  });
+});
+
+app.get('/api/admin/chats', requireAdmin, (req, res) => {
+  const rows = db.prepare('SELECT * FROM chat_messages ORDER BY created_at DESC LIMIT 300').all();
+  res.json(rows);
+});
+
+// ── IN-APP VOICE CALLING & LOGGING ───────────────────────────────────────────
+
+app.post('/api/calls/start', requireAuth, (req, res) => {
+  const { receiverId, receiverName, callType } = req.body || {};
+  if (!receiverId) {
+    return res.status(400).json({ error: 'Receiver ID is required.' });
+  }
+
+  const id = `call_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO call_logs (id, caller_id, caller_name, receiver_id, receiver_name, call_type, status, duration_seconds, started_at, ended_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'active', 0, ?, NULL)
+  `).run(
+    id,
+    req.session.userId,
+    req.session.name,
+    receiverId,
+    receiverName || 'Recipient',
+    callType || 'voice',
+    nowIso
+  );
+
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'CALL_INITIATED', `Voice call initiated to ${receiverName || receiverId}`, req.ip);
+
+  res.status(201).json({
+    id,
+    callerId: req.session.userId,
+    callerName: req.session.name,
+    receiverId,
+    receiverName,
+    status: 'active',
+    startedAt: nowIso
+  });
+});
+
+app.post('/api/calls/:id/end', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { durationSeconds, status } = req.body || {};
+
+  const call = db.prepare('SELECT * FROM call_logs WHERE id = ?').get(id);
+  if (!call) return res.status(404).json({ error: 'Call log not found.' });
+
+  const nowIso = new Date().toISOString();
+  const dur = Math.max(0, Number(durationSeconds) || 0);
+  const endStatus = status || (dur > 0 ? 'completed' : 'missed');
+
+  db.prepare(`
+    UPDATE call_logs
+    SET status = ?, duration_seconds = ?, ended_at = ?
+    WHERE id = ?
+  `).run(endStatus, dur, nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'CALL_ENDED', `Voice call ${id} ended (${endStatus}, ${dur}s)`, req.ip);
+
+  res.json({ success: true, id, status: endStatus, durationSeconds: dur, endedAt: nowIso });
+});
+
+app.get('/api/admin/calls', requireAdmin, (req, res) => {
+  const rows = db.prepare('SELECT * FROM call_logs ORDER BY started_at DESC LIMIT 300').all();
+  res.json(rows);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -5,6 +5,9 @@ export interface UserProfile {
   name: string;
   email: string;
   phone: string;
+  accountId?: string;
+  username?: string;
+  hasPassword?: boolean;
   avatar?: string;
   activeRole: Role;
   authorizedRoles: Role[];
@@ -16,27 +19,35 @@ export interface UserProfile {
   pincode?: string;
   sellerStatus: 'none' | 'pending' | 'approved' | 'rejected';
   sellerApplication?: {
+    id?: string;
     storeName: string;
     businessType: string;
     gstin?: string;
     address: string;
     productCategory?: string;
     storeLogo?: string;
+    status?: string;
+    adminNotes?: string;
     submittedAt: string;
   };
   providerStatus: 'none' | 'pending' | 'approved' | 'rejected';
   providerApplication?: {
+    id?: string;
     tradeCategory: string;
     experienceYears: number;
     hourlyRate: number;
     serviceArea?: string;
+    resumeUrl?: string;
     resumeText?: string;
     previousWork?: string;
+    previousWorkSamples?: { id?: string; title: string; image?: string; description?: string }[];
     idProofType?: string;
     idProofNumber?: string;
     profilePhoto?: string;
     idDocumentPhoto?: string;
     issuedProviderId?: string;
+    status?: string;
+    adminNotes?: string;
     submittedAt: string;
   };
   adminVerified: boolean;
@@ -63,7 +74,7 @@ export interface ProductVariant {
 export interface Product {
   id: string;
   title: string;
-  category: 'Electronics' | 'Fashion' | 'Home & Living' | 'Groceries' | 'Beauty';
+  category: string;
   price: number;
   originalPrice: number;
   discountPercentage: number;
@@ -172,8 +183,24 @@ export interface CartItem {
   selectedVariant?: ProductVariant;
 }
 
-export type OrderStatus = 'confirmed' | 'packed' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled' | 'refund_requested';
-export type PaymentStatus = 'pending' | 'success' | 'failed' | 'refunded';
+export type OrderStatus =
+  | 'confirmed'
+  | 'packed'
+  | 'shipped'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'delivered_pending_payment'
+  | 'completed'
+  | 'cancelled'
+  | 'refund_requested';
+
+export type PaymentStatus =
+  | 'pending'
+  | 'success'
+  | 'failed'
+  | 'refunded'
+  | 'pending_admin_clearance'
+  | 'cleared';
 
 export interface OrderItem {
   productId: string;
@@ -190,6 +217,7 @@ export interface Order {
   orderNumber: string;
   customerId: string;
   customerName: string;
+  customerPhone?: string;
   items: OrderItem[];
   subtotal: number;
   sellerDeliveryCharge: number;
@@ -199,6 +227,8 @@ export interface Order {
   total: number;
   orderStatus: OrderStatus;
   paymentStatus: PaymentStatus;
+  adminPaymentCleared?: boolean;
+  customerConfirmed?: boolean;
   paymentMethod: string;
   createdAt: string;
   deliveryAddress: string;
@@ -218,6 +248,7 @@ export type BookingStatus =
   | 'in_progress'
   | 'work_paused_extra_time'
   | 'completed_pending_review'
+  | 'completed_pending_payment'
   | 'problem_reported'
   | 'completed'
   | 'cancelled'
@@ -330,6 +361,8 @@ export interface Booking {
   customerAddress: string;
   status: BookingStatus;
   paymentStatus: PaymentStatus;
+  adminPaymentCleared?: boolean;
+  customerConfirmed?: boolean;
   totalPrice: number;
   cancellationTerms: string;
   createdAt: string;
@@ -402,4 +435,17 @@ export interface ChatMessageItem {
   sender: 'user' | 'peer';
   text: string;
   timestamp: string;
+}
+
+export interface CallLog {
+  id: string;
+  callerId: string;
+  callerName: string;
+  receiverId: string;
+  receiverName: string;
+  callType: 'voice' | 'masked';
+  status: 'active' | 'completed' | 'missed' | 'failed';
+  durationSeconds: number;
+  startedAt: string;
+  endedAt?: string;
 }
