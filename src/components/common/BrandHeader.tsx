@@ -79,14 +79,15 @@ export const BrandHeader: React.FC<{
             onClick={() => setActiveTab('home')}
             className="flex items-center gap-2 cursor-pointer flex-shrink-0 active:scale-95 transition-transform"
           >
-            {/* NSO Logo Mark */}
-            <div className="relative w-9 h-9 rounded-[14px] bg-gradient-to-br from-red-600 to-rose-600 flex items-center justify-center shadow-md shadow-red-500/30 text-white font-black text-[13px] tracking-tighter border border-white/20">
-              <span className="relative z-10 font-black leading-none">NSO</span>
-              <div className="absolute inset-0 rounded-[14px] bg-white/10 pointer-events-none" />
-            </div>
+            {/* NSO Official Logo Mark */}
+            <img
+              src="/nso-app-icon.svg"
+              alt="NSO Orbit"
+              className="w-9 h-9 rounded-[12px] shadow-md shadow-blue-900/20 object-contain"
+            />
             <div className="hidden min-[360px]:block leading-none">
               <span className="font-black text-xs text-red-600 tracking-tight block">NSO</span>
-              <span className="text-[7px] font-extrabold text-slate-400 tracking-widest uppercase block">Orbit</span>
+              <span className="text-[7px] font-extrabold text-blue-900 tracking-widest uppercase block">Orbit</span>
             </div>
           </div>
 

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 640" role="img" aria-labelledby="title desc">
+  <title id="title">New Shopping Orbit</title>
+  <desc id="desc">A bold crimson NSO monogram encircled by a fast platinum orbital path, with the full brand name below.</desc>
+  <defs>
+    <linearGradient id="platinum" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fff"/><stop offset=".28" stop-color="#d8dce1"/><stop offset=".62" stop-color="#aab0b9"/><stop offset="1" stop-color="#f5f6f7"/>
+    </linearGradient>
+    <linearGradient id="crimson" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f5273d"/><stop offset=".55" stop-color="#d20d27"/><stop offset="1" stop-color="#a9001b"/>
+    </linearGradient>
+    <radialGradient id="orbitBlue" cx=".32" cy=".22" r=".9">
+      <stop stop-color="#485eff"/><stop offset=".48" stop-color="#2639d9"/><stop offset="1" stop-color="#111b68"/>
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#650011" flood-opacity=".15"/>
+    </filter>
+  </defs>
+  <!-- Refined orbital ring, deliberately broken by the speed streaks -->
+  <path d="M174 337C168 205 295 106 452 105c138-1 245 68 273 156" fill="none" stroke="url(#platinum)" stroke-width="10" stroke-linecap="round"/>
+  <path d="M710 321c-29 121-147 208-286 208-128 0-223-56-254-139" fill="none" stroke="url(#platinum)" stroke-width="10" stroke-linecap="round"/>
+  <path d="m723 267 75-37-82-1" fill="none" stroke="url(#crimson)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m174 390-73 34 80 5" fill="none" stroke="url(#crimson)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M218 181c35-35 79-58 129-69" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".95"/>
+  <!-- White medallion grounds the mark and keeps it legible on any background -->
+  <circle cx="450" cy="306" r="171" fill="url(#orbitBlue)" stroke="url(#platinum)" stroke-width="8" filter="url(#shadow)"/>
+  <circle cx="450" cy="306" r="153" fill="none" stroke="#aebcff" stroke-width="2" opacity=".72"/>
+  <!-- Custom, tightly kerned monogram -->
+  <g font-family="Arial, Helvetica, sans-serif" font-weight="900" font-style="italic" text-anchor="middle" paint-order="stroke">
+    <text x="361" y="359" font-size="144" letter-spacing="-13" fill="url(#crimson)" stroke="#fff" stroke-width="3">N</text>
+    <text x="456" y="359" font-size="144" letter-spacing="-13" fill="url(#crimson)" stroke="#fff" stroke-width="3">S</text>
+    <text x="548" y="359" font-size="144" letter-spacing="-13" fill="url(#crimson)" stroke="#fff" stroke-width="3">O</text>
+  </g>
+  <path d="M328 384h244" fill="none" stroke="url(#platinum)" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="450" cy="405" r="4" fill="#c1c5cb"/>
+  <!-- Wordmark -->
+  <text x="450" y="586" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="800" letter-spacing="5" fill="#252932">NEW SHOPPING ORBIT</text>
+  <path d="M270 611h360" stroke="url(#platinum)" stroke-width="2" stroke-linecap="round"/>
+</svg>
