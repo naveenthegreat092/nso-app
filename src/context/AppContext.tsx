@@ -287,25 +287,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     const syncCloudData = async () => {
       const cloudProducts = await api.getProducts();
-      if (Array.isArray(cloudProducts)) setProducts(cloudProducts);
+      if (Array.isArray(cloudProducts) && cloudProducts.length > 0) setProducts(cloudProducts);
 
       const cloudOrders = await api.getOrders();
-      if (Array.isArray(cloudOrders)) setOrders(cloudOrders);
+      if (Array.isArray(cloudOrders) && cloudOrders.length > 0) setOrders(cloudOrders);
 
       const cloudBookings = await api.getBookings();
-      if (Array.isArray(cloudBookings)) setBookings(cloudBookings);
+      if (Array.isArray(cloudBookings) && cloudBookings.length > 0) setBookings(cloudBookings);
 
       const cloudCategories = await api.getServiceCategories();
-      if (Array.isArray(cloudCategories)) setServiceCategories(cloudCategories);
+      if (Array.isArray(cloudCategories) && cloudCategories.length > 0) setServiceCategories(cloudCategories);
 
       const cloudServices = await api.getServices();
-      if (Array.isArray(cloudServices)) setServices(cloudServices);
+      if (Array.isArray(cloudServices) && cloudServices.length > 0) setServices(cloudServices);
 
       const cloudCancellations = await api.getProviderCancellations();
-      if (Array.isArray(cloudCancellations)) setProviderCancellationReviews(cloudCancellations);
+      if (Array.isArray(cloudCancellations) && cloudCancellations.length > 0) setProviderCancellationReviews(cloudCancellations);
 
       const cloudRequests = await api.getSpecialRequests();
-      if (Array.isArray(cloudRequests)) setSpecialRequests(cloudRequests);
+      if (Array.isArray(cloudRequests) && cloudRequests.length > 0) setSpecialRequests(cloudRequests);
     };
     syncCloudData();
   }, []);
