@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "854370106044",
+    "project_id": "nso-orbit",
+    "storage_bucket": "nso-orbit.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:854370106044:android:f13d89f6d21e5c7d092eb9",
+        "android_client_info": {
+          "package_name": "com.nso.orbit"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBq1RcrqEBJsIkR9RNoAS9ALppyTGLFCoE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

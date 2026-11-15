@@ -12,3 +12,4 @@ server/data/db.json
 server/data/*.db*
 *.zip
 output/
+*firebase-service-account*.json

@@ -45,12 +45,13 @@ export function initFCM() {
 
     // Load credentials
     let credential;
+    const getCert = (sa) => (admin.cert ? admin.cert(sa) : admin.credential?.cert(sa));
 
     // Option 1: JSON file path
     const saPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
     if (saPath && fs.existsSync(saPath)) {
       const sa = JSON.parse(fs.readFileSync(saPath, 'utf8'));
-      credential = admin.credential.cert(sa);
+      credential = getCert(sa);
       console.log('[FCM] Using service account from file:', saPath);
     }
 
@@ -60,7 +61,7 @@ export function initFCM() {
       if (saJson) {
         try {
           const sa = JSON.parse(saJson);
-          credential = admin.credential.cert(sa);
+          credential = getCert(sa);
           console.log('[FCM] Using service account from FIREBASE_SERVICE_ACCOUNT_JSON env.');
         } catch {
           console.warn('[FCM] FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON.');
@@ -73,7 +74,7 @@ export function initFCM() {
       const localPath = path.join(__dirname, 'firebase-service-account.json');
       if (fs.existsSync(localPath)) {
         const sa = JSON.parse(fs.readFileSync(localPath, 'utf8'));
-        credential = admin.credential.cert(sa);
+        credential = getCert(sa);
         console.log('[FCM] Using local server/firebase-service-account.json.');
       }
     }
@@ -86,8 +87,13 @@ export function initFCM() {
     }
 
     firebaseApp = admin.initializeApp({ credential });
-    messaging = admin.messaging(firebaseApp);
-    fcmEnabled = true;
+    try {
+      const messagingPkg = require('firebase-admin/messaging');
+      messaging = messagingPkg.getMessaging(firebaseApp);
+    } catch {
+      messaging = admin.messaging ? admin.messaging(firebaseApp) : null;
+    }
+    fcmEnabled = !!messaging;
     console.log('[FCM] ✅ Firebase Admin SDK initialized. Push notifications ENABLED.');
   } catch (err) {
     console.error('[FCM] Init error:', err.message);
