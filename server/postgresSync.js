@@ -31,7 +31,9 @@ export async function initPostgresSync(db) {
     return false;
   }
 
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString =
+    process.env.DATABASE_URL ||
+    'postgresql://postgres.dzzinexgdvaqqbssdrib:usnd06250826%40%23_%26-%2B()%2F@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres';
   if (!connectionString) {
     console.log('[Supabase Sync] No DATABASE_URL configured. Running in local SQLite mode.');
     return false;
