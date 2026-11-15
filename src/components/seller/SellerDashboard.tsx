@@ -277,51 +277,70 @@ export const SellerDashboard: React.FC = () => {
                   </div>
 
                   {/* Stage-by-Stage Dispatch Actions */}
-                  <div className="pt-2 border-t border-gray-100 space-y-1.5">
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
-                      Dispatch Pipeline Actions:
-                    </span>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {order.orderStatus === 'confirmed' && (
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'packed')}
-                          className="py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-sm"
-                        >
-                          Mark as Packed
-                        </button>
-                      )}
-                      {order.orderStatus === 'packed' && (
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'shipped')}
-                          className="py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-sm"
-                        >
-                          Handover to Logistics
-                        </button>
-                      )}
-                      {order.orderStatus === 'shipped' && (
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'out_for_delivery')}
-                          className="py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm"
-                        >
-                          Out for Delivery
-                        </button>
-                      )}
-                      {order.orderStatus === 'out_for_delivery' && (
-                        <button
-                          onClick={() => updateOrderStatus(order.id, 'delivered')}
-                          className="py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm"
-                        >
-                          Confirm Delivered
-                        </button>
-                      )}
-                      {order.orderStatus === 'delivered' && (
-                        <span className="col-span-2 text-center text-xs font-bold text-emerald-700 bg-emerald-50 py-1.5 rounded-lg flex items-center justify-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          Order Delivered & Eligible for Payout
+                  {/* Payment Verification Safeguard: Block Dispatch if Unpaid */}
+                  {order.paymentStatus !== 'success' && order.paymentMethod !== 'cod' ? (
+                    <div className="pt-2 border-t border-gray-100">
+                      <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/90 text-xs flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                          <div>
+                            <span className="font-extrabold text-amber-950 block text-[11px]">Payment Pending (₹{order.total})</span>
+                            <span className="text-[10px] text-amber-700">Dispatch locked. Waiting for customer UPI confirmation.</span>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-mono font-bold bg-amber-200/70 text-amber-900 px-2.5 py-1 rounded-lg">
+                          LOCKED
                         </span>
-                      )}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    /* Stage-by-Stage Dispatch Actions */
+                    <div className="pt-2 border-t border-gray-100 space-y-1.5">
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                        Dispatch Pipeline Actions:
+                      </span>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {order.orderStatus === 'confirmed' && (
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'packed')}
+                            className="py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow-sm"
+                          >
+                            Mark as Packed
+                          </button>
+                        )}
+                        {order.orderStatus === 'packed' && (
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'shipped')}
+                            className="py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-sm"
+                          >
+                            Handover to Logistics
+                          </button>
+                        )}
+                        {order.orderStatus === 'shipped' && (
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'out_for_delivery')}
+                            className="py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm"
+                          >
+                            Out for Delivery
+                          </button>
+                        )}
+                        {order.orderStatus === 'out_for_delivery' && (
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'delivered')}
+                            className="py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm"
+                          >
+                            Confirm Delivered
+                          </button>
+                        )}
+                        {order.orderStatus === 'delivered' && (
+                          <span className="col-span-2 text-center text-xs font-bold text-emerald-700 bg-emerald-50 py-1.5 rounded-lg flex items-center justify-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            Order Delivered & Eligible for Payout
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))
             )}

@@ -24,7 +24,8 @@ import {
   Check,
   X,
   ShieldCheck,
-  Key
+  Key,
+  QrCode
 } from 'lucide-react';
 
 export const OrdersScreen: React.FC = () => {
@@ -530,8 +531,46 @@ export const OrdersScreen: React.FC = () => {
                         </button>
                       )}
 
-                      {/* Confirm Completion & Release */}
-                      {booking.status === 'completed_pending_review' && (
+                      {/* Final Service Payment Due (Dynamic PhonePe QR Code Scanner) */}
+                      {booking.status === 'completed_pending_review' && booking.paymentStatus !== 'success' && (
+                        <div className="w-full bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-500/40 rounded-2xl p-3.5 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <QrCode className="w-4 h-4 text-emerald-700" />
+                              <span className="font-black text-xs text-emerald-950">Work Done — Final Payment Due</span>
+                            </div>
+                            <span className="font-mono font-black text-sm text-emerald-700 bg-white border border-emerald-300 px-2 py-0.5 rounded-lg shadow-2xs">
+                              ₹{booking.totalPrice}
+                            </span>
+                          </div>
+
+                          {/* Dynamic PhonePe QR Code */}
+                          <div className="bg-white p-3 rounded-xl border border-emerald-200/80 text-center space-y-2 shadow-xs">
+                            <img
+                              src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+                                `upi://pay?pa=8310421121@axl&pn=Naveen%20%20U&am=${booking.totalPrice}&cu=INR&tn=Booking%20${booking.bookingNumber}&mc=0000&mode=02&purpose=00`
+                              )}`}
+                              alt="Scan to Pay Final Bill"
+                              className="w-28 h-28 mx-auto rounded-lg object-contain"
+                            />
+                            <div className="text-[11px] text-slate-600">
+                              <span className="block font-bold text-slate-900">Scan &amp; Pay ₹{booking.totalPrice} with PhonePe / GPay</span>
+                              <span className="font-mono text-[10px] text-slate-500">Payee: Naveen U (8310421121@axl)</span>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => confirmServiceCompletion(booking.id)}
+                            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl font-black text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>I Have Paid ₹{booking.totalPrice} • Complete &amp; Close Booking</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Confirm Completion & Release if already paid */}
+                      {booking.status === 'completed_pending_review' && booking.paymentStatus === 'success' && (
                         <button
                           onClick={() => confirmServiceCompletion(booking.id)}
                           className="flex items-center gap-1 text-[11px] font-black text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-lg shadow-sm active:scale-95 transition-all"
