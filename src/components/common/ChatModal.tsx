@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Image, ShieldCheck, CheckCheck, PhoneCall, PhoneOff, Mic, MicOff, Volume2 } from 'lucide-react';
+import { X, Send, Image, ShieldCheck, CheckCheck, PhoneCall, PhoneOff, Mic, MicOff, Volume2, MessageCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { api } from '../../api/client';
 
@@ -166,7 +166,16 @@ export const ChatModal: React.FC<{
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <a
+              href={`https://wa.me/918310421121?text=${encodeURIComponent(`Hello NSO Support, I am chatting regarding: ${peerName}`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 transition-colors"
+              title="Open WhatsApp Support"
+            >
+              <MessageCircle className="w-4 h-4" />
+            </a>
             <button
               onClick={handleMaskedCall}
               className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-emerald-400 transition-colors"

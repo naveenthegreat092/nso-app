@@ -2786,6 +2786,7 @@ app.get('/api/bookings', requireAuth, (req, res) => {
       cancellationDetails: b.cancellation_details_json ? JSON.parse(b.cancellation_details_json) : undefined,
       completedAt: b.completed_at,
       confirmedCompletedAt: b.confirmed_completed_at,
+      completionOtp: b.completion_otp || (b.booking_number ? String(b.booking_number).replace(/\D/g, '').slice(-4) : '4821'),
       paymentMethod: b.payment_method || 'online',
       status: b.status,
       paymentStatus: b.payment_status,
@@ -3274,13 +3275,21 @@ app.patch('/api/bookings/:id/hourly/time-used', requireAuth, (req, res) => {
 // Provider: Marks job completed and notifies customer
 app.post('/api/bookings/:id/complete', requireAuth, (req, res) => {
   const { id } = req.params;
-  const { completionNotes } = req.body || {};
+  const { completionNotes, completionOtp } = req.body || {};
 
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
   if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
     return res.status(403).json({ error: 'Only assigned provider can mark job complete.' });
+  }
+
+  // Verify Completion OTP if provided
+  const expectedOtp = booking.completion_otp || (booking.booking_number ? String(booking.booking_number).replace(/\D/g, '').slice(-4) : '');
+  if (!req.session.isAdmin && completionOtp && expectedOtp) {
+    if (String(completionOtp).trim() !== String(expectedOtp).trim()) {
+      return res.status(400).json({ error: 'Incorrect 4-digit Completion OTP. Please verify with customer.' });
+    }
   }
 
   const nowIso = new Date().toISOString();
@@ -4611,5 +4620,13 @@ if (process.argv[1] && process.argv[1].endsWith('server.js')) {
     console.log(`   OTP Provider: ${OTP_PROVIDER}`);
     console.log(`   Admin Phone:  ${ADMIN_PHONE ? `+91 ${ADMIN_PHONE}` : 'NOT CONFIGURED'}`);
     console.log(`============================================================\n`);
+
+    // Automatic Keep-Alive Self-Ping for Cloud Hosting (prevents cold-starts on Render)
+    const publicUrl = process.env.RENDER_EXTERNAL_URL || (process.env.NODE_ENV === 'production' ? 'https://nso-app-md32.onrender.com' : null);
+    if (publicUrl && !process.argv.includes('test')) {
+      setInterval(() => {
+        fetch(`${publicUrl}/api/health`).catch(() => {});
+      }, 10 * 60 * 1000);
+    }
   });
 }

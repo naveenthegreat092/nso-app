@@ -378,6 +378,7 @@ export interface Booking {
   cancellationDetails?: CancellationDetails;
   completedAt?: string;
   confirmedCompletedAt?: string;
+  completionOtp?: string;
   revisedQuote?: RevisedQuote;
   completionNotes?: string;
   problemDescription?: string;

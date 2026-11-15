@@ -23,7 +23,8 @@ import {
   Timer,
   Check,
   X,
-  ShieldCheck
+  ShieldCheck,
+  Key
 } from 'lucide-react';
 
 export const OrdersScreen: React.FC = () => {
@@ -444,6 +445,24 @@ export const OrdersScreen: React.FC = () => {
                       <span className="text-gray-500">Agreed Price:</span>
                       <span className="font-black text-gray-900">₹{booking.totalPrice}</span>
                     </div>
+
+                    {/* Completion OTP Card for Active Services */}
+                    {['confirmed', 'in_progress', 'travelling'].includes(booking.status) && (
+                      <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold flex-shrink-0">
+                            <Key className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="font-black text-amber-950 block text-xs">Job Completion OTP</span>
+                            <span className="text-[10px] text-amber-700 font-medium">Give this to specialist only after work is done</span>
+                          </div>
+                        </div>
+                        <span className="font-mono font-black text-base bg-white border border-amber-300 text-amber-950 px-3 py-1 rounded-xl tracking-widest shadow-xs">
+                          {booking.completionOtp || (booking.bookingNumber ? booking.bookingNumber.replace(/\D/g, '').slice(-4) : '4821')}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Action Buttons Row */}
                     <div className="flex items-center gap-2 flex-wrap">

@@ -591,9 +591,20 @@ export const ProviderDashboard: React.FC = () => {
                         </button>
                         <button
                           onClick={async () => {
+                            const expectedOtp = b.completionOtp || (b.bookingNumber ? b.bookingNumber.replace(/\D/g, '').slice(-4) : '');
+                            let enteredOtp = '';
+                            if (expectedOtp) {
+                              const inputOtp = window.prompt(`🔒 Customer Completion OTP Verification:\n\nPlease enter the 4-digit Completion OTP shown on the customer's screen:`);
+                              if (!inputOtp) return;
+                              if (inputOtp.trim() !== expectedOtp.trim()) {
+                                showToast('❌ Incorrect OTP! Please ask the customer for their 4-digit completion code.');
+                                return;
+                              }
+                              enteredOtp = inputOtp.trim();
+                            }
                             if (sharingBookingId === b.id) await stopSharing(b.id);
-                            await markServiceComplete(b.id, 'Work completed successfully on-site.');
-                            showToast('🎉 Service completed! Customer notified for payment confirmation.');
+                            await markServiceComplete(b.id, 'Work completed successfully on-site.', enteredOtp);
+                            showToast('🎉 Service completed with OTP verification! Customer notified.');
                           }}
                           className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] rounded-lg shadow-sm active:scale-95 transition-all"
                         >

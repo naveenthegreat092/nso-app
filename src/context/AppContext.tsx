@@ -139,7 +139,7 @@ interface AppContextType {
   requestHourlyExtraTime: (bookingId: string, requestedHours: number, reason: string, extraAmount?: number) => Promise<void>;
   customerDecideExtraTime: (bookingId: string, approved: boolean) => Promise<void>;
   updateHourlyTimeUsed: (bookingId: string, timeUsedHours: number, timerRunning?: boolean) => Promise<void>;
-  markServiceComplete: (bookingId: string, completionNotes?: string) => Promise<void>;
+  markServiceComplete: (bookingId: string, completionNotes?: string, completionOtp?: string) => Promise<void>;
   confirmServiceCompletion: (bookingId: string, rating?: number, reviewComment?: string) => Promise<void>;
   reportServiceProblem: (bookingId: string, problemType: 'poor_quality' | 'incomplete_work' | 'damage' | 'other', description: string, photos?: string[]) => Promise<void>;
   adminReviewProblem: (bookingId: string, reviewData: { siteVisitRequired?: boolean; siteVisitScheduledAt?: string; adminNotes?: string; resolved?: boolean; resolutionNotes?: string }) => Promise<void>;
@@ -1207,7 +1207,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       hourlyDetails,
       cancellationTerms: service.cancellationPolicy,
       createdAt: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      technicianEtaMinutes: 14
+      technicianEtaMinutes: 14,
+      completionOtp: String(Math.floor(1000 + Math.random() * 9000))
     };
 
     setBookings((prev) => [fallbackBooking, ...prev]);
@@ -1538,7 +1539,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // ── Completion & Problem Reporting ──────────────────────────────────────────
 
-  const markServiceComplete = async (bookingId: string, completionNotes?: string) => {
+  const markServiceComplete = async (bookingId: string, completionNotes?: string, completionOtp?: string) => {
     const now = new Date().toISOString();
     setBookings((prev) =>
       prev.map((b) =>
@@ -1549,10 +1550,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     try {
-      await api.markServiceComplete(bookingId, completionNotes);
+      await api.markServiceComplete(bookingId, completionNotes, completionOtp);
     } catch {}
 
-    addAuditLog('SERVICE_MARKED_COMPLETE', `Provider marked Booking ${bookingId} as completed. Customer notified.`);
+    addAuditLog('SERVICE_MARKED_COMPLETE', `Provider marked Booking ${bookingId} as completed with OTP verification.`);
     showToast('Job marked completed! Waiting for customer confirmation.');
   };
 

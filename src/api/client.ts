@@ -604,13 +604,13 @@ export const api = {
 
   // ── Completion & Problem Reporting ──────────────────────────────────────────
 
-  markServiceComplete: async (bookingId: string, completionNotes?: string): Promise<{ success: boolean; message?: string }> => {
+  markServiceComplete: async (bookingId: string, completionNotes?: string, completionOtp?: string): Promise<{ success: boolean; message?: string }> => {
     try {
       const res = await fetch(`${API_BASE}/bookings/${bookingId}/complete`, {
         ...defaultOpts,
         method: 'POST',
         headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ completionNotes })
+        body: JSON.stringify({ completionNotes, completionOtp })
       });
       const data = await res.json();
       return { success: res.ok, ...data };
