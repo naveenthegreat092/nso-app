@@ -19,7 +19,8 @@ import {
   Store,
   Clock,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Bell
 } from 'lucide-react';
 
 export const AccountScreen: React.FC<{
@@ -44,6 +45,19 @@ export const AccountScreen: React.FC<{
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
+  const [testingPush, setTestingPush] = useState(false);
+
+  const handleTestPush = async () => {
+    setTestingPush(true);
+    try {
+      const res = await api.sendTestNotification('🔔 NSO Test', 'Push notifications are working!');
+      showToast(res.success ? '✅ Test push triggered!' : '⚠️ Push not configured yet.');
+    } catch {
+      showToast('⚠️ Could not send test push.');
+    } finally {
+      setTestingPush(false);
+    }
+  };
 
   const handleSavePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -327,6 +341,15 @@ export const AccountScreen: React.FC<{
 
       {/* 6. Sign Out */}
       <div className="pt-2 pb-2">
+        {/* Test Push Notification */}
+        <button
+          onClick={handleTestPush}
+          disabled={testingPush}
+          className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-3xl bg-slate-50 border border-slate-200/70 text-slate-700 font-bold text-sm hover:bg-slate-100 active:scale-98 transition-all shadow-xs mb-3 disabled:opacity-60"
+        >
+          <Bell className="w-4 h-4 text-red-500" />
+          {testingPush ? 'Sending...' : 'Test Push Notification'}
+        </button>
         <button
           onClick={() => {
             if (window.confirm('Are you sure you want to sign out?')) {

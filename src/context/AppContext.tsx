@@ -35,6 +35,7 @@ import {
 } from '../data/mockData';
 import { Language, translations, SUPPORTED_LANGUAGES } from '../i18n/translations';
 import { api } from '../api/client';
+import { Capacitor } from '@capacitor/core';
 
 /** Unauthenticated user shape — no hardcoded credentials or roles */
 const UNAUTHENTICATED_USER: UserProfile = {
@@ -584,6 +585,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsAuthModalOpen(false);
         addAuditLog('USER_LOGIN', `User signed in: ${serverUser.phone || serverUser.email}`, authUser.activeRole);
         showToast(isOwner ? '👑 Welcome Marketplace Owner!' : `Welcome ${serverUser.name || 'back'}!`);
+
+        // Register FCM device token (Android only)
+        try {
+          if (Capacitor.isNativePlatform()) {
+            const { PushNotifications } = await import('@capacitor/push-notifications');
+            await PushNotifications.requestPermissions();
+            await PushNotifications.register();
+            PushNotifications.addListener('registration', async (tokenData) => {
+              await api.registerPushToken(tokenData.value, 'android', 'capacitor');
+            });
+          }
+        } catch {
+          // Non-critical — FCM setup failed silently
+        }
+
         return authUser;
       }
     } catch {
