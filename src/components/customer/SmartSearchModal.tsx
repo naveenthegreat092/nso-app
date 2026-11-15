@@ -37,10 +37,10 @@ export const SmartSearchModal: React.FC<{
   ];
 
   const trendingTags = [
-    '⚡ 10-Min Essentials',
-    '🔧 Urgent Electrician',
-    '🎧 Wireless Audio',
-    '🧹 Deep Housekeeping'
+    'Daily Essentials',
+    'Certified Electrician',
+    'Wireless Audio',
+    'Deep Cleaning'
   ];
 
   const handleVoiceSearch = () => {

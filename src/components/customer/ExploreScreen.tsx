@@ -10,7 +10,14 @@ import {
   Minus,
   Compass,
   Heart,
-  Package
+  Package,
+  Layers,
+  Headphones,
+  Shirt,
+  ShoppingBasket,
+  Home,
+  Sparkles,
+  Scissors
 } from 'lucide-react';
 
 export const ExploreScreen: React.FC<{
@@ -34,9 +41,23 @@ export const ExploreScreen: React.FC<{
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
-  const productCategories = ['Electronics', 'Fashion', 'Home & Living', 'Groceries'];
+  const productCategories = ['Groceries', 'Electronics', 'Fashion', 'Home & Living'];
   const dynamicServiceCatNames = appServiceCategories?.map((c) => c.name) || ['Home repairs', 'Home care', 'Moving and delivery'];
   const allCategories = ['All', ...productCategories, ...dynamicServiceCatNames];
+
+  const getCategoryIcon = (catName: string) => {
+    const lower = catName.toLowerCase();
+    if (lower === 'all') return Layers;
+    if (lower.includes('grocer')) return ShoppingBasket;
+    if (lower.includes('electr')) return Headphones;
+    if (lower.includes('fashion') || lower.includes('cloth')) return Shirt;
+    if (lower.includes('repair') || lower.includes('plumb')) return Wrench;
+    if (lower.includes('clean') || lower.includes('care')) return Sparkles;
+    if (lower.includes('kitchen') || lower.includes('home') || lower.includes('living')) return Home;
+    if (lower.includes('salon') || lower.includes('spa') || lower.includes('wellness')) return Scissors;
+    if (lower.includes('mov') || lower.includes('deliver') || lower.includes('transport')) return Package;
+    return Sparkles;
+  };
 
   const getProductCartQuantity = (productId: string) => {
     const item = cart.find((c) => c.product.id === productId);
@@ -108,21 +129,26 @@ export const ExploreScreen: React.FC<{
         )}
       </div>
 
-      {/* Horizontal Category Strip */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-        {allCategories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setSelectedCategory(cat)}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
-              selectedCategory === cat
-                ? 'bg-red-600 text-white shadow-sm'
-                : 'bg-white border border-slate-200/70 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
+      {/* Horizontal Category Strip with Vector Icons */}
+      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+        {allCategories.map((cat) => {
+          const Icon = getCategoryIcon(cat);
+          const isSelected = selectedCategory === cat;
+          return (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all active:scale-95 ${
+                isSelected
+                  ? 'bg-red-600 text-white shadow-sm'
+                  : 'bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+              <span>{cat}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Empty State */}
