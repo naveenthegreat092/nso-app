@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Product, Service } from '../../types';
 import {
@@ -19,7 +19,15 @@ import {
   Truck,
   Heart,
   Store,
-  Compass
+  Compass,
+  Headphones,
+  Shirt,
+  ShoppingBasket,
+  Coffee,
+  Scissors,
+  Package,
+  Layers,
+  X
 } from 'lucide-react';
 
 export const HomeScreen: React.FC<{
@@ -42,15 +50,90 @@ export const HomeScreen: React.FC<{
     user
   } = useApp();
 
-  const categories = [
-    { name: 'Electronics', icon: '🎧', bg: 'bg-blue-50 text-blue-600' },
-    { name: 'Fashion', icon: '👕', bg: 'bg-rose-50 text-rose-600' },
-    { name: 'Home & Kitchen', icon: '☕', bg: 'bg-amber-50 text-amber-600' },
-    { name: 'Groceries', icon: '🥑', bg: 'bg-emerald-50 text-emerald-600' },
-    { name: 'Plumbing', icon: '🔧', bg: 'bg-cyan-50 text-cyan-600' },
-    { name: 'Electrical', icon: '⚡', bg: 'bg-yellow-50 text-yellow-700' },
-    { name: 'Deep Cleaning', icon: '✨', bg: 'bg-purple-50 text-purple-600' },
-    { name: 'Salon & Spa', icon: '✂️', bg: 'bg-pink-50 text-pink-600' },
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  const categoryPills = [
+    {
+      id: 'all',
+      name: 'All Orbit',
+      icon: Layers,
+      color: 'text-red-600',
+      bg: 'bg-red-50 text-red-600',
+      activeStyle: 'bg-red-600 text-white shadow-md shadow-red-500/25 border-red-600',
+      matcher: () => true
+    },
+    {
+      id: 'groceries',
+      name: 'Groceries',
+      icon: ShoppingBasket,
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-50 text-emerald-600',
+      activeStyle: 'bg-emerald-600 text-white shadow-md shadow-emerald-500/25 border-emerald-600',
+      matcher: (c: string) => /grocer/i.test(c)
+    },
+    {
+      id: 'electronics',
+      name: 'Electronics',
+      icon: Headphones,
+      color: 'text-blue-600',
+      bg: 'bg-blue-50 text-blue-600',
+      activeStyle: 'bg-blue-600 text-white shadow-md shadow-blue-500/25 border-blue-600',
+      matcher: (c: string) => /electr/i.test(c)
+    },
+    {
+      id: 'fashion',
+      name: 'Fashion',
+      icon: Shirt,
+      color: 'text-rose-600',
+      bg: 'bg-rose-50 text-rose-600',
+      activeStyle: 'bg-rose-600 text-white shadow-md shadow-rose-500/25 border-rose-600',
+      matcher: (c: string) => /fashion|cloth|wear/i.test(c)
+    },
+    {
+      id: 'repairs',
+      name: 'Repairs & AC',
+      icon: Wrench,
+      color: 'text-cyan-600',
+      bg: 'bg-cyan-50 text-cyan-600',
+      activeStyle: 'bg-cyan-600 text-white shadow-md shadow-cyan-500/25 border-cyan-600',
+      matcher: (c: string) => /repair|plumb|ac|paint/i.test(c)
+    },
+    {
+      id: 'cleaning',
+      name: 'Cleaning',
+      icon: Sparkles,
+      color: 'text-purple-600',
+      bg: 'bg-purple-50 text-purple-600',
+      activeStyle: 'bg-purple-600 text-white shadow-md shadow-purple-500/25 border-purple-600',
+      matcher: (c: string) => /clean|care|maid/i.test(c)
+    },
+    {
+      id: 'home',
+      name: 'Kitchen',
+      icon: Coffee,
+      color: 'text-amber-600',
+      bg: 'bg-amber-50 text-amber-600',
+      activeStyle: 'bg-amber-600 text-white shadow-md shadow-amber-500/25 border-amber-600',
+      matcher: (c: string) => /kitchen|home|living/i.test(c)
+    },
+    {
+      id: 'salon',
+      name: 'Salon & Spa',
+      icon: Scissors,
+      color: 'text-pink-600',
+      bg: 'bg-pink-50 text-pink-600',
+      activeStyle: 'bg-pink-600 text-white shadow-md shadow-pink-500/25 border-pink-600',
+      matcher: (c: string) => /salon|wellness|groom|spa/i.test(c)
+    },
+    {
+      id: 'movers',
+      name: 'Delivery',
+      icon: Package,
+      color: 'text-indigo-600',
+      bg: 'bg-indigo-50 text-indigo-600',
+      activeStyle: 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25 border-indigo-600',
+      matcher: (c: string) => /mov|courier|deliver/i.test(c)
+    }
   ];
 
   const getProductCartQuantity = (productId: string) => {
@@ -58,7 +141,11 @@ export const HomeScreen: React.FC<{
     return item ? item.quantity : 0;
   };
 
+  const currentMatcher = categoryPills.find((c) => c.id === selectedCategory)?.matcher || (() => true);
+
   const approvedProducts = products.filter((p) => p.approvalStatus === 'approved');
+  const displayedProducts = approvedProducts.filter((p) => currentMatcher(p.category || p.title || ''));
+  const displayedServices = services.filter((s) => currentMatcher(s.category || s.title || ''));
 
   return (
     <div className="space-y-5 pb-24 px-4 pt-3 animate-fade-in-up">
@@ -105,36 +192,61 @@ export const HomeScreen: React.FC<{
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl pointer-events-none" />
       </div>
 
-      {/* 2. Category Rail */}
-      <div className="space-y-3">
+      {/* 2. Polished Category Pill Navigation */}
+      <div className="space-y-2.5">
         <div className="flex items-center justify-between">
-          <h3 className="font-black text-[15px] text-slate-900 tracking-tight">Explore Categories</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-black text-[15px] text-slate-900 tracking-tight">Categories</h3>
+            {selectedCategory !== 'all' && (
+              <button
+                onClick={() => setSelectedCategory('all')}
+                className="text-[10px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-full flex items-center gap-1 transition-colors active:scale-95"
+              >
+                <span>Reset</span>
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
           <button
             onClick={() => setActiveTab('explore')}
             className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-0.5 active:scale-95 transition-all"
           >
-            <span>View All</span>
+            <span>All Categories</span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar pb-1">
-          {categories.map((cat) => (
-            <button
-              key={cat.name}
-              onClick={() => setActiveTab('explore')}
-              className="flex flex-col items-center gap-1.5 min-w-[68px] flex-shrink-0 group cursor-pointer active:scale-95 transition-transform"
-            >
-              <div
-                className={`w-14 h-14 rounded-2xl ${cat.bg} flex items-center justify-center text-2xl shadow-sm group-hover:scale-105 transition-all border border-white`}
+        {/* Polished Horizontal Category Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1.5 pt-0.5 scroll-smooth">
+          {categoryPills.map((cat) => {
+            const Icon = cat.icon;
+            const isSelected = selectedCategory === cat.id;
+
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id === selectedCategory ? 'all' : cat.id)}
+                className="flex flex-col items-center gap-1.5 min-w-[72px] flex-shrink-0 group cursor-pointer active:scale-95 transition-all"
               >
-                {cat.icon}
-              </div>
-              <span className="text-[11px] font-semibold text-slate-600 text-center leading-tight">
-                {cat.name}
-              </span>
-            </button>
-          ))}
+                <div
+                  className={`w-13 h-13 rounded-2xl flex items-center justify-center transition-all border ${
+                    isSelected
+                      ? cat.activeStyle
+                      : `${cat.bg} border-slate-100/80 shadow-xs group-hover:scale-105 group-hover:shadow-sm`
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 ${isSelected ? 'text-white stroke-[2.5]' : cat.color}`} />
+                </div>
+                <span
+                  className={`text-[11px] text-center leading-tight transition-colors ${
+                    isSelected ? 'font-black text-slate-900' : 'font-semibold text-slate-600 group-hover:text-slate-900'
+                  }`}
+                >
+                  {cat.name}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -145,6 +257,11 @@ export const HomeScreen: React.FC<{
             <h3 className="font-black text-[15px] text-slate-900 tracking-tight flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-red-600" />
               <span>Marketplace Products</span>
+              {selectedCategory !== 'all' && (
+                <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono">
+                  {displayedProducts.length}
+                </span>
+              )}
             </h3>
             <p className="text-[11px] text-slate-400 font-medium mt-0.5">Verified local merchants & brands</p>
           </div>
@@ -158,20 +275,30 @@ export const HomeScreen: React.FC<{
           )}
         </div>
 
-        {approvedProducts.length === 0 ? (
+        {displayedProducts.length === 0 ? (
           /* Clean Empty Store Welcome State */
           <div className="bg-white rounded-2xl border border-slate-100 p-6 text-center shadow-sm space-y-3">
             <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center mx-auto">
               <Store className="w-7 h-7" />
             </div>
             <div className="space-y-1">
-              <h4 className="text-sm font-black text-slate-800">Store is Getting Ready</h4>
+              <h4 className="text-sm font-black text-slate-800">
+                {selectedCategory !== 'all' ? 'No items in this category yet' : 'Store is Getting Ready'}
+              </h4>
               <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-                Products will appear here once sellers list their items. Check back soon!
+                {selectedCategory !== 'all'
+                  ? 'Try selecting "All Orbit" or another category above.'
+                  : 'Products will appear here once sellers list their items. Check back soon!'}
               </p>
             </div>
-            {/* Only show admin shortcut if user is admin */}
-            {user.activeRole === 'admin' || user.adminVerified ? (
+            {selectedCategory !== 'all' ? (
+              <button
+                onClick={() => setSelectedCategory('all')}
+                className="px-5 py-2 bg-red-600 text-white font-black text-xs rounded-2xl shadow-sm transition-all active:scale-95"
+              >
+                Show All Categories
+              </button>
+            ) : user.activeRole === 'admin' || user.adminVerified ? (
               <button
                 onClick={() => switchRole('admin')}
                 className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-2xl shadow-md transition-all active:scale-95 inline-flex items-center gap-2"
@@ -192,7 +319,7 @@ export const HomeScreen: React.FC<{
         ) : (
           /* 2-Column Product Grid */
           <div className="grid grid-cols-2 gap-3">
-            {approvedProducts.map((product) => {
+            {displayedProducts.map((product) => {
               const qty = getProductCartQuantity(product.id);
               return (
                 <div
@@ -318,17 +445,21 @@ export const HomeScreen: React.FC<{
           )}
         </div>
 
-        {services.length === 0 ? (
+        {displayedServices.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-100 p-6 text-center shadow-sm space-y-2">
             <Wrench className="w-8 h-8 text-amber-400 mx-auto" />
-            <h4 className="text-sm font-black text-slate-800">Services Coming Soon</h4>
+            <h4 className="text-sm font-black text-slate-800">
+              {selectedCategory !== 'all' ? 'No services in this category' : 'Services Coming Soon'}
+            </h4>
             <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-              Certified plumbers, electricians, cleaners, and more will appear here once approved.
+              {selectedCategory !== 'all'
+                ? 'Try selecting another category above or check the full catalog.'
+                : 'Certified plumbers, electricians, cleaners, and more will appear here once approved.'}
             </p>
           </div>
         ) : (
           <div className="space-y-2.5">
-            {services.slice(0, 3).map((service) => (
+            {displayedServices.slice(0, 4).map((service) => (
               <div
                 key={service.id}
                 onClick={() => onSelectService(service)}
