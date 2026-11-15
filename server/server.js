@@ -365,6 +365,8 @@ try { db.exec("ALTER TABLE services ADD COLUMN hub_address TEXT DEFAULT 'NSO Ver
 try { db.exec('ALTER TABLE services ADD COLUMN hub_lat REAL DEFAULT 12.9784;'); } catch (_) {}
 try { db.exec('ALTER TABLE services ADD COLUMN hub_lng REAL DEFAULT 77.6408;'); } catch (_) {}
 try { db.exec('ALTER TABLE orders ADD COLUMN seller_delivery_charge REAL DEFAULT 0;'); } catch (_) {}
+try { db.exec('ALTER TABLE commission_ledger ADD COLUMN settled_at TEXT;'); } catch (_) {}
+try { db.exec('ALTER TABLE commission_ledger ADD COLUMN settlement_ref TEXT;'); } catch (_) {}
 
 // Enhanced service booking platform schema
 db.exec(`
@@ -3953,18 +3955,40 @@ function recordServiceCommission(bookingId, bookingTotal, providerId) {
   }
 }
 
-// Get Commission & Ledger (Owner only)
+// Get Commission & Payout Ledger (Owner only)
 app.get('/api/commission', requireAdmin, (req, res) => {
   const productsRate = Number(getSetting('products_commission_rate', '10'));
   const servicesRate = Number(getSetting('services_commission_rate', '15'));
 
-  const rows = db.prepare('SELECT * FROM commission_ledger ORDER BY created_at DESC').all();
-  const totalEarned = rows.reduce((sum, r) => sum + r.commission_amount, 0);
+  const rows = db.prepare(`
+    SELECT cl.*, 
+           u.name as beneficiary_name, 
+           u.phone as beneficiary_phone,
+           sa.business_name,
+           pa.trade_category
+    FROM commission_ledger cl
+    LEFT JOIN users u ON cl.beneficiary_id = u.id
+    LEFT JOIN seller_applications sa ON cl.beneficiary_id = sa.user_id
+    LEFT JOIN provider_applications pa ON cl.beneficiary_id = pa.user_id
+    ORDER BY cl.created_at DESC
+  `).all();
+
+  const totalGross = rows.reduce((sum, r) => sum + (Number(r.gross_amount) || 0), 0);
+  const totalEarned = rows.reduce((sum, r) => sum + (Number(r.commission_amount) || 0), 0);
+  const totalPendingPayout = rows
+    .filter(r => r.payout_status !== 'settled')
+    .reduce((sum, r) => sum + (Number(r.payout_amount) || 0), 0);
+  const totalSettledPayout = rows
+    .filter(r => r.payout_status === 'settled')
+    .reduce((sum, r) => sum + (Number(r.payout_amount) || 0), 0);
 
   res.json({
     productsRate,
     servicesRate,
+    totalGross,
     totalEarned,
+    totalPendingPayout,
+    totalSettledPayout,
     transactions: rows.map((r) => ({
       id: r.id,
       type: r.type,
@@ -3974,10 +3998,52 @@ app.get('/api/commission', requireAdmin, (req, res) => {
       commissionAmount: r.commission_amount,
       payoutAmount: r.payout_amount,
       beneficiaryId: r.beneficiary_id,
+      beneficiaryName: r.business_name || r.beneficiary_name || 'Vendor',
+      beneficiaryPhone: r.beneficiary_phone || '',
+      category: r.trade_category || (r.type === 'product' ? 'Product Seller' : 'Service Provider'),
       payoutStatus: r.payout_status,
+      settledAt: r.settled_at || null,
+      settlementRef: r.settlement_ref || null,
       createdAt: r.created_at
     }))
   });
+});
+
+// Settle Single Payout (Owner only)
+app.post('/api/commission/:id/settle', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { settlementRef } = req.body || {};
+  const now = new Date().toISOString();
+  const ref = settlementRef || `UPI_${Date.now().toString().slice(-6)}`;
+
+  const result = db.prepare(`
+    UPDATE commission_ledger 
+    SET payout_status = 'settled', settled_at = ?, settlement_ref = ?
+    WHERE id = ?
+  `).run(now, ref, id);
+
+  if (result.changes === 0) {
+    return res.status(404).json({ error: 'Ledger item not found.' });
+  }
+
+  logAudit(req.session.userId, req.session.name, 'admin', 'PAYOUT_SETTLED', `Payout for ledger entry ${id} marked SETTLED (Ref: ${ref})`, req.ip);
+  res.json({ success: true, id, settledAt: now, settlementRef: ref });
+});
+
+// Settle All Pending Payouts (Owner only)
+app.post('/api/commission/settle-all', requireAdmin, (req, res) => {
+  const { settlementRef } = req.body || {};
+  const now = new Date().toISOString();
+  const ref = settlementRef || `BULK_UPI_${Date.now().toString().slice(-6)}`;
+
+  const result = db.prepare(`
+    UPDATE commission_ledger 
+    SET payout_status = 'settled', settled_at = ?, settlement_ref = ?
+    WHERE payout_status != 'settled'
+  `).run(now, ref);
+
+  logAudit(req.session.userId, req.session.name, 'admin', 'BULK_PAYOUT_SETTLED', `Bulk settlement of ${result.changes} ledger entries (Ref: ${ref})`, req.ip);
+  res.json({ success: true, settledCount: result.changes, settledAt: now, settlementRef: ref });
 });
 
 // Update Commission Rates (Owner only)

@@ -44,7 +44,12 @@ import {
   Trash2,
   Image as ImageIcon,
   PhoneCall,
-  MessageSquare
+  MessageSquare,
+  Wallet,
+  ExternalLink,
+  Building2,
+  Filter,
+  ArrowUpRight
 } from 'lucide-react';
 
 interface Application {
@@ -116,7 +121,18 @@ export const AdminDashboard: React.FC = () => {
   // Live applications from backend only (no fake demo applications)
   const [applications, setApplications] = useState<Application[]>([]);
   const [appLoading, setAppLoading] = useState(false);
-  const [commissionStats, setCommissionStats] = useState({ productsRate: 10, servicesRate: 15, totalEarned: 0, transactions: [] as any[] });
+  const [commissionStats, setCommissionStats] = useState({
+    productsRate: 10,
+    servicesRate: 15,
+    totalGross: 0,
+    totalEarned: 0,
+    totalPendingPayout: 0,
+    totalSettledPayout: 0,
+    transactions: [] as any[]
+  });
+  const [payoutFilter, setPayoutFilter] = useState<'all' | 'pending' | 'settled'>('all');
+  const [payoutSearch, setPayoutSearch] = useState('');
+  const [settlingId, setSettlingId] = useState<string | null>(null);
   const [merchantUpi, setMerchantUpi] = useState('8310421121@axl');
   const [upiSaving, setUpiSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<
@@ -237,6 +253,48 @@ export const AdminDashboard: React.FC = () => {
       });
       if (res.ok) { setCommissionStats(await res.json()); showToast(`Commission rate updated to ${rate}%`); }
     } catch { showToast('Commission rate updated locally.'); }
+  };
+
+  const handleSettlePayout = async (id: string) => {
+    const defaultRef = `UPI_${Date.now().toString().slice(-6)}`;
+    const ref = window.prompt('Enter UPI Transaction ID / UTR or Settlement Note:', defaultRef);
+    if (ref === null) return;
+    setSettlingId(id);
+    try {
+      const res = await fetch(`${API}/commission/${id}/settle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settlementRef: ref })
+      });
+      if (res.ok) {
+        showToast('✅ Payout marked settled via UPI!');
+        fetchCommission();
+      } else {
+        showToast('Failed to update payout settlement.');
+      }
+    } catch {
+      showToast('Error updating payout.');
+    } finally {
+      setSettlingId(null);
+    }
+  };
+
+  const handleSettleAllPayouts = async () => {
+    if (!window.confirm('Are you sure you want to mark all pending vendor payouts as settled via UPI?')) return;
+    try {
+      const res = await fetch(`${API}/commission/settle-all`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settlementRef: `BULK_UPI_${Date.now().toString().slice(-6)}` })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showToast(`✅ Settled ${data.settledCount || 0} vendor payouts!`);
+        fetchCommission();
+      }
+    } catch {
+      showToast('Error executing bulk settlement.');
+    }
   };
 
   const [adminQuoteInput, setAdminQuoteInput] = useState<{ [id: string]: string }>({});
@@ -652,6 +710,206 @@ export const AdminDashboard: React.FC = () => {
                       </button>
                     </div>
                   ))
+                )}
+              </div>
+            </div>
+
+            {/* Vendor & Specialist Payout Ledger */}
+            <div className="bg-white rounded-2xl p-4 border border-emerald-200 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900">Vendor & Specialist Payout Ledger</h4>
+                    <p className="text-[10px] text-slate-500">PhonePe UPI Collections ({merchantUpi}) vs Net Payable to Vendors</p>
+                  </div>
+                </div>
+                {commissionStats.transactions.some((t: any) => t.payoutStatus !== 'settled') && (
+                  <button
+                    onClick={handleSettleAllPayouts}
+                    className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black shadow-xs flex items-center gap-1 active:scale-95 transition-all"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Settle All via UPI</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Payout Financial Metrics Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="bg-purple-50/70 border border-purple-150 rounded-xl p-2.5">
+                  <span className="text-[9px] font-black text-purple-700 uppercase tracking-wider block">Gross UPI Received</span>
+                  <div className="text-sm font-black text-purple-950 mt-0.5">
+                    ₹{commissionStats.totalGross?.toLocaleString('en-IN') || 0}
+                  </div>
+                  <span className="text-[8px] text-purple-600 font-semibold block mt-0.5">into {merchantUpi}</span>
+                </div>
+                <div className="bg-emerald-50/70 border border-emerald-150 rounded-xl p-2.5">
+                  <span className="text-[9px] font-black text-emerald-700 uppercase tracking-wider block">NSO Commission</span>
+                  <div className="text-sm font-black text-emerald-950 mt-0.5">
+                    ₹{commissionStats.totalEarned?.toLocaleString('en-IN') || 0}
+                  </div>
+                  <span className="text-[8px] text-emerald-600 font-semibold block mt-0.5">Platform Net Revenue</span>
+                </div>
+                <div className="bg-amber-50/70 border border-amber-150 rounded-xl p-2.5">
+                  <span className="text-[9px] font-black text-amber-700 uppercase tracking-wider block">Pending Vendor Owed</span>
+                  <div className="text-sm font-black text-amber-950 mt-0.5">
+                    ₹{commissionStats.totalPendingPayout?.toLocaleString('en-IN') || 0}
+                  </div>
+                  <span className="text-[8px] text-amber-600 font-semibold block mt-0.5">Awaiting Transfer</span>
+                </div>
+                <div className="bg-blue-50/70 border border-blue-150 rounded-xl p-2.5">
+                  <span className="text-[9px] font-black text-blue-700 uppercase tracking-wider block">Disbursed via UPI</span>
+                  <div className="text-sm font-black text-blue-950 mt-0.5">
+                    ₹{commissionStats.totalSettledPayout?.toLocaleString('en-IN') || 0}
+                  </div>
+                  <span className="text-[8px] text-blue-600 font-semibold block mt-0.5">Settled to Vendors</span>
+                </div>
+              </div>
+
+              {/* Filters & Search */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl text-[10px] font-black">
+                  {(['all', 'pending', 'settled'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setPayoutFilter(tab)}
+                      className={`px-2.5 py-1 rounded-lg capitalize transition-all ${
+                        payoutFilter === tab ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+                      }`}
+                    >
+                      {tab} ({
+                        tab === 'all'
+                          ? commissionStats.transactions.length
+                          : commissionStats.transactions.filter((t: any) =>
+                              tab === 'pending' ? t.payoutStatus !== 'settled' : t.payoutStatus === 'settled'
+                            ).length
+                      })
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="text"
+                  placeholder="Filter by vendor / ref..."
+                  value={payoutSearch}
+                  onChange={e => setPayoutSearch(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 text-[11px] font-semibold text-slate-800 outline-none w-44"
+                />
+              </div>
+
+              {/* Transactions List */}
+              <div className="space-y-2">
+                {commissionStats.transactions
+                  .filter((t: any) => {
+                    if (payoutFilter === 'pending') return t.payoutStatus !== 'settled';
+                    if (payoutFilter === 'settled') return t.payoutStatus === 'settled';
+                    return true;
+                  })
+                  .filter((t: any) => {
+                    if (!payoutSearch) return true;
+                    const q = payoutSearch.toLowerCase();
+                    return (
+                      t.beneficiaryName?.toLowerCase().includes(q) ||
+                      t.referenceId?.toLowerCase().includes(q) ||
+                      t.beneficiaryPhone?.includes(q)
+                    );
+                  }).length === 0 ? (
+                  <div className="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                    <p className="text-xs text-slate-400 font-medium">No ledger entries match this filter.</p>
+                  </div>
+                ) : (
+                  commissionStats.transactions
+                    .filter((t: any) => {
+                      if (payoutFilter === 'pending') return t.payoutStatus !== 'settled';
+                      if (payoutFilter === 'settled') return t.payoutStatus === 'settled';
+                      return true;
+                    })
+                    .filter((t: any) => {
+                      if (!payoutSearch) return true;
+                      const q = payoutSearch.toLowerCase();
+                      return (
+                        t.beneficiaryName?.toLowerCase().includes(q) ||
+                        t.referenceId?.toLowerCase().includes(q) ||
+                        t.beneficiaryPhone?.includes(q)
+                      );
+                    })
+                    .map((item: any) => {
+                      const isSettled = item.payoutStatus === 'settled';
+                      return (
+                        <div
+                          key={item.id}
+                          className={`p-3 rounded-xl border transition-all text-xs space-y-2 ${
+                            isSettled ? 'bg-slate-50/70 border-slate-200' : 'bg-white border-amber-200 shadow-xs'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-black tracking-wider ${
+                                  item.type === 'product'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : 'bg-purple-100 text-purple-800'
+                                }`}
+                              >
+                                {item.type}
+                              </span>
+                              <span className="font-mono font-bold text-slate-800 text-[11px]">
+                                {item.referenceId?.slice(0, 16)}
+                              </span>
+                            </div>
+                            <span
+                              className={`text-[9px] font-black px-2 py-0.5 rounded-full ${
+                                isSettled
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-amber-100 text-amber-800 animate-pulse'
+                              }`}
+                            >
+                              {isSettled ? '✅ Disbursed' : '⏳ Pending UPI Transfer'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-slate-600">
+                            <div>
+                              <span className="font-bold text-slate-900 block">{item.beneficiaryName}</span>
+                              <span className="text-[10px] text-slate-400">
+                                {item.category} • {item.beneficiaryPhone ? `+91 ${item.beneficiaryPhone}` : 'Direct Partner'}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-slate-500 text-[10px]">
+                                Gross: ₹{item.grossAmount} • Fee ({item.commissionRate}%): -₹{item.commissionAmount}
+                              </div>
+                              <div className="font-black text-slate-900 text-xs">
+                                Net Payout: <span className="text-emerald-700">₹{item.payoutAmount}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {isSettled ? (
+                            <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-100">
+                              <span>Ref: {item.settlementRef || 'UPI'}</span>
+                              <span>Settled: {new Date(item.settledAt || item.createdAt).toLocaleDateString()}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between pt-1 border-t border-amber-100/80">
+                              <span className="text-[10px] text-amber-700 font-semibold">
+                                Transfer ₹{item.payoutAmount} to vendor via UPI
+                              </span>
+                              <button
+                                onClick={() => handleSettlePayout(item.id)}
+                                disabled={settlingId === item.id}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black shadow-xs flex items-center gap-1 active:scale-95 disabled:opacity-50"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>{settlingId === item.id ? 'Saving...' : 'Mark Paid via UPI'}</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                 )}
               </div>
             </div>

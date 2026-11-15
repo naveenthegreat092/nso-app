@@ -23,18 +23,20 @@ let fcmEnabled = false;
 export function initFCM() {
   try {
     const require = createRequire(import.meta.url);
-    let admin;
+    let adminRaw;
     try {
-      admin = require('firebase-admin');
+      adminRaw = require('firebase-admin');
     } catch {
       console.warn('[FCM] firebase-admin not installed — push notifications disabled.');
       console.warn('[FCM] Run: npm install firebase-admin   then restart server.');
       return;
     }
+    const admin = adminRaw.default || adminRaw;
 
     // Already initialized
-    if (admin.apps.length > 0) {
-      firebaseApp = admin.apps[0];
+    const apps = admin.apps || [];
+    if (apps.length > 0) {
+      firebaseApp = apps[0];
       messaging = admin.messaging(firebaseApp);
       fcmEnabled = true;
       console.log('[FCM] ✅ Firebase Admin already initialized.');

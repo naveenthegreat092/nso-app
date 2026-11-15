@@ -19,7 +19,11 @@ import {
   Info,
   Tag,
   Zap,
-  ShoppingBag
+  ShoppingBag,
+  Crosshair,
+  ExternalLink,
+  Loader2,
+  Edit3
 } from 'lucide-react';
 
 export const CartCheckoutModal: React.FC<{
@@ -39,6 +43,54 @@ export const CartCheckoutModal: React.FC<{
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkoutComplete, setCheckoutComplete] = useState<any>(null);
   const [serverMerchantUpi, setServerMerchantUpi] = useState<string>('8310421121@axl');
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [addressInput, setAddressInput] = useState(deliveryAddress);
+
+  const detectCurrentLocation = () => {
+    if (!('geolocation' in navigator)) {
+      showToast('GPS Geolocation is not supported by your device browser.');
+      return;
+    }
+    setIsDetectingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`);
+          if (res.ok) {
+            const data = await res.json();
+            const addr = data.address || {};
+            const street = addr.road || addr.residential || '';
+            const suburb = addr.suburb || addr.neighbourhood || addr.subdivision || 'Bengaluru';
+            const city = addr.city || addr.town || 'Bengaluru';
+            const postcode = addr.postcode || '560001';
+            const formatted = `${street ? `${street}, ` : ''}${suburb}, ${city} - ${postcode}`;
+            setDeliveryAddress(formatted);
+            setAddressInput(formatted);
+            showToast(`📍 Location detected: ${suburb}`);
+          } else {
+            const fallback = `Near Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}, Bengaluru`;
+            setDeliveryAddress(fallback);
+            setAddressInput(fallback);
+            showToast('📍 GPS coordinates captured');
+          }
+        } catch {
+          const fallback = `Near Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}, Bengaluru`;
+          setDeliveryAddress(fallback);
+          setAddressInput(fallback);
+          showToast('📍 GPS coordinates captured');
+        } finally {
+          setIsDetectingLocation(false);
+        }
+      },
+      (err) => {
+        setIsDetectingLocation(false);
+        showToast(`GPS: ${err.message || 'Unable to retrieve location'}`);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  };
 
   useEffect(() => {
     api.getPublicSettings().then((settings) => {
@@ -203,18 +255,79 @@ export const CartCheckoutModal: React.FC<{
               </div>
             )}
 
-            {/* Delivery Address Pill */}
-            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 space-y-1.5 text-xs">
+            {/* Delivery Address Pill with 1-Tap GPS & Google Maps */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3 space-y-2 text-xs">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 font-bold text-slate-900">
                   <MapPin className="w-4 h-4 text-red-600" />
-                  <span>Delivering to Home</span>
+                  <span>Delivery Address</span>
                 </div>
-                <span className="text-[10px] text-red-600 font-extrabold cursor-pointer hover:underline">
-                  Edit
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={detectCurrentLocation}
+                    disabled={isDetectingLocation}
+                    className="flex items-center gap-1 text-[10px] bg-red-50 text-red-700 hover:bg-red-100 px-2 py-0.5 rounded-lg font-bold border border-red-200/60 active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    {isDetectingLocation ? (
+                      <Loader2 className="w-3 h-3 animate-spin text-red-600" />
+                    ) : (
+                      <Crosshair className="w-3 h-3 text-red-600" />
+                    )}
+                    <span>{isDetectingLocation ? 'Locating...' : 'Use Live GPS'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddressInput(deliveryAddress);
+                      setIsEditingAddress(!isEditingAddress);
+                    }}
+                    className="text-[10px] text-slate-600 font-extrabold hover:text-red-600"
+                  >
+                    {isEditingAddress ? 'Done' : 'Edit'}
+                  </button>
+                </div>
               </div>
-              <p className="text-slate-600 text-[11px] pl-5 leading-snug">{deliveryAddress}</p>
+
+              {isEditingAddress ? (
+                <div className="space-y-1.5 pt-1">
+                  <textarea
+                    value={addressInput}
+                    onChange={(e) => setAddressInput(e.target.value)}
+                    placeholder="Enter Flat/Door No, Apartment, Street, Landmark, Pincode"
+                    rows={2}
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2 text-[11px] text-slate-800 outline-none focus:border-red-400 font-medium"
+                  />
+                  <div className="flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeliveryAddress(addressInput);
+                        setIsEditingAddress(false);
+                        showToast('Address updated for this order');
+                      }}
+                      className="px-2.5 py-1 bg-red-600 text-white rounded-lg text-[10px] font-black"
+                    >
+                      Save Address
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-slate-700 text-[11px] pl-5 leading-snug font-medium">{deliveryAddress}</p>
+                  <div className="pl-5 pt-0.5">
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddress)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[9px] text-blue-600 hover:underline font-semibold"
+                    >
+                      <ExternalLink className="w-2.5 h-2.5" />
+                      <span>Open in Google Maps</span>
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Cart Items List */}
