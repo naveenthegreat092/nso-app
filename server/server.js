@@ -14,6 +14,7 @@ import { fileURLToPath } from 'url';
 import { DatabaseSync } from 'node:sqlite';
 import crypto from 'node:crypto';
 import { initFCM, sendPush, isFCMEnabled } from './fcm.js';
+import { initPostgresSync, triggerCloudSync, flushCloudSync, getCloudSyncStatus } from './postgresSync.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -524,6 +525,13 @@ const seedCandidateCategories = () => {
   }
 };
 try { seedCandidateCategories(); } catch (err) { console.warn('Error seeding categories:', err.message); }
+
+// Initialize Supabase PostgreSQL Cloud Persistence (when running server, not during test runs)
+if (!process.argv.some((arg) => arg && arg.includes('test'))) {
+  initPostgresSync(db).catch((err) => {
+    console.warn('[Supabase Sync] Background init error:', err.message);
+  });
+}
 
 // Seed default marketplace settings if not present
 const getSetting = (key, defaultVal) => {
@@ -2533,6 +2541,9 @@ app.post('/api/orders', requireAuth, (req, res) => {
       { type: 'admin_order', orderId, orderNumber }
     );
 
+    // Trigger persistent backup to Supabase PostgreSQL
+    triggerCloudSync(db);
+
     res.status(201).json({
       id: orderId,
       orderNumber,
@@ -2912,6 +2923,9 @@ app.post('/api/bookings', requireAuth, (req, res) => {
       `${service.title} booked by ${req.session.name} with ${service.provider_name}.`,
       { type: 'admin_booking', bookingId, bookingNumber }
     );
+
+    // Trigger persistent backup to Supabase PostgreSQL
+    triggerCloudSync(db);
 
     res.status(201).json({
       id: bookingId,
@@ -4486,6 +4500,21 @@ app.post('/api/notifications/test-push', requireAuth, async (req, res) => {
   }
 });
 
+// ── Admin Cloud Database Sync Endpoints ─────────────────────────────────────
+
+app.get('/api/admin/cloud-sync', requireAuth, requireAdmin, (req, res) => {
+  res.json({ success: true, ...getCloudSyncStatus(db) });
+});
+
+app.post('/api/admin/cloud-sync/flush', requireAuth, requireAdmin, async (req, res) => {
+  await flushCloudSync(db);
+  res.json({
+    success: true,
+    message: 'Local database flushed to Supabase PostgreSQL cloud storage.',
+    ...getCloudSyncStatus(db)
+  });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 16. HEALTH CHECK
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4503,6 +4532,7 @@ app.get('/api/health', (req, res) => {
     version: '2.0.0',
     database: 'SQLite (node:sqlite ACID WAL)',
     uptimeSeconds: Math.floor(process.uptime()),
+    cloudSync: getCloudSyncStatus(db),
     stats: {
       productsCount,
       approvedProductsCount,
