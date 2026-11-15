@@ -15,6 +15,7 @@ import {
   Check,
   X,
   ChevronRight,
+  ChevronLeft,
   MapPin,
   Navigation,
   Radio,
@@ -46,7 +47,8 @@ export const ProviderDashboard: React.FC = () => {
     services,
     serviceCategories,
     addNewService,
-    updateProviderRate
+    updateProviderRate,
+    switchRole
   } = useApp();
   const [activeTab, setActiveTab] = useState<'jobs' | 'schedule' | 'portfolio' | 'categories' | 'rates'>('jobs');
 
@@ -245,9 +247,18 @@ export const ProviderDashboard: React.FC = () => {
                 <p className="text-[10px] text-amber-100">{currentProviderName} ({currentProviderTrade})</p>
               </div>
             </div>
-            <span className="text-[10px] bg-amber-400/30 text-amber-100 border border-amber-300/30 px-2 py-0.5 rounded-full font-bold">
-              VERIFIED
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => switchRole('customer')}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 text-white text-[11px] font-bold border border-white/20 active:scale-95 transition-all"
+              >
+                <ChevronLeft className="w-3 h-3" />
+                <span>Store</span>
+              </button>
+              <span className="text-[10px] bg-amber-400/30 text-amber-100 border border-amber-300/30 px-2 py-0.5 rounded-full font-bold">
+                VERIFIED
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-white/20 text-center">

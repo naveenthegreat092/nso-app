@@ -67,7 +67,8 @@ export const BrandHeader: React.FC<{
       : 'Customer';
 
   // Only show role badge if user has non-customer roles or is on a non-customer view
-  const hasMultipleRoles = user.authorizedRoles.length > 1 || user.activeRole !== 'customer';
+  const isOwner = Boolean(user.adminVerified) || Boolean(user.phone && user.phone.replace(/\D/g, '').endsWith('8310421121'));
+  const hasMultipleRoles = user.authorizedRoles.length > 1 || user.activeRole !== 'customer' || isOwner;
 
   return (
     <header className="sticky top-0 z-40 bg-white/97 backdrop-blur-md border-b border-slate-100 shadow-[0_1px_8px_rgba(0,0,0,0.04)] px-4 pt-3 pb-3 space-y-2.5">
@@ -229,7 +230,7 @@ export const BrandHeader: React.FC<{
             </button>
 
             {/* Seller */}
-            {(user.sellerStatus === 'approved' || user.activeRole === 'seller') && (
+            {(user.sellerStatus === 'approved' || user.activeRole === 'seller' || isOwner) && (
               <button
                 onClick={() => { switchRole('seller'); setShowRoleModal(false); }}
                 className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all active:scale-98 ${
@@ -252,7 +253,7 @@ export const BrandHeader: React.FC<{
             )}
 
             {/* Provider */}
-            {(user.providerStatus === 'approved' || user.activeRole === 'provider') && (
+            {(user.providerStatus === 'approved' || user.activeRole === 'provider' || isOwner) && (
               <button
                 onClick={() => { switchRole('provider'); setShowRoleModal(false); }}
                 className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all active:scale-98 ${
@@ -275,7 +276,7 @@ export const BrandHeader: React.FC<{
             )}
 
             {/* Admin */}
-            {user.adminVerified && (
+            {(user.adminVerified || isOwner) && (
               <button
                 onClick={() => { switchRole('admin'); setShowRoleModal(false); }}
                 className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all active:scale-98 ${

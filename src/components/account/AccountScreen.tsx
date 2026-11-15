@@ -88,7 +88,7 @@ export const AccountScreen: React.FC<{
   };
 
   const handleProviderTap = () => {
-    if (user.providerStatus === 'approved') {
+    if (user.adminVerified || user.providerStatus === 'approved') {
       switchRole('provider');
     } else {
       setAppModalType('provider');
@@ -96,7 +96,7 @@ export const AccountScreen: React.FC<{
   };
 
   const handleSellerTap = () => {
-    if (user.sellerStatus === 'approved') {
+    if (user.adminVerified || user.sellerStatus === 'approved') {
       switchRole('seller');
     } else {
       setAppModalType('seller');

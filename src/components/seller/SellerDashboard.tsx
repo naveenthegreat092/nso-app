@@ -22,11 +22,12 @@ import {
   Image as ImageIcon,
   Trash2,
   MapPin,
-  ExternalLink
+  ExternalLink,
+  ChevronLeft
 } from 'lucide-react';
 
 export const SellerDashboard: React.FC = () => {
-  const { products, orders, updateOrderStatus, updateOrderDeliveryFee, addProduct, deleteProduct, updateProductStock, user, showToast } = useApp();
+  const { products, orders, updateOrderStatus, updateOrderDeliveryFee, addProduct, deleteProduct, updateProductStock, user, showToast, switchRole } = useApp();
   const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'earnings'>('orders');
 
   // New product form modal state
@@ -124,9 +125,18 @@ export const SellerDashboard: React.FC = () => {
                 <p className="text-[10px] text-emerald-100">{user.sellerApplication?.storeName || user.name || 'Verified Store'} (ID: {user.id.slice(-6)})</p>
               </div>
             </div>
-            <span className="text-[10px] bg-emerald-400/30 text-emerald-100 border border-emerald-300/30 px-2 py-0.5 rounded-full font-bold">
-              Status: APPROVED
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => switchRole('customer')}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 text-white text-[11px] font-bold border border-white/20 active:scale-95 transition-all"
+              >
+                <ChevronLeft className="w-3 h-3" />
+                <span>Store</span>
+              </button>
+              <span className="text-[10px] bg-emerald-400/30 text-emerald-100 border border-emerald-300/30 px-2 py-0.5 rounded-full font-bold">
+                APPROVED
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-white/20 text-center">
