@@ -117,7 +117,7 @@ export const AdminDashboard: React.FC = () => {
   const [applications, setApplications] = useState<Application[]>([]);
   const [appLoading, setAppLoading] = useState(false);
   const [commissionStats, setCommissionStats] = useState({ productsRate: 10, servicesRate: 15, totalEarned: 0, transactions: [] as any[] });
-  const [merchantUpi, setMerchantUpi] = useState('8310421121@ybl');
+  const [merchantUpi, setMerchantUpi] = useState('8310421121@axl');
   const [upiSaving, setUpiSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<
     'analytics' | 'payments' | 'special_requests' | 'quotes' | 'approvals' | 'services_rates' | 'disputes' | 'cancellations' | 'calls_chats' | 'audit' | 'settings'
@@ -1276,7 +1276,7 @@ export const AdminDashboard: React.FC = () => {
                   type="text"
                   value={merchantUpi}
                   onChange={(e) => setMerchantUpi(e.target.value)}
-                  placeholder="e.g. 8310421121@ybl or yourname@paytm"
+                  placeholder="e.g. 8310421121@axl or yourname@paytm"
                   className="flex-1 bg-white border border-purple-200 rounded-xl px-3 py-2 text-xs font-black text-purple-950 outline-none font-mono"
                 />
                 <button

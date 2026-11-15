@@ -38,7 +38,7 @@ export const CartCheckoutModal: React.FC<{
   const [couponDiscount, setCouponDiscount] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkoutComplete, setCheckoutComplete] = useState<any>(null);
-  const [serverMerchantUpi, setServerMerchantUpi] = useState<string>('8310421121@ybl');
+  const [serverMerchantUpi, setServerMerchantUpi] = useState<string>('8310421121@axl');
 
   useEffect(() => {
     api.getPublicSettings().then((settings) => {
@@ -413,8 +413,8 @@ export const CartCheckoutModal: React.FC<{
 
               {/* Direct UPI Intent & QR Box (Zero Razorpay required) */}
               {paymentMethod === 'upi' && (() => {
-                const adminUpi = serverMerchantUpi || localStorage.getItem('nso_merchant_upi') || '8310421121@ybl';
-                const upiIntent = `upi://pay?pa=${adminUpi}&pn=NSO%20Orbit&am=${fullTotal}&cu=INR&tn=Order%20Payment`;
+                const adminUpi = serverMerchantUpi || localStorage.getItem('nso_merchant_upi') || '8310421121@axl';
+                const upiIntent = `upi://pay?pa=${adminUpi}&pn=Naveen%20%20U&am=${fullTotal}&cu=INR&tn=Order%20Payment&mc=0000&mode=02&purpose=00`;
                 const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiIntent)}`;
 
                 return (
@@ -439,7 +439,7 @@ export const CartCheckoutModal: React.FC<{
 
                     <div>
                       <p className="text-[11px] font-bold text-slate-700">
-                        Scan with GPay, PhonePe, or Paytm
+                        Scan with PhonePe, GPay, or Paytm (Payee: <strong>Naveen U</strong>)
                       </p>
                       <div className="flex items-center justify-center gap-1 mt-0.5 text-[11px] text-slate-500 font-mono">
                         <span>UPI ID: <strong className="text-slate-900">{adminUpi}</strong></span>

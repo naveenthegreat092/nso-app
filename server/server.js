@@ -548,6 +548,7 @@ const setSetting = (key, value) => {
 
 if (!getSetting('products_commission_rate', null)) setSetting('products_commission_rate', '10');
 if (!getSetting('services_commission_rate', null)) setSetting('services_commission_rate', '15');
+if (!getSetting('merchant_upi_id', null) || getSetting('merchant_upi_id', null) === '8310421121@ybl') setSetting('merchant_upi_id', '8310421121@axl');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. APP & MIDDLEWARE SETUP
@@ -4077,9 +4078,10 @@ app.post('/api/payments/webhook', (req, res) => {
 
 // Public settings (returns current PhonePe UPI ID and gateway readiness to all phones)
 app.get('/api/settings/public', (req, res) => {
-  const merchantUpi = getSetting('merchant_upi_id', PHONEPE_MERCHANT_UPI_ID || '8310421121@ybl');
+  const merchantUpi = getSetting('merchant_upi_id', PHONEPE_MERCHANT_UPI_ID || '8310421121@axl');
   res.json({
     merchantUpiId: merchantUpi,
+    merchantName: 'Naveen U',
     phonepeMerchantId: PHONEPE_MERCHANT_ID,
     phonepeEnv: PHONEPE_ENV,
     isConfigured: Boolean(PHONEPE_MERCHANT_ID && PHONEPE_SALT_KEY)
@@ -4107,9 +4109,9 @@ app.post('/api/payments/phonepe/initiate', requireAuth, async (req, res) => {
   }
 
   const txnId = `NSO_${Date.now()}_${crypto.randomInt(1000, 9999)}`;
-  const merchantUpi = getSetting('merchant_upi_id', PHONEPE_MERCHANT_UPI_ID || '8310421121@ybl');
+  const merchantUpi = getSetting('merchant_upi_id', PHONEPE_MERCHANT_UPI_ID || '8310421121@axl');
   const note = encodeURIComponent(`NSO Order ${orderId || bookingId || txnId}`);
-  const upiIntent = `upi://pay?pa=${merchantUpi}&pn=NSO%20Orbit&am=${numAmount.toFixed(2)}&cu=INR&tn=${note}`;
+  const upiIntent = `upi://pay?pa=${merchantUpi}&pn=Naveen%20%20U&am=${numAmount.toFixed(2)}&cu=INR&tn=${note}&mc=0000&mode=02&purpose=00`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiIntent)}`;
 
   const nowIso = new Date().toISOString();
