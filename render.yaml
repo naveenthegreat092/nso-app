@@ -14,6 +14,8 @@ services:
       - key: SESSION_SECRET
         value: "nso-bengaluru-pilot-secure-session-key-2026"
       - key: OTP_PROVIDER
-        value: "console"
+        value: "fast2sms"
+      - key: FAST2SMS_API_KEY
+        value: "cAwy8bhS01fsLr2fnO3C7smCfNLKmqAKTDnkKBLlFiOkr7qfIHAdtITafHGovc4K2IbGwF045bIetAA9"
       - key: DATABASE_URL
         sync: false
