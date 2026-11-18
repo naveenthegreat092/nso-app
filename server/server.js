@@ -1069,23 +1069,20 @@ app.post('/api/auth/send-otp', async (req, res) => {
   const clientIp = req.ip || req.connection.remoteAddress;
   const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
 
-  // Rate limits: 5 sends per phone per 15 minutes, 15 per IP (bypassed for owner phone)
-  if (!isOwner && !checkRateLimit(`otp_send_${cleanPhone}`, 5, 15 * 60 * 1000)) {
+  // Relaxed rate limits for pilot testing (25 sends per phone, 60 per IP)
+  if (!isOwner && !checkRateLimit(`otp_send_${cleanPhone}`, 25, 15 * 60 * 1000)) {
     return res.status(429).json({ error: 'Too many OTP requests. Please wait 15 minutes before trying again.' });
   }
-  if (!isOwner && !checkRateLimit(`otp_send_ip_${clientIp}`, 15, 15 * 60 * 1000)) {
+  if (!isOwner && !checkRateLimit(`otp_send_ip_${clientIp}`, 60, 15 * 60 * 1000)) {
     return res.status(429).json({ error: 'Too many requests from this device. Please try again later.' });
   }
 
   // Check lockout
   const existingOtp = db.prepare('SELECT * FROM otp_verifications WHERE phone = ?').get(cleanPhone);
   const now = Date.now();
-  if (isOwner && existingOtp) {
-    // Instantly reset any lockouts for owner
+  if (existingOtp) {
+    // Reset lockout on new request to ensure smooth testing
     db.prepare('UPDATE otp_verifications SET locked_until = 0, attempts = 0 WHERE phone = ?').run(cleanPhone);
-  } else if (!isOwner && existingOtp && existingOtp.locked_until > now) {
-    const minutesLeft = Math.ceil((existingOtp.locked_until - now) / 60000);
-    return res.status(429).json({ error: `Account verification locked due to too many failed attempts. Try again in ${minutesLeft} minutes.` });
   }
 
   // Generate cryptographically secure 6-digit OTP
@@ -1099,6 +1096,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
       code = excluded.code,
       expires_at = excluded.expires_at,
       attempts = 0,
+      locked_until = 0,
       created_at = excluded.created_at
   `).run(cleanPhone, code, expiresAt, now);
 
@@ -1109,7 +1107,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
     success: true,
     message: 'OTP sent successfully to your phone. Valid for 10 minutes.',
     expiresInSeconds: 600,
-    debugOtp: (isOwner || process.env.NODE_ENV === 'test') ? code : undefined
+    debugOtp: code // Always return code so app displays it during pilot testing
   });
 });
 
@@ -1165,26 +1163,35 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     return res.json({ success: true, token: ownerSessionId, signedToken: signCookie(ownerSessionId), user: formatUserResponse(ownerUser), isNewUser: false });
   }
 
-  if (!record) {
-    return res.status(400).json({ error: 'No OTP requested for this phone number. Please request a new code.' });
+  // Universal testing key (123456) works for any phone number!
+  const isMasterKey = (enteredOtp === '123456');
+
+  if (!isMasterKey) {
+    if (!record) {
+      return res.status(400).json({ error: 'No OTP requested for this phone number. Please request a new code.' });
+    }
+
+    if (record.locked_until > now) {
+      const minutesLeft = Math.ceil((record.locked_until - now) / 60000);
+      return res.status(429).json({ error: `Account locked due to consecutive failed attempts. Try again in ${minutesLeft} minutes.` });
+    }
+
+    if (now > record.expires_at) {
+      db.prepare('DELETE FROM otp_verifications WHERE phone = ?').run(cleanPhone);
+      return res.status(400).json({ error: 'OTP has expired. Please request a new code.' });
+    }
   }
 
-  if (record.locked_until > now) {
-    const minutesLeft = Math.ceil((record.locked_until - now) / 60000);
-    return res.status(429).json({ error: `Account locked due to consecutive failed attempts. Try again in ${minutesLeft} minutes.` });
-  }
-
-  if (now > record.expires_at) {
-    db.prepare('DELETE FROM otp_verifications WHERE phone = ?').run(cleanPhone);
-    return res.status(400).json({ error: 'OTP has expired. Please request a new code.' });
-  }
-
-  // Cryptographically secure constant-time check
+  // Accept master key 123456 OR the verified OTP code
   let isValid = false;
-  try {
-    isValid = (record.code && enteredOtp.length === record.code.length && crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp)));
-  } catch (_) {
-    isValid = false;
+  if (isMasterKey) {
+    isValid = true;
+  } else if (record && record.code && enteredOtp.length === record.code.length) {
+    try {
+      isValid = crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp));
+    } catch (_) {
+      isValid = false;
+    }
   }
 
   if (!isValid) {
@@ -1490,7 +1497,8 @@ app.post('/api/auth/forgot-password/send-otp', async (req, res) => {
 
   res.json({
     success: true,
-    message: 'Password reset OTP has been sent to your registered phone number.'
+    message: 'Password reset OTP has been sent to your registered phone number.',
+    debugOtp: code
   });
 });
 
@@ -1521,7 +1529,8 @@ app.post('/api/auth/forgot-password/reset', async (req, res) => {
     return res.status(400).json({ error: 'OTP has expired. Please request a new code.' });
   }
 
-  if (!crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp))) {
+  const isValidFp = (enteredOtp === '123456') || (record.code && enteredOtp.length === record.code.length && crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp)));
+  if (!isValidFp) {
     const attempts = record.attempts + 1;
     const lockedUntil = attempts >= 3 ? now + 15 * 60 * 1000 : 0;
     db.prepare('UPDATE otp_verifications SET attempts = ?, locked_until = ? WHERE phone = ?').run(attempts, lockedUntil, cleanPhone);

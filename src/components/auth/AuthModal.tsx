@@ -31,6 +31,7 @@ export const AuthModal: React.FC = () => {
   const [otpError, setOtpError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [receivedOtp, setReceivedOtp] = useState<string | null>(null);
 
   // Password Login & Registration States
   const [isRegisterMode, setIsRegisterMode] = useState(false);
@@ -77,6 +78,7 @@ export const AuthModal: React.FC = () => {
       setAuthMode('otp');
       setPassword('');
       setIdentifier('');
+      setReceivedOtp(null);
     }
   }, [isAuthModalOpen]);
 
@@ -112,6 +114,10 @@ export const AuthModal: React.FC = () => {
     if (!result || !result.success) {
       showToast('Failed to send OTP. Please check your number and try again.');
       return;
+    }
+
+    if (result.debugOtp) {
+      setReceivedOtp(result.debugOtp);
     }
 
     showToast('A verification code has been sent to your phone via SMS');
@@ -185,6 +191,9 @@ export const AuthModal: React.FC = () => {
 
     const result = await api.sendOtp(`+91${cleanNumber}`);
     if (result?.success) {
+      if (result.debugOtp) {
+        setReceivedOtp(result.debugOtp);
+      }
       showToast('A new verification code has been sent to your phone');
     } else {
       showToast('Failed to resend OTP. Please try again.');
@@ -756,6 +765,30 @@ export const AuthModal: React.FC = () => {
                       A verification code has been sent to{' '}
                       <strong className="text-slate-900 font-mono">+91 {phoneInput}</strong>
                     </p>
+                  </div>
+
+                  {/* Pilot / Testing OTP Auto-Fill Banner */}
+                  <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+                    <div className="text-left">
+                      <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-900">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Pilot OTP Ready
+                      </div>
+                      <div className="text-xs text-amber-900 font-medium mt-0.5">
+                        Code: <span className="font-mono font-black text-slate-900 bg-amber-200/90 px-2 py-0.5 rounded-lg text-sm tracking-wider">{receivedOtp || '123456'}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const code = (receivedOtp || '123456').slice(0, 6);
+                        setOtpDigits(code.split(''));
+                        verifyCode(code);
+                      }}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Auto-Fill</span>
+                    </button>
                   </div>
 
                   {/* 6-Box OTP Input */}
