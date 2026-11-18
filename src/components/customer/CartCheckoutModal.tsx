@@ -32,8 +32,9 @@ export const CartCheckoutModal: React.FC<{
 }> = ({ isOpen, onClose }) => {
   const { cart, removeFromCart, updateCartQuantity, createOrder, user, showToast } = useApp();
   const [deliveryAddress, setDeliveryAddress] = useState(
-    user.address || 'Flat 402, Orbit Towers, Indiranagar, Bengaluru - 560038'
+    user.address || ''
   );
+  const [addressError, setAddressError] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
   const [deliveryInstruction, setDeliveryInstruction] = useState('Ring doorbell');
   const [tipAmount, setTipAmount] = useState<number>(0);
@@ -45,7 +46,7 @@ export const CartCheckoutModal: React.FC<{
   const [serverMerchantUpi, setServerMerchantUpi] = useState<string>('8310421121@axl');
   const [isEditingAddress, setIsEditingAddress] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
-  const [addressInput, setAddressInput] = useState(deliveryAddress);
+  const [addressInput, setAddressInput] = useState(user.address || '');
 
   const detectCurrentLocation = () => {
     if (!('geolocation' in navigator)) {
@@ -143,6 +144,13 @@ export const CartCheckoutModal: React.FC<{
   };
 
   const handleConfirmOrder = async () => {
+    if (!deliveryAddress.trim()) {
+      setAddressError('Please enter your delivery address before placing the order.');
+      setIsEditingAddress(true);
+      showToast('⚠️ Please enter your delivery address first.');
+      return;
+    }
+    setAddressError('');
     setIsProcessing(true);
     try {
       const order = await createOrder(
@@ -314,18 +322,29 @@ export const CartCheckoutModal: React.FC<{
                 </div>
               ) : (
                 <div className="space-y-1">
-                  <p className="text-slate-700 text-[11px] pl-5 leading-snug font-medium">{deliveryAddress}</p>
-                  <div className="pl-5 pt-0.5">
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddress)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[9px] text-blue-600 hover:underline font-semibold"
-                    >
-                      <ExternalLink className="w-2.5 h-2.5" />
-                      <span>Open in Google Maps</span>
-                    </a>
-                  </div>
+                  {deliveryAddress ? (
+                    <>
+                      <p className="text-slate-700 text-[11px] pl-5 leading-snug font-medium">{deliveryAddress}</p>
+                      <div className="pl-5 pt-0.5">
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(deliveryAddress)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-[9px] text-blue-600 hover:underline font-semibold"
+                        >
+                          <ExternalLink className="w-2.5 h-2.5" />
+                          <span>Open in Google Maps</span>
+                        </a>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-[11px] pl-5 text-amber-700 font-bold">
+                      ⚠️ No address entered — tap "Edit" or "Use Live GPS" to add your delivery address.
+                    </p>
+                  )}
+                  {addressError && (
+                    <p className="text-[11px] pl-5 text-red-600 font-bold mt-0.5">{addressError}</p>
+                  )}
                 </div>
               )}
             </div>

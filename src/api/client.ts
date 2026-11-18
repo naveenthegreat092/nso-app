@@ -9,7 +9,8 @@ import {
   JobQuotation,
   HourlyDetails,
   ReportedProblem,
-  ProviderCancellationReview
+  ProviderCancellationReview,
+  ProviderDetail
 } from '../types';
 
 // Dynamic API Base URL:
@@ -28,17 +29,13 @@ const API_BASE = getApiBase();
 /** Default fetch options — always include session cookies */
 const defaultOpts: RequestInit = { credentials: 'include' };
 
-/** Helper to provide authentication headers (tokens and admin bypass) across web and native WebViews */
+/** Helper to provide authentication headers (tokens) across web and native WebViews */
 export const getAuthHeaders = (extra?: Record<string, string>): Record<string, string> => {
   const headers: Record<string, string> = { ...extra };
   const token = localStorage.getItem('nso_auth_token');
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
     headers['x-session-token'] = token;
-  }
-  const adminPhone = localStorage.getItem('nso_admin_phone');
-  if (adminPhone) {
-    headers['x-admin-phone'] = adminPhone;
   }
   const userPhone = localStorage.getItem('nso_user_phone');
   if (userPhone) {
@@ -415,6 +412,47 @@ export const api = {
       return res.ok;
     } catch {
       return false;
+    }
+  },
+
+  verifyOrderPayment: async (orderId: string, transactionId?: string): Promise<{ success: boolean; order?: Order; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/orders/${orderId}/verify-payment`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ transactionId })
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  cancelOrderPayment: async (orderId: string, reason?: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/orders/${orderId}/cancel-payment`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ reason })
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  getProviders: async (): Promise<ProviderDetail[]> => {
+    try {
+      const res = await fetch(`${API_BASE}/providers`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
     }
   },
 
@@ -1359,6 +1397,167 @@ export const api = {
       return await res.json();
     } catch {
       return null;
+    }
+  },
+
+  // ── Password Recovery ────────────────────────────────────────────────────────
+
+  forgotPasswordSendOtp: async (phone: string): Promise<{ success: boolean; message?: string; debugOtp?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/forgot-password/send-otp`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ phone })
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  forgotPasswordReset: async (phone: string, otp: string, newPassword: string): Promise<{ success: boolean; message?: string; token?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/forgot-password/reset`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ phone, otp, newPassword })
+      });
+      const data = await res.json();
+      if (data.token) localStorage.setItem('nso_auth_token', data.token);
+      return data;
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  // ── Biometrics ──────────────────────────────────────────────────────────────
+
+  registerBiometricCredential: async (credentialId: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/biometric/register`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ credentialId })
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  biometricLogin: async (credentialId: string, identifier?: string): Promise<{ success: boolean; user?: UserProfile; token?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/biometric/login`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ credentialId, identifier })
+      });
+      const data = await res.json();
+      if (data.token) localStorage.setItem('nso_auth_token', data.token);
+      if (data.user?.phone) {
+        const clean = data.user.phone.replace(/\D/g, '').slice(-10);
+        localStorage.setItem('nso_user_phone', clean);
+      }
+      return data;
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  // ── Admin Multi-Factor Authentication ───────────────────────────────────────
+
+  adminStartMfa: async (phone: string, password: string): Promise<{ success: boolean; adminSessionId?: string; emailMasked?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/admin/start`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ phone, password })
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  adminVerifyBiometric: async (adminSessionId: string, credentialVerified: boolean): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/admin/verify-biometric`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ adminSessionId, credentialVerified })
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  adminVerifyEmailOtp: async (adminSessionId: string, code: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/admin/verify-email-otp`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ adminSessionId, code })
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  adminFinalizeMfa: async (adminSessionId: string): Promise<{ success: boolean; user?: UserProfile; token?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/admin/finalize`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ adminSessionId })
+      });
+      const data = await res.json();
+      if (data.token) localStorage.setItem('nso_auth_token', data.token);
+      if (data.user?.phone) {
+        const clean = data.user.phone.replace(/\D/g, '').slice(-10);
+        localStorage.setItem('nso_user_phone', clean);
+        localStorage.setItem('nso_admin_phone', clean);
+      }
+      return data;
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  uploadServiceWorkMedia: async (serviceId: string, workPhotos: string[], workVideos: string[]): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/services/${serviceId}/work-media`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ workPhotos, workVideos })
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  addProviderPortfolioPhoto: async (item: { title: string; image: string; tag: string }): Promise<{ success: boolean; item?: any; message?: string; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/provider/portfolio`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(item)
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: e.message };
     }
   }
 };

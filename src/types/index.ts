@@ -110,6 +110,8 @@ export interface ServiceCategory {
 
 export interface ProviderDetail {
   id: string;
+  issuedProviderId?: string;
+  userId?: string;
   name: string;
   avatar: string;
   tradeTitle: string;
@@ -164,6 +166,8 @@ export interface Service {
   categoryId?: string;
   providerId: string;
   providerName: string;
+  issuedProviderId?: string;
+  providerUserId?: string;
   providerRating: number;
   providerJobsCompleted: number;
   modes: ('home_visit' | 'provider_location')[];
@@ -175,6 +179,8 @@ export interface Service {
   hubAddress?: string;
   hubLat?: number;
   hubLng?: number;
+  workPhotos?: string[];
+  workVideos?: string[];
 }
 
 export interface CartItem {
@@ -184,6 +190,7 @@ export interface CartItem {
 }
 
 export type OrderStatus =
+  | 'payment_pending'
   | 'confirmed'
   | 'packed'
   | 'shipped'
@@ -352,6 +359,8 @@ export interface Booking {
   serviceTitle: string;
   providerId: string;
   providerName: string;
+  issuedProviderId?: string;
+  providerUserId?: string;
   customerId: string;
   customerName: string;
   customerPhone?: string;

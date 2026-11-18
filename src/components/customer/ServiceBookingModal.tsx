@@ -158,8 +158,11 @@ export const ServiceBookingModal: React.FC<{
 
               <div>
                 <h3 className="font-black text-sm text-slate-900">{service.title}</h3>
-                <div className="flex items-center gap-2 text-xs text-slate-600 mt-0.5">
-                  <span className="font-semibold text-slate-800">{service.providerName}</span>
+                <div className="flex items-center gap-1.5 text-xs text-slate-600 mt-0.5 flex-wrap">
+                  <span className="font-bold text-slate-900">{service.providerName}</span>
+                  <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-black px-1.5 py-0.5 rounded">
+                    ID: {service.issuedProviderId || service.providerId}
+                  </span>
                   <span>•</span>
                   <div className="flex items-center gap-0.5 text-amber-600 font-extrabold">
                     <Star className="w-3 h-3 fill-amber-400 text-amber-400" />

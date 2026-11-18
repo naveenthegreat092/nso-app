@@ -299,9 +299,12 @@ export const ExploreScreen: React.FC<{
                       e.stopPropagation();
                       openProviderProfile(s.providerId);
                     }}
-                    className="flex items-center gap-1.5 pt-0.5"
+                    className="flex items-center gap-1.5 pt-0.5 flex-wrap cursor-pointer"
                   >
-                    <p className="text-xs text-slate-500 font-medium hover:text-red-600">{s.providerName}</p>
+                    <p className="text-xs text-slate-600 font-bold hover:text-red-600">{s.providerName}</p>
+                    <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-black px-1.5 py-0.5 rounded">
+                      ID: {s.issuedProviderId || s.providerId}
+                    </span>
                     <span className="text-[10px] text-blue-600 font-bold hover:underline">Profile ↗</span>
                   </div>
                 </div>

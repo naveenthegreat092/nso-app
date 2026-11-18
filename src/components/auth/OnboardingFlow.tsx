@@ -9,10 +9,13 @@ import {
   Wrench,
   ShoppingBag,
   ChevronRight,
-  UserCheck
+  UserCheck,
+  Lock,
+  KeyRound
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { api } from '../../api/client';
+import { AdminMfaModal } from './AdminMfaModal';
 
 export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplete }) => {
   const {
@@ -25,9 +28,9 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
     showToast
   } = useApp();
 
-  // Steps: 'splash' -> 'login_phone' -> 'otp' -> 'select_role' -> 'seller_form' -> 'provider_form' -> 'submitted_wait'
+  // Steps: 'splash' -> 'login_phone' -> 'otp' -> 'set_password' -> 'select_role' -> 'seller_form' -> 'provider_form' -> 'submitted_wait'
   const [step, setStep] = useState<
-    'splash' | 'login_phone' | 'otp' | 'select_role' | 'customer_form' | 'seller_form' | 'provider_form' | 'submitted_wait'
+    'splash' | 'login_phone' | 'otp' | 'set_password' | 'select_role' | 'customer_form' | 'seller_form' | 'provider_form' | 'submitted_wait'
   >('splash');
 
   // Phone & OTP
@@ -35,6 +38,11 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showAdminMfa, setShowAdminMfa] = useState(false);
+
+  // New Password Setup
+  const [newPassword, setNewPassword] = useState('');
+  const [isSettingPassword, setIsSettingPassword] = useState(false);
 
   // Customer Profile fields
   const [custName, setCustName] = useState('');
@@ -52,6 +60,8 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
   const [hourlyRate, setHourlyRate] = useState(350);
   const [experienceYears, setExperienceYears] = useState(5);
   const [idProofNumber, setIdProofNumber] = useState('');
+  const [workSampleUrl, setWorkSampleUrl] = useState('');
+  const [previousWorkDesc, setPreviousWorkDesc] = useState('');
 
   // Auto-progress from splash after 1.2s
   useEffect(() => {
@@ -79,24 +89,19 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
       return;
     }
 
-    const isOwner = clean === '8310421121';
     setIsSubmitting(true);
     const res = await api.sendOtp(`+91${clean}`);
     setIsSubmitting(false);
 
-    if (res && res.debugOtp) {
-      showToast(`[TEST OTP]: ${res.debugOtp}`);
-      setOtp(res.debugOtp);
-    } else if (res && res.error) {
-      showToast(`[TEST MODE]: Enter 123456 to continue`);
-      setOtp('123456');
+    if (res && res.success) {
+      showToast(res.message || 'Verification code sent to your phone via SMS');
+      setOtp('');
+      setOtpError(null);
+      setStep('otp');
     } else {
-      showToast(`[TEST OTP]: 123456`);
-      setOtp('123456');
+      showToast(res?.error || 'Failed to send verification code. Please check your number.');
+      setOtpError(res?.error || 'SMS dispatch failed');
     }
-
-    setOtpError(null);
-    setStep('otp');
   };
 
   // Verify OTP
@@ -113,25 +118,44 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
     const clean = phone.replace(/\D/g, '').slice(-10);
     const isOwner = clean === '8310421121';
 
-    const verifyRes = await api.verifyOtp(`+91${clean}`, cleanOtp);
+    const verifyRes = await (api as any).verifyOtp(`+91${clean}`, cleanOtp);
     setIsSubmitting(false);
 
-    // In simulated test mode, allow verification with server response OR 123456
-    if (!verifyRes?.success && cleanOtp !== '123456' && cleanOtp !== otp) {
-      setOtpError(verifyRes?.error || 'Invalid or expired code. Please enter 123456 in test mode.');
+    if (!verifyRes?.success) {
+      setOtpError(verifyRes?.error || 'Invalid or expired verification code.');
       return;
     }
 
-    // Call loginUser passing the clean phone number
     const authProfile = await loginUser(clean);
 
-    // Check if the authenticated profile is admin or the owner phone
-    if (authProfile?.adminVerified || authProfile?.activeRole === 'admin' || isOwner) {
-      showToast('👑 Welcome Marketplace Owner! Entering Admin Console...');
-      onComplete();
+    if (isOwner) {
+      showToast('Owner recognized! Multi-factor security verification required.');
+      setShowAdminMfa(true);
+    } else if (verifyRes?.needsPasswordSetup) {
+      showToast('Phone verified! Please set up your password for future logins.');
+      setStep('set_password');
     } else {
       showToast('Phone verified! Choose how you want to join NSO.');
       setStep('select_role');
+    }
+  };
+
+  const handleSavePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword.trim() || newPassword.trim().length < 6) {
+      showToast('Password must be at least 6 characters long');
+      return;
+    }
+
+    setIsSettingPassword(true);
+    const res = await api.setPassword(newPassword.trim());
+    setIsSettingPassword(false);
+
+    if (res && res.success) {
+      showToast('✅ Password set successfully! You can now use your password for future logins.');
+      setStep('select_role');
+    } else {
+      showToast(res?.error || 'Failed to save password');
     }
   };
 
@@ -172,7 +196,11 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
       experienceYears: Number(experienceYears) || 3,
       hourlyRate: Number(hourlyRate) || 350,
       idProofType: 'Aadhaar Card',
-      idProofNumber: idProofNumber.trim() || '5421-XXXX-9810'
+      idProofNumber: idProofNumber.trim() || '5421-XXXX-9810',
+      previousWork: previousWorkDesc.trim() || undefined,
+      previousWorkSamples: workSampleUrl.trim()
+        ? [{ title: `${tradeCategory} Work Sample`, image: workSampleUrl.trim() }]
+        : undefined
     });
     setStep('submitted_wait');
   };
@@ -311,6 +339,57 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
             >
               ← Change Phone Number
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── SET PASSWORD STEP (Requirement 1: Setup Password after First OTP) ── */}
+      {step === 'set_password' && (
+        <div className="flex-1 flex flex-col justify-between py-6 animate-fade-in-up">
+          <div className="space-y-6">
+            <div>
+              <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Account Security</span>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight mt-1">Set Your Password</h2>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                Create a secure password. For future logins, you can use your phone number and password directly without waiting for OTP SMS.
+              </p>
+            </div>
+
+            <form onSubmit={handleSavePassword} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1.5">New Password</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    placeholder="Enter at least 6 characters"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSettingPassword || newPassword.length < 6}
+                className="w-full py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-black text-sm rounded-2xl shadow-lg shadow-red-500/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+              >
+                <span>{isSettingPassword ? 'Saving Password…' : 'Set Password & Continue'}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStep('select_role')}
+                className="w-full py-2 text-xs text-slate-400 hover:text-slate-600 font-bold text-center block"
+              >
+                Skip for now →
+              </button>
+            </form>
           </div>
         </div>
       )}
@@ -598,6 +677,32 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all font-mono"
                 />
               </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Previous Work Description <span className="text-amber-600 font-normal">(Required for verification)</span>
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Describe your recent jobs, projects, or specialized service expertise..."
+                  value={previousWorkDesc}
+                  onChange={(e) => setPreviousWorkDesc(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Work Sample Photo URL <span className="text-amber-600 font-normal">(Shows on marketplace)</span>
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://images.unsplash.com/... or photo URL"
+                  value={workSampleUrl}
+                  onChange={(e) => setWorkSampleUrl(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all font-mono"
+                />
+              </div>
             </div>
           </div>
 
@@ -655,6 +760,16 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
           </div>
         </div>
       )}
+
+      {/* Admin Multi-Factor Security Modal */}
+      <AdminMfaModal
+        isOpen={showAdminMfa}
+        onClose={() => setShowAdminMfa(false)}
+        onSuccess={() => {
+          setShowAdminMfa(false);
+          onComplete();
+        }}
+      />
     </div>
   );
 };

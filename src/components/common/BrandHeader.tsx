@@ -12,8 +12,10 @@ import {
   ShieldAlert,
   User,
   X,
-  CheckCircle2
+  CheckCircle2,
+  Lock
 } from 'lucide-react';
+import { AdminMfaModal } from '../auth/AdminMfaModal';
 
 export const BrandHeader: React.FC<{
   onOpenCart: () => void;
@@ -36,6 +38,7 @@ export const BrandHeader: React.FC<{
 
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [showRoleModal, setShowRoleModal] = useState(false);
+  const [showAdminMfa, setShowAdminMfa] = useState(false);
 
   const placeholders = [
     'Search earbuds, smartwatches, groceries...',
@@ -73,18 +76,18 @@ export const BrandHeader: React.FC<{
   return (
     <header className="sticky top-0 z-40 bg-white/97 backdrop-blur-md border-b border-slate-100 shadow-[0_1px_8px_rgba(0,0,0,0.04)] px-4 pt-3 pb-3 space-y-2.5">
       {/* Top Bar: Brand Logo + Location + Actions */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-1.5">
         {/* Left: Brand & Location */}
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
           <div
             onClick={() => setActiveTab('home')}
-            className="flex items-center gap-2 cursor-pointer flex-shrink-0 active:scale-95 transition-transform"
+            className="flex items-center gap-1.5 cursor-pointer flex-shrink-0 active:scale-95 transition-transform"
           >
             {/* NSO Official Logo Mark */}
             <img
               src="/nso-app-icon.svg"
               alt="NSO Orbit"
-              className="w-9 h-9 rounded-[12px] shadow-md shadow-blue-900/20 object-contain"
+              className="w-8 h-8 min-[380px]:w-9 min-[380px]:h-9 rounded-[10px] shadow-sm object-contain"
             />
             <div className="hidden min-[360px]:block leading-none">
               <span className="font-black text-xs text-red-600 tracking-tight block">NSO</span>
@@ -95,36 +98,36 @@ export const BrandHeader: React.FC<{
           {/* Delivery Location Selector */}
           <button
             onClick={openAddressModal}
-            className="flex items-center gap-1.5 cursor-pointer bg-slate-50 hover:bg-slate-100 active:bg-slate-200 px-3 py-1.5 rounded-full border border-slate-200/80 transition-colors min-w-0 max-w-[160px]"
+            className="flex items-center gap-1 cursor-pointer bg-slate-50 hover:bg-slate-100 active:bg-slate-200 px-2 sm:px-3 py-1 rounded-full border border-slate-200/80 transition-colors min-w-0 max-w-[105px] min-[360px]:max-w-[130px] sm:max-w-[160px]"
             aria-label="Change delivery address"
           >
-            <MapPin className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
-            <span className="font-bold text-xs text-slate-800 truncate">
-              {selectedAddress.title}
+            <MapPin className="w-3 h-3 text-red-500 flex-shrink-0" />
+            <span className="font-bold text-[11px] text-slate-800 truncate">
+              {selectedAddress.title || 'Add Address'}
             </span>
-            <ChevronDown className="w-3 h-3 text-slate-400 flex-shrink-0" />
+            <ChevronDown className="w-2.5 h-2.5 text-slate-400 flex-shrink-0" />
           </button>
         </div>
 
         {/* Right: Role badge + Wishlist + Notifications + Cart */}
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
           {/* Role Switcher Badge — only shown when user has multiple roles */}
           {hasMultipleRoles && (
             <button
               onClick={() => setShowRoleModal(true)}
-              className="flex items-center gap-1 bg-red-50 border border-red-200/80 text-red-700 px-2 py-1 rounded-full text-[10px] font-bold active:scale-95 transition-all"
+              className="flex items-center gap-1 bg-red-50 border border-red-200/80 text-red-700 px-1.5 min-[360px]:px-2 py-1 rounded-full text-[9px] min-[360px]:text-[10px] font-bold active:scale-95 transition-all"
               aria-label="Switch role"
             >
               {user.activeRole === 'admin' ? (
-                <ShieldAlert className="w-3 h-3" />
+                <ShieldAlert className="w-3 h-3 flex-shrink-0" />
               ) : user.activeRole === 'seller' ? (
-                <Store className="w-3 h-3" />
+                <Store className="w-3 h-3 flex-shrink-0" />
               ) : user.activeRole === 'provider' ? (
-                <Wrench className="w-3 h-3" />
+                <Wrench className="w-3 h-3 flex-shrink-0" />
               ) : (
-                <User className="w-3 h-3" />
+                <User className="w-3 h-3 flex-shrink-0" />
               )}
-              <span>{roleName}</span>
+              <span className="hidden min-[340px]:inline">{roleName}</span>
               <ChevronDown className="w-2.5 h-2.5" />
             </button>
           )}
@@ -132,21 +135,21 @@ export const BrandHeader: React.FC<{
           {/* Wishlist */}
           <button
             onClick={openWishlist}
-            className="p-2 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors active:scale-95"
+            className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded-full transition-colors active:scale-95"
             aria-label="Wishlist"
           >
-            <Heart className={`w-5 h-5 ${wishlist.length > 0 ? 'fill-rose-600 text-rose-600' : 'text-slate-700'}`} />
+            <Heart className={`w-4 h-4 min-[380px]:w-5 min-[380px]:h-5 ${wishlist.length > 0 ? 'fill-rose-600 text-rose-600' : 'text-slate-700'}`} />
           </button>
 
           {/* Notifications Bell */}
           <button
             onClick={onOpenNotifications}
-            className="relative p-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors active:scale-95"
+            className="relative p-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors active:scale-95"
             aria-label="Notifications"
           >
-            <Bell className="w-5 h-5 text-slate-700" />
+            <Bell className="w-4 h-4 min-[380px]:w-5 min-[380px]:h-5 text-slate-700" />
             {unreadNotifications > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 bg-red-600 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+              <span className="absolute top-0 right-0 bg-red-600 text-white font-black text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white shadow-xs">
                 {unreadNotifications}
               </span>
             )}
@@ -155,12 +158,12 @@ export const BrandHeader: React.FC<{
           {/* Cart */}
           <button
             onClick={onOpenCart}
-            className="relative p-2 text-slate-700 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors active:scale-95"
+            className="relative p-1.5 text-slate-700 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors active:scale-95"
             aria-label="Shopping Cart"
           >
-            <ShoppingBag className="w-5 h-5 text-slate-800" />
+            <ShoppingBag className="w-4 h-4 min-[380px]:w-5 min-[380px]:h-5 text-slate-800" />
             {cartCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 bg-red-600 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-bounce-in">
+              <span className="absolute top-0 right-0 bg-red-600 text-white font-black text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white shadow-xs animate-bounce-in">
                 {cartCount > 9 ? '9+' : cartCount}
               </span>
             )}
@@ -278,7 +281,14 @@ export const BrandHeader: React.FC<{
             {/* Admin */}
             {(user.adminVerified || isOwner) && (
               <button
-                onClick={() => { switchRole('admin'); setShowRoleModal(false); }}
+                onClick={() => {
+                  setShowRoleModal(false);
+                  if (user.adminVerified) {
+                    switchRole('admin');
+                  } else {
+                    setShowAdminMfa(true);
+                  }
+                }}
                 className={`w-full flex items-center gap-3 p-3.5 rounded-2xl border-2 transition-all active:scale-98 ${
                   user.activeRole === 'admin'
                     ? 'border-red-500 bg-red-50/60'
@@ -289,7 +299,15 @@ export const BrandHeader: React.FC<{
                   <ShieldAlert className="w-5 h-5 text-red-600" />
                 </div>
                 <div className="text-left flex-1">
-                  <p className="font-black text-sm text-slate-900">Admin / Owner</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-black text-sm text-slate-900">Admin / Owner</p>
+                    {!user.adminVerified && (
+                      <span className="text-[9px] bg-purple-100 text-purple-800 font-black px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                        <Lock className="w-2.5 h-2.5" />
+                        MFA
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[11px] text-slate-500">NSO control panel & approvals</p>
                 </div>
                 {user.activeRole === 'admin' && (
@@ -304,6 +322,16 @@ export const BrandHeader: React.FC<{
           </div>
         </div>
       )}
+
+      {/* Admin Multi-Factor Security Modal */}
+      <AdminMfaModal
+        isOpen={showAdminMfa}
+        onClose={() => setShowAdminMfa(false)}
+        onSuccess={() => {
+          setShowAdminMfa(false);
+          switchRole('admin');
+        }}
+      />
     </header>
   );
 };

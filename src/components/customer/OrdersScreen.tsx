@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api } from '../../api/client';
 import { InvoiceModal } from '../common/InvoiceModal';
 import {
   Package,
@@ -53,6 +54,8 @@ export const OrdersScreen: React.FC = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
   const [confirmCancelType, setConfirmCancelType] = useState<'order' | 'booking'>('order');
+  const [verifyingPaymentId, setVerifyingPaymentId] = useState<string | null>(null);
+  const [cancellingPaymentId, setCancellingPaymentId] = useState<string | null>(null);
 
   // Quotation & Problem reporting states
   const [quoteDecisionFeedback, setQuoteDecisionFeedback] = useState<{ [bookingId: string]: string }>({});
@@ -80,6 +83,38 @@ export const OrdersScreen: React.FC = () => {
     setConfirmCancelId(null);
   };
 
+  const handleVerifyPayment = async (orderId: string) => {
+    setVerifyingPaymentId(orderId);
+    try {
+      const result = await api.verifyOrderPayment(orderId);
+      if (result?.success) {
+        showToast('✅ Payment verified! Your order is confirmed.');
+      } else {
+        showToast('Payment verification pending. Contact support if you have already paid.');
+      }
+    } catch {
+      showToast('Could not verify payment. Please try again or contact support.');
+    } finally {
+      setVerifyingPaymentId(null);
+    }
+  };
+
+  const handleCancelPayment = async (orderId: string) => {
+    setCancellingPaymentId(orderId);
+    try {
+      const result = await api.cancelOrderPayment(orderId);
+      if (result?.success) {
+        showToast('Order cancelled. No payment was collected.');
+      } else {
+        showToast('Could not cancel order. Please contact support.');
+      }
+    } catch {
+      showToast('Could not cancel order. Please contact support.');
+    } finally {
+      setCancellingPaymentId(null);
+    }
+  };
+
   const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
   };
@@ -96,6 +131,8 @@ export const OrdersScreen: React.FC = () => {
         return <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">Out for Delivery</span>;
       case 'delivered':
         return <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">Delivered</span>;
+      case 'payment_pending':
+        return <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full animate-pulse">⏳ Awaiting Payment</span>;
       case 'delivered_pending_payment':
         return <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">Delivered (Pending Release)</span>;
       case 'completed':
@@ -234,6 +271,40 @@ export const OrdersScreen: React.FC = () => {
                         </div>
                         {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                       </div>
+
+                      {order.orderStatus === 'payment_pending' && (
+                        <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-between text-xs font-bold text-amber-900">
+                            <span className="flex items-center gap-1.5">
+                              <QrCode className="w-4 h-4 text-amber-600" />
+                              <span>UPI Payment Required (₹{order.total})</span>
+                            </span>
+                            <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-black">
+                              Awaiting Payment
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-amber-800 leading-tight">
+                            Please complete payment to confirm this seller order. Orders are not sent to sellers until payment is received.
+                          </p>
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              disabled={verifyingPaymentId === order.id}
+                              onClick={() => handleVerifyPayment(order.id)}
+                              className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-black shadow-xs flex items-center justify-center gap-1 active:scale-95 transition-all"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>{verifyingPaymentId === order.id ? 'Checking...' : 'I Have Paid — Verify'}</span>
+                            </button>
+                            <button
+                              disabled={cancellingPaymentId === order.id}
+                              onClick={() => handleCancelPayment(order.id)}
+                              className="py-1.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold active:scale-95 transition-all"
+                            >
+                              {cancellingPaymentId === order.id ? 'Cancelling...' : 'Cancel'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Expanded Pipeline Stages */}
@@ -430,8 +501,11 @@ export const OrdersScreen: React.FC = () => {
 
                     <div>
                       <h4 className="font-bold text-xs text-gray-900">{booking.serviceTitle}</h4>
-                      <p className="text-[11px] text-gray-600 mt-0.5">
-                        Provider: <span className="font-semibold text-gray-800">{booking.providerName}</span>
+                      <p className="text-[11px] text-gray-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <span>Provider: <span className="font-bold text-gray-900">{booking.providerName}</span></span>
+                        <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-black px-1.5 py-0.2 rounded">
+                          ID: {booking.issuedProviderId || booking.providerId}
+                        </span>
                       </p>
                       <div className="flex items-center gap-2 text-[11px] text-gray-500 mt-1">
                         <Clock className="w-3.5 h-3.5 text-red-600" />

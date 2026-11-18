@@ -16,4 +16,4 @@ services:
       - key: OTP_PROVIDER
         value: "console"
       - key: DATABASE_URL
-        value: "postgresql://postgres.dzzinexgdvaqqbssdrib:usnd06250826%40%23_%26-%2B()%2F@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres"
+        sync: false

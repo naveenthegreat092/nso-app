@@ -90,6 +90,12 @@ export const ProviderDashboard: React.FC = () => {
   const [ratePricingType, setRatePricingType] = useState<'fixed' | 'hourly' | 'metered' | 'quotation_required'>('fixed');
   const [rateUnit, setRateUnit] = useState('service');
 
+  // Work media upload state (Requirement 5)
+  const [workMediaServiceId, setWorkMediaServiceId] = useState<string | null>(null);
+  const [workPhotoUrls, setWorkPhotoUrls] = useState('');
+  const [workVideoUrls, setWorkVideoUrls] = useState('');
+  const [uploadingWorkMedia, setUploadingWorkMedia] = useState(false);
+
   // Portfolio photo upload state
   const [showAddPhotoModal, setShowAddPhotoModal] = useState(false);
   const [photoTitle, setPhotoTitle] = useState('');
@@ -230,6 +236,31 @@ export const ProviderDashboard: React.FC = () => {
       prev.map((s, i) => (i === index ? { ...s, active: !s.active } : s))
     );
     showToast(`Slot status updated`);
+  };
+
+  const handleUploadWorkMedia = async (serviceId: string) => {
+    const photos = workPhotoUrls.split('\n').map((s) => s.trim()).filter(Boolean);
+    const videos = workVideoUrls.split('\n').map((s) => s.trim()).filter(Boolean);
+    if (photos.length === 0) {
+      showToast('⚠️ Please provide at least one work photo URL before saving.');
+      return;
+    }
+    setUploadingWorkMedia(true);
+    try {
+      const result = await api.uploadServiceWorkMedia(serviceId, photos, videos);
+      if (result?.success) {
+        showToast('✅ Work photos & videos uploaded! Your listing is now eligible for public display.');
+        setWorkMediaServiceId(null);
+        setWorkPhotoUrls('');
+        setWorkVideoUrls('');
+      } else {
+        showToast(result?.error || 'Failed to upload work media.');
+      }
+    } catch {
+      showToast('Failed to upload work media. Please try again.');
+    } finally {
+      setUploadingWorkMedia(false);
+    }
   };
 
   return (
@@ -800,20 +831,128 @@ export const ProviderDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex justify-end pt-1">
-                    <button
-                      onClick={() => {
-                        setEditingServiceId(svc.id);
-                        setRatePrice(svc.price);
-                        setRateHourly(svc.hourlyRate || svc.price);
-                        setRatePricingType(svc.pricingType || 'fixed');
-                        setRateUnit(svc.unit || 'service');
-                      }}
-                      className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs active:scale-95"
-                    >
-                      Update Rate &amp; Model
-                    </button>
+                  {/* Work Media Status & Public Listing Eligibility */}
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200">
+                    <span className="font-semibold text-slate-600">Public Front-Page Status:</span>
+                    {svc.workPhotos && svc.workPhotos.length > 0 ? (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        {svc.workPhotos.length} Work Photos Verified
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 text-amber-600" />
+                        Work Photos Required
+                      </span>
+                    )}
                   </div>
+
+                  {/* Work Media Upload Inline Form */}
+                  {workMediaServiceId === svc.id ? (
+                    <div className="bg-white p-3 rounded-xl border border-amber-200 space-y-2 mt-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-xs text-slate-800">Upload Work Showcase Media</span>
+                        <button
+                          type="button"
+                          onClick={() => setWorkMediaServiceId(null)}
+                          className="text-slate-400 hover:text-slate-600 p-1"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-tight">
+                        Required by marketplace security: Customers must see your actual previous work photos and videos before your service appears on the front page.
+                      </p>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-700 block mb-0.5">
+                          Upload Photos from Device / Camera:
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files || []);
+                            files.forEach(file => {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                if (typeof reader.result === 'string') {
+                                  setWorkPhotoUrls(prev => prev ? `${prev}\n${reader.result}` : reader.result as string);
+                                }
+                              };
+                              reader.readAsDataURL(file);
+                            });
+                          }}
+                          className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-emerald-100 file:text-emerald-800 hover:file:bg-emerald-200 cursor-pointer mb-1.5"
+                        />
+                        <label className="text-[10px] font-bold text-slate-700 block mb-0.5">
+                          Work Photo URLs (or uploaded files above):
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={workPhotoUrls}
+                          onChange={(e) => setWorkPhotoUrls(e.target.value)}
+                          placeholder="https://example.com/work-photo1.jpg&#10;https://example.com/work-photo2.jpg"
+                          className="w-full text-[11px] font-mono p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-amber-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-700 block mb-0.5">
+                          Work Video URLs (Optional, One URL per line):
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={workVideoUrls}
+                          onChange={(e) => setWorkVideoUrls(e.target.value)}
+                          placeholder="https://example.com/work-video1.mp4"
+                          className="w-full text-[11px] font-mono p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-amber-400"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setWorkMediaServiceId(null)}
+                          className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={uploadingWorkMedia}
+                          onClick={() => handleUploadWorkMedia(svc.id)}
+                          className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-[11px] rounded-lg shadow-xs"
+                        >
+                          {uploadingWorkMedia ? 'Saving...' : 'Save Media'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button
+                        onClick={() => {
+                          setWorkMediaServiceId(svc.id);
+                          setWorkPhotoUrls((svc.workPhotos || []).join('\n'));
+                          setWorkVideoUrls((svc.workVideos || []).join('\n'));
+                        }}
+                        className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg shadow-xs active:scale-95 flex items-center gap-1"
+                      >
+                        <Image className="w-3 h-3 text-slate-600" />
+                        <span>Upload Work Media</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingServiceId(svc.id);
+                          setRatePrice(svc.price);
+                          setRateHourly(svc.hourlyRate || svc.price);
+                          setRatePricingType(svc.pricingType || 'fixed');
+                          setRateUnit(svc.unit || 'service');
+                        }}
+                        className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] rounded-lg shadow-xs active:scale-95"
+                      >
+                        Update Rate &amp; Model
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -862,6 +1001,24 @@ export const ProviderDashboard: React.FC = () => {
               </div>
 
               <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">Upload Work Photo (Device / Camera)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        if (typeof reader.result === 'string') {
+                          setPhotoUrl(reader.result);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-amber-100 file:text-amber-800 hover:file:bg-amber-200 cursor-pointer mb-2"
+                />
                 <label className="text-xs font-bold text-gray-700 block mb-1">Photo Preview</label>
                 <img src={photoUrl} alt="preview" className="w-full h-28 object-cover rounded-xl border border-gray-200" />
               </div>

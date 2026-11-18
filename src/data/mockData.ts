@@ -26,16 +26,7 @@ export const INITIAL_USER: UserProfile = {
   isLoggedIn: false
 };
 
-export const INITIAL_ADDRESSES: SavedAddress[] = [
-  {
-    id: 'addr_1',
-    label: 'Home',
-    title: 'Primary Residence',
-    fullAddress: 'Flat 402, 100ft Road, Indiranagar, Bengaluru - 560038',
-    landmark: 'Near Indiranagar Metro',
-    isDefault: true
-  }
-];
+export const INITIAL_ADDRESSES: SavedAddress[] = [];
 
 import { INITIAL_SERVICE_CATALOG, INITIAL_VERIFIED_PROVIDERS } from './serviceCatalog';
 

@@ -38,6 +38,13 @@ import { api } from '../api/client';
 import { Capacitor } from '@capacitor/core';
 
 /** Unauthenticated user shape — no hardcoded credentials or roles */
+const EMPTY_ADDRESS: SavedAddress = {
+  id: '',
+  label: 'Home',
+  title: 'Set Address',
+  fullAddress: ''
+};
+
 const UNAUTHENTICATED_USER: UserProfile = {
   id: '',
   name: '',
@@ -213,7 +220,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [addresses, setAddresses] = useState<SavedAddress[]>(INITIAL_ADDRESSES);
 
   const [selectedAddress, setSelectedAddress] = useState<SavedAddress>(
-    () => INITIAL_ADDRESSES.find((a) => a.isDefault) || INITIAL_ADDRESSES[0]
+    () => INITIAL_ADDRESSES.find((a) => a.isDefault) || INITIAL_ADDRESSES[0] || EMPTY_ADDRESS
   );
 
   const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS);
@@ -272,66 +279,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const serverUser = await api.getMe();
         if (serverUser && serverUser.id) {
-          const isOwner =
-            Boolean(serverUser.adminVerified) ||
-            (serverUser.phone && serverUser.phone.replace(/\D/g, '').endsWith('8310421121')) ||
-            localStorage.getItem('nso_admin_phone') === '8310421121';
+          const isAdminVerified = Boolean(serverUser.adminVerified);
           const savedActiveRole = (localStorage.getItem('nso_active_role') as Role) || undefined;
 
-          if (isOwner) {
-            localStorage.setItem('nso_admin_phone', '8310421121');
-            const targetRole = savedActiveRole || (serverUser.activeRole === 'customer' ? 'admin' : serverUser.activeRole);
+          if (isAdminVerified) {
+            const targetRole = savedActiveRole || 'admin';
             setUser({
               ...serverUser,
               adminVerified: true,
               sellerStatus: 'approved',
               providerStatus: 'approved',
-              authorizedRoles: ['customer', 'admin', 'seller', 'provider'],
+              authorizedRoles: Array.from(new Set([...serverUser.authorizedRoles, 'admin' as Role, 'seller' as Role, 'provider' as Role])),
               activeRole: targetRole,
               isLoggedIn: true
             });
           } else {
             setUser({
               ...serverUser,
+              adminVerified: false,
               activeRole: savedActiveRole && serverUser.authorizedRoles.includes(savedActiveRole) ? savedActiveRole : serverUser.activeRole,
               isLoggedIn: true
             });
           }
-        } else if (localStorage.getItem('nso_admin_phone') === '8310421121') {
-          const savedActiveRole = (localStorage.getItem('nso_active_role') as Role) || 'admin';
-          setUser({
-            id: 'usr_owner_admin',
-            name: 'Marketplace Owner',
-            email: 'owner@nso.in',
-            phone: '+91 8310421121',
-            activeRole: savedActiveRole,
-            authorizedRoles: ['customer', 'admin', 'seller', 'provider'],
-            approvalStatus: 'approved',
-            sellerStatus: 'approved',
-            providerStatus: 'approved',
-            adminVerified: true,
-            address: 'NSO Headquarters, Bengaluru',
-            isLoggedIn: true
-          });
         }
       } catch {
-        if (localStorage.getItem('nso_admin_phone') === '8310421121') {
-          const savedActiveRole = (localStorage.getItem('nso_active_role') as Role) || 'admin';
-          setUser({
-            id: 'usr_owner_admin',
-            name: 'Marketplace Owner',
-            email: 'owner@nso.in',
-            phone: '+91 8310421121',
-            activeRole: savedActiveRole,
-            authorizedRoles: ['customer', 'admin', 'seller', 'provider'],
-            approvalStatus: 'approved',
-            sellerStatus: 'approved',
-            providerStatus: 'approved',
-            adminVerified: true,
-            address: 'NSO Headquarters, Bengaluru',
-            isLoggedIn: true
-          });
-        }
+        // Unauthenticated fallback
       } finally {
         setIsAppLoading(false);
       }
@@ -356,6 +328,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const cloudServices = await api.getServices();
       if (Array.isArray(cloudServices) && cloudServices.length > 0) setServices(cloudServices);
+
+      const cloudProviders = await api.getProviders();
+      if (Array.isArray(cloudProviders) && cloudProviders.length > 0) setProviders(cloudProviders);
 
       const cloudCancellations = await api.getProviderCancellations();
       if (Array.isArray(cloudCancellations) && cloudCancellations.length > 0) setProviderCancellationReviews(cloudCancellations);
@@ -424,8 +399,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const openProviderProfile = (providerIdOrName: string) => {
+    if (!providerIdOrName) return;
+    const target = providerIdOrName.trim().toLowerCase();
     const prov =
-      providers.find((p) => p.id === providerIdOrName || p.name.toLowerCase().includes(providerIdOrName.toLowerCase())) ||
+      providers.find((p) =>
+        p.id?.toLowerCase() === target ||
+        (p as any).issuedProviderId?.toLowerCase() === target ||
+        (p as any).userId?.toLowerCase() === target ||
+        p.name.toLowerCase().includes(target) ||
+        target.includes(p.name.toLowerCase())
+      ) ||
       providers[0];
     setSelectedProviderDetail(prov || null);
   };
@@ -639,32 +622,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const serverUser = await api.getMe();
       if (serverUser && serverUser.id) {
-        const isOwner =
-          Boolean(serverUser.adminVerified) ||
-          (serverUser.phone && serverUser.phone.replace(/\D/g, '').endsWith('8310421121')) ||
-          clean === '8310421121';
-        if (isOwner) {
-          localStorage.setItem('nso_admin_phone', '8310421121');
-        }
         if (serverUser.phone) {
           localStorage.setItem('nso_user_phone', serverUser.phone.replace(/\D/g, '').slice(-10));
         }
+        const isAdminVerified = Boolean(serverUser.adminVerified);
         const savedActiveRole = (localStorage.getItem('nso_active_role') as Role) || undefined;
         const authUser: UserProfile = {
           ...serverUser,
-          adminVerified: isOwner || serverUser.adminVerified,
-          activeRole: isOwner ? (savedActiveRole || 'admin') : serverUser.activeRole,
-          sellerStatus: isOwner ? 'approved' : serverUser.sellerStatus,
-          providerStatus: isOwner ? 'approved' : serverUser.providerStatus,
-          authorizedRoles: isOwner
-            ? ['customer', 'admin', 'seller', 'provider']
-            : serverUser.authorizedRoles,
+          adminVerified: isAdminVerified,
+          activeRole: isAdminVerified ? (savedActiveRole || 'admin') : (savedActiveRole && serverUser.authorizedRoles?.includes(savedActiveRole) ? savedActiveRole : serverUser.activeRole),
           isLoggedIn: true
         };
         setUser(authUser);
         setIsAuthModalOpen(false);
         addAuditLog('USER_LOGIN', `User signed in: ${serverUser.phone || serverUser.email}`, authUser.activeRole);
-        showToast(isOwner ? '👑 Welcome Marketplace Owner!' : `Welcome ${serverUser.name || 'back'}!`);
+        showToast(isAdminVerified ? '👑 Welcome Marketplace Owner!' : `Welcome ${serverUser.name || 'back'}!`);
 
         // Register FCM device token (Android only)
         try {
@@ -686,28 +658,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Backend offline or local session fallback
     }
 
-    if (clean === '8310421121') {
-      localStorage.setItem('nso_admin_phone', '8310421121');
-      localStorage.setItem('nso_user_phone', '8310421121');
-      const adminProfile: UserProfile = {
-        id: 'usr_owner_admin',
-        name: 'Marketplace Owner',
-        email: 'owner@nso.in',
-        phone: '+91 8310421121',
-        activeRole: 'admin',
-        authorizedRoles: ['customer', 'admin', 'seller', 'provider'],
-        approvalStatus: 'approved',
-        sellerStatus: 'approved',
-        providerStatus: 'approved',
-        adminVerified: true,
-        address: 'NSO Headquarters, Bengaluru',
-        isLoggedIn: true
-      };
-      setUser(adminProfile);
-      setIsAuthModalOpen(false);
-      showToast('👑 Welcome Marketplace Owner! Entering Admin Console...');
-      return adminProfile;
-    }
     return null;
   };
 
@@ -2060,7 +2010,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('nso_language');
     setUser(UNAUTHENTICATED_USER);
     setAddresses(INITIAL_ADDRESSES);
-    setSelectedAddress(INITIAL_ADDRESSES[0]);
+    setSelectedAddress(INITIAL_ADDRESSES[0] || EMPTY_ADDRESS);
     setProducts(MOCK_PRODUCTS);
     setServices(MOCK_SERVICES);
     setProviders(MOCK_PROVIDERS);

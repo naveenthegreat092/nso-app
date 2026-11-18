@@ -12,9 +12,12 @@ import {
   AlertCircle,
   KeyRound,
   User,
-  CheckCircle2
+  CheckCircle2,
+  Fingerprint,
+  ScanFace
 } from 'lucide-react';
 import { api } from '../../api/client';
+import { promptBiometricAuth } from '../../utils/biometrics';
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, closeAuthModal, loginUser, showToast } = useApp();
@@ -40,6 +43,18 @@ export const AuthModal: React.FC = () => {
   const [regCity, setRegCity] = useState('Bengaluru');
   const [regPincode, setRegPincode] = useState('560001');
   const [passwordLoading, setPasswordLoading] = useState(false);
+
+  // Forgot Password States
+  const [isForgotMode, setIsForgotMode] = useState(false);
+  const [forgotStep, setForgotStep] = useState<'phone' | 'reset'>('phone');
+  const [forgotPhone, setForgotPhone] = useState('');
+  const [forgotOtp, setForgotOtp] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+
+  // Biometric state
+  const [biometricLoading, setBiometricLoading] = useState(false);
 
   const inputRefs = [
     useRef<HTMLInputElement>(null),
@@ -99,12 +114,7 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
-    if (result.debugOtp) {
-      showToast(`Verification code: ${result.debugOtp}`);
-      setOtpDigits(result.debugOtp.split(''));
-    } else {
-      showToast('A verification code has been sent to your phone');
-    }
+    showToast('A verification code has been sent to your phone via SMS');
     setCountdown(30);
     setCanResend(false);
     setStep('otp');
@@ -236,6 +246,78 @@ export const AuthModal: React.FC = () => {
     closeAuthModal();
   };
 
+  // Forgot Password: Send OTP
+  const handleForgotSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = forgotPhone.replace(/\D/g, '').slice(-10);
+    if (clean.length < 10) {
+      setForgotError('Please enter a valid 10-digit mobile number');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotError(null);
+    const res = await api.forgotPasswordSendOtp(clean);
+    setForgotLoading(false);
+    if (!res || !res.success) {
+      setForgotError(res?.error || 'Failed to dispatch recovery code.');
+      return;
+    }
+    showToast('Recovery verification code sent to your mobile via SMS');
+    setForgotStep('reset');
+  };
+
+  // Forgot Password: Reset Password
+  const handleForgotReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = forgotPhone.replace(/\D/g, '').slice(-10);
+    const cleanOtp = forgotOtp.trim().replace(/\D/g, '');
+    if (cleanOtp.length < 6) {
+      setForgotError('Please enter the 6-digit recovery code');
+      return;
+    }
+    if (!forgotNewPassword.trim() || forgotNewPassword.trim().length < 6) {
+      setForgotError('Password must be at least 6 characters long');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotError(null);
+    const res = await api.forgotPasswordReset(clean, cleanOtp, forgotNewPassword.trim());
+    setForgotLoading(false);
+    if (!res || !res.success) {
+      setForgotError(res?.error || 'Failed to reset password. Check the code.');
+      return;
+    }
+    showToast('✅ Password reset successfully! Signed in.');
+    await loginUser();
+    closeAuthModal();
+  };
+
+  // Biometric Sign-In
+  const handleBiometricLogin = async () => {
+    setBiometricLoading(true);
+    try {
+      const bioPassed = await promptBiometricAuth('NSO Customer');
+      if (!bioPassed) {
+        showToast('Biometric authentication cancelled');
+        setBiometricLoading(false);
+        return;
+      }
+      const credId = localStorage.getItem('nso_biometric_cred_id') || 'local_device_credential';
+      const res = await api.biometricLogin(credId);
+      setBiometricLoading(false);
+      if (res && res.success) {
+        showToast('✅ Biometric Sign-in successful!');
+        await loginUser();
+        closeAuthModal();
+      } else {
+        showToast(res?.error || 'Biometrics not enrolled yet. Please sign in with password first to enroll.');
+      }
+    } catch (e: any) {
+      setBiometricLoading(false);
+      showToast(e?.message || 'Biometric sensor error');
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
       <div className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden border border-gray-100 max-h-[92vh] flex flex-col">
@@ -289,7 +371,113 @@ export const AuthModal: React.FC = () => {
 
         {/* Modal Content */}
         <div className="p-6 overflow-y-auto">
-          {authMode === 'password' ? (
+          {isForgotMode ? (
+            <div className="space-y-4">
+              <div>
+                <span className="text-[10px] font-bold text-red-600 uppercase tracking-widest">Account Recovery</span>
+                <h3 className="text-lg font-black text-gray-900 mt-0.5">Reset Your Password</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {forgotStep === 'phone'
+                    ? 'Enter your registered phone number. A real OTP will be sent via SMS.'
+                    : 'Enter the recovery OTP and choose a new password.'}
+                </p>
+              </div>
+
+              {forgotError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-700 text-xs font-semibold">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>{forgotError}</span>
+                </div>
+              )}
+
+              {forgotStep === 'phone' ? (
+                <form onSubmit={handleForgotSendOtp} className="space-y-4">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">Registered Mobile Number</label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500">+91</span>
+                      <input
+                        type="tel"
+                        maxLength={10}
+                        required
+                        value={forgotPhone}
+                        onChange={(e) => setForgotPhone(e.target.value.replace(/\D/g, ''))}
+                        placeholder="10-digit mobile number"
+                        className="w-full pl-12 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={forgotLoading || forgotPhone.length < 10}
+                    className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2"
+                  >
+                    {forgotLoading ? 'Sending Recovery Code...' : 'Send Recovery OTP'}
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setIsForgotMode(false); setForgotStep('phone'); setForgotError(null); }}
+                    className="w-full text-center text-xs text-slate-500 hover:text-slate-800 font-bold py-1"
+                  >
+                    ← Back to Sign In
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleForgotReset} className="space-y-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">6-Digit Recovery OTP</label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      value={forgotOtp}
+                      onChange={(e) => setForgotOtp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Enter 6-digit SMS OTP"
+                      className="w-full text-center font-mono font-bold tracking-widest px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                      autoFocus
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">New Password</label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        value={forgotNewPassword}
+                        onChange={(e) => setForgotNewPassword(e.target.value)}
+                        placeholder="At least 6 characters"
+                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={forgotLoading || forgotOtp.length < 6 || forgotNewPassword.length < 6}
+                    className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2"
+                  >
+                    {forgotLoading ? 'Resetting Password...' : 'Reset Password & Sign In'}
+                    <CheckCircle2 className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setIsForgotMode(false); setForgotStep('phone'); setForgotError(null); }}
+                    className="w-full text-center text-xs text-slate-500 hover:text-slate-800 font-bold py-1"
+                  >
+                    Cancel
+                  </button>
+                </form>
+              )}
+            </div>
+          ) : authMode === 'password' ? (
             <div>
               {!isRegisterMode ? (
                 <form onSubmit={handlePasswordLogin} className="space-y-4">
@@ -319,9 +507,18 @@ export const AuthModal: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                        Password
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-700 block">
+                          Password
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => { setIsForgotMode(true); setForgotStep('phone'); setForgotError(null); }}
+                          className="text-[10px] font-bold text-red-600 hover:underline"
+                        >
+                          Forgot Password?
+                        </button>
+                      </div>
                       <div className="relative">
                         <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                         <input
@@ -344,6 +541,19 @@ export const AuthModal: React.FC = () => {
                     {passwordLoading ? 'Signing In...' : 'Sign In'}
                     <ArrowRight className="w-4 h-4" />
                   </button>
+
+                  {/* Biometric Instant Login Option */}
+                  <div className="pt-2 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={handleBiometricLogin}
+                      disabled={biometricLoading}
+                      className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all active:scale-98"
+                    >
+                      <Fingerprint className="w-4 h-4 text-purple-600" />
+                      <span>{biometricLoading ? 'Verifying Hardware...' : 'Sign In with Fingerprint / Face Unlock'}</span>
+                    </button>
+                  </div>
 
                   <div className="text-center pt-2">
                     <button

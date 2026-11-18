@@ -121,6 +121,7 @@ export const AdminDashboard: React.FC = () => {
   // Live applications from backend only (no fake demo applications)
   const [applications, setApplications] = useState<Application[]>([]);
   const [appLoading, setAppLoading] = useState(false);
+  const [appFilter, setAppFilter] = useState<'pending' | 'all'>('pending');
   const [commissionStats, setCommissionStats] = useState({
     productsRate: 10,
     servicesRate: 15,
@@ -223,23 +224,30 @@ export const AdminDashboard: React.FC = () => {
   }, [activeTab]);
 
   const handleApproveApplication = async (appId: string, approved: boolean) => {
+    let adminNotes = approved ? 'Approved by Admin' : 'Rejected by Admin';
+    if (!approved) {
+      const reason = window.prompt(
+        'Enter rejection reason (this will be shown to the applicant):',
+        'Application did not meet marketplace requirements.'
+      );
+      if (reason === null) return; // Admin cancelled the prompt — do nothing
+      if (reason.trim()) adminNotes = reason.trim();
+    }
     const targetAppl = applications.find(a => a.id === appId);
     if (targetAppl?.type === 'provider') {
       approveProviderWithId(appId, approved, targetAppl);
     }
     try {
-      const success = await api.approveApplication(appId, approved, {
-        adminNotes: approved ? 'Approved by Admin' : 'Rejected by Admin'
-      });
+      const success = await api.approveApplication(appId, approved, { adminNotes });
       if (success) {
-        setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: approved ? 'approved' : 'rejected' } : a));
-        showToast(approved ? `✅ Approved! Provider ID Issued.` : '❌ Application Rejected.');
+        setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: approved ? 'approved' : 'rejected', adminNotes } : a));
+        showToast(approved ? `✅ Approved! Provider ID Issued.` : '❌ Application Rejected — Applicant notified.');
         fetchApplications();
         return;
       }
     } catch {
-      showToast(approved ? '✅ Approved locally!' : '❌ Rejected.');
-      setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: approved ? 'approved' : 'rejected' } : a));
+      showToast(approved ? '✅ Approved locally!' : '❌ Rejected locally.');
+      setApplications(prev => prev.map(a => a.id === appId ? { ...a, status: approved ? 'approved' : 'rejected', adminNotes } : a));
     }
   };
 
@@ -1468,11 +1476,29 @@ export const AdminDashboard: React.FC = () => {
           <div className="space-y-3">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[11px] font-black text-gray-500 uppercase tracking-wider">
-                Pending Applications ({applications.filter(a => a.status === 'pending').length})
+                {appFilter === 'pending'
+                  ? `Pending Applications (${applications.filter(a => a.status === 'pending').length})`
+                  : `All Applications (${applications.length})`}
               </span>
-              <button onClick={fetchApplications} className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200">
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <div className="flex bg-gray-100 rounded-xl p-0.5 text-[10px] font-bold">
+                  <button
+                    onClick={() => setAppFilter('pending')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${appFilter === 'pending' ? 'bg-white text-amber-700 shadow-sm' : 'text-gray-500'}`}
+                  >
+                    Pending
+                  </button>
+                  <button
+                    onClick={() => setAppFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${appFilter === 'all' ? 'bg-white text-slate-700 shadow-sm' : 'text-gray-500'}`}
+                  >
+                    All History
+                  </button>
+                </div>
+                <button onClick={fetchApplications} className="p-1.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200">
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             {/* Commission Settings */}
@@ -1678,7 +1704,7 @@ export const AdminDashboard: React.FC = () => {
 
             <div className="pt-2 pb-1">
               <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider block">
-                Provider & Seller Applications ({applications.length})
+                {appFilter === 'pending' ? 'Pending Applications' : 'All Applications History'} ({applications.filter(a => appFilter === 'pending' ? a.status === 'pending' : true).length})
               </span>
             </div>
 
@@ -1686,15 +1712,19 @@ export const AdminDashboard: React.FC = () => {
               <div className="text-center py-8 text-slate-400 text-xs font-medium">Loading applications...</div>
             )}
 
-            {!appLoading && applications.length === 0 && (
+            {!appLoading && applications.filter(a => appFilter === 'pending' ? a.status === 'pending' : true).length === 0 && (
               <div className="bg-white rounded-2xl border border-gray-100 p-6 text-center">
                 <UserCheck className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                <p className="text-sm font-black text-slate-400">No Applications Yet</p>
-                <p className="text-xs text-slate-400 mt-1">When users apply to become Providers or Sellers, they'll appear here.</p>
+                <p className="text-sm font-black text-slate-400">
+                  {appFilter === 'pending' ? 'No Pending Applications' : 'No Applications History'}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {appFilter === 'pending' ? 'All submitted applications have been reviewed.' : 'When users apply to become Providers or Sellers, they will appear here.'}
+                </p>
               </div>
             )}
 
-            {applications.map(appl => (
+            {(appFilter === 'pending' ? applications.filter(a => a.status === 'pending') : applications).map(appl => (
               <div key={appl.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-3 text-xs">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2.5">
@@ -1831,8 +1861,18 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 )}
                 {appl.status !== 'pending' && (
-                  <div className={`text-center py-1.5 rounded-xl text-xs font-black ${appl.status === 'approved' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-                    {appl.status === 'approved' ? '✅ Approved — Portal Unlocked' : '❌ Rejected'}
+                  <div className={`py-1.5 px-2 rounded-xl text-xs font-black space-y-0.5 ${appl.status === 'approved' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                    <div className="text-center">{appl.status === 'approved' ? '✅ Approved — Portal Unlocked' : '❌ Rejected'}</div>
+                    {appl.adminNotes && appl.status === 'rejected' && (
+                      <div className="text-[10px] font-normal text-red-600 bg-red-100/60 rounded-lg px-2 py-1 mt-1">
+                        <span className="font-bold">Reason: </span>{appl.adminNotes}
+                      </div>
+                    )}
+                    {appl.status === 'rejected' && (
+                      <div className="text-[10px] font-normal text-slate-500 mt-0.5 text-center">
+                        Applicant can submit a new application if still interested.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

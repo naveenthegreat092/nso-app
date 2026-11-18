@@ -22,8 +22,12 @@ import {
   XCircle,
   Bell,
   MessageCircle,
-  ExternalLink
+  ExternalLink,
+  Fingerprint,
+  ScanFace
 } from 'lucide-react';
+import { promptBiometricAuth } from '../../utils/biometrics';
+import { AdminMfaModal } from '../auth/AdminMfaModal';
 
 export const AccountScreen: React.FC<{
   onOpenSpecialRequest: () => void;
@@ -48,6 +52,31 @@ export const AccountScreen: React.FC<{
   const [newPassword, setNewPassword] = useState('');
   const [savingPassword, setSavingPassword] = useState(false);
   const [testingPush, setTestingPush] = useState(false);
+  const [showAdminMfa, setShowAdminMfa] = useState(false);
+  const [enrollingBio, setEnrollingBio] = useState(false);
+
+  const handleEnrollBiometrics = async () => {
+    setEnrollingBio(true);
+    try {
+      const bioPassed = await promptBiometricAuth(user.name || 'NSO Customer');
+      if (!bioPassed) {
+        showToast('Biometric enrollment cancelled or not supported on this device');
+        setEnrollingBio(false);
+        return;
+      }
+      const credId = localStorage.getItem('nso_biometric_cred_id') || `cred_${Date.now()}`;
+      const res = await api.registerBiometricCredential(credId);
+      setEnrollingBio(false);
+      if (res && res.success) {
+        showToast('✅ Biometrics linked! You can now use Fingerprint or Face Unlock.');
+      } else {
+        showToast(res?.error || 'Failed to link biometrics');
+      }
+    } catch (e: any) {
+      setEnrollingBio(false);
+      showToast(e?.message || 'Biometric hardware sensor error');
+    }
+  };
 
   const handleTestPush = async () => {
     setTestingPush(true);
@@ -313,6 +342,24 @@ export const AccountScreen: React.FC<{
           </div>
 
           <div
+            onClick={handleEnrollBiometrics}
+            className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
+          >
+            <div className="flex items-center gap-3 text-slate-800 font-bold text-xs">
+              <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                <Fingerprint className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="block text-slate-900 font-black">Fingerprint &amp; Face Unlock</span>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  {enrollingBio ? 'Enrolling sensor...' : 'Enable fast biometric sign-in on this device'}
+                </span>
+              </div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-400" />
+          </div>
+
+          <div
             onClick={() => setIsPolicyModalOpen(true)}
             className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
           >
@@ -330,8 +377,8 @@ export const AccountScreen: React.FC<{
         </div>
       </div>
 
-      {/* 5. Store Owner & Superadmin Portal (Discrete, Protected Gateway - Only visible to verified Admin) */}
-      {user.adminVerified && (
+      {/* 5. Store Owner & Superadmin Portal (Discrete, Protected Gateway - Only accessible to authorized admin phone) */}
+      {(user.adminVerified || (user.phone && user.phone.replace(/\D/g, '').endsWith('8310421121'))) && (
         <div className="space-y-2.5 pt-2">
           <div className="flex items-center justify-between px-1">
             <h4 className="font-black text-xs text-slate-900 uppercase tracking-wider">
@@ -339,12 +386,18 @@ export const AccountScreen: React.FC<{
             </h4>
             <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-full flex items-center gap-1 border border-purple-200/50">
               <Lock className="w-2.5 h-2.5 text-purple-600" />
-              <span>Owner Protected</span>
+              <span>{user.adminVerified ? 'Unlocked' : 'MFA Protected'}</span>
             </span>
           </div>
 
           <div
-            onClick={() => switchRole('admin')}
+            onClick={() => {
+              if (user.adminVerified) {
+                switchRole('admin');
+              } else {
+                setShowAdminMfa(true);
+              }
+            }}
             className="bg-gradient-to-r from-slate-900 to-indigo-950 rounded-3xl p-4 text-white shadow-md cursor-pointer hover:brightness-110 active:scale-98 transition-all flex items-center justify-between border border-slate-800"
           >
             <div className="flex items-center gap-3.5">
@@ -354,7 +407,7 @@ export const AccountScreen: React.FC<{
               <div>
                 <h5 className="font-black text-sm text-white">Owner Admin Control Panel</h5>
                 <p className="text-xs text-purple-200/80 mt-0.5">
-                  Sales analytics, UPI payment verification & inventory
+                  {user.adminVerified ? 'Sales analytics, UPI payment verification & inventory' : 'Authenticate via Password, Biometrics & Email OTP'}
                 </p>
               </div>
             </div>
@@ -431,6 +484,14 @@ export const AccountScreen: React.FC<{
           onClose={() => setAppModalType(null)}
         />
       )}
+      <AdminMfaModal
+        isOpen={showAdminMfa}
+        onClose={() => setShowAdminMfa(false)}
+        onSuccess={() => {
+          setShowAdminMfa(false);
+          switchRole('admin');
+        }}
+      />
     </div>
   );
 };

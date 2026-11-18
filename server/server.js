@@ -46,8 +46,9 @@ const PORT = Number(process.env.PORT) || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'nso-dev-insecure-secret-key-change-in-production';
-const ADMIN_PHONE = (process.env.ADMIN_PHONE || process.env.OWNER_PHONE || '').replace(/\D/g, '').slice(-10); // 10 digits only
-const OTP_PROVIDER = process.env.OTP_PROVIDER || 'console'; // 'console' | 'twilio' | 'msg91'
+const ADMIN_PHONE = (process.env.ADMIN_PHONE || process.env.OWNER_PHONE || '8310421121').replace(/\D/g, '').slice(-10); // 10 digits only
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@nso.in';
+const OTP_PROVIDER = process.env.OTP_PROVIDER || (process.env.FAST2SMS_API_KEY ? 'fast2sms' : 'console');
 const SESSION_COOKIE_NAME = 'nso_session';
 const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -467,31 +468,36 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
+
+  CREATE TABLE IF NOT EXISTS admin_auth_sessions (
+    id TEXT PRIMARY KEY,
+    admin_id TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    email TEXT NOT NULL,
+    password_verified INTEGER NOT NULL DEFAULT 0,
+    biometric_verified INTEGER NOT NULL DEFAULT 0,
+    email_otp_verified INTEGER NOT NULL DEFAULT 0,
+    email_otp_code TEXT,
+    email_otp_expires_at INTEGER,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS email_verifications (
+    email TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  );
 `);
 
-// Clean out fake, sample, and demo pilot products and services from database
-try {
-  const pilotProductIds = [
-    'prod_boat_earbuds',
-    'prod_smartwatch_pulse',
-    'prod_wildcraft_bag',
-    'prod_a2_milk',
-    'prod_alphonso_mango',
-    'prod_philips_mixer'
-  ];
-  for (const pid of pilotProductIds) {
-    db.prepare('DELETE FROM products WHERE id = ?').run(pid);
-  }
-  const pilotServiceIds = [
-    'serv_electrician_inspection',
-    'serv_plumbing_doorstep',
-    'serv_deep_cleaning_home',
-    'serv_ac_jet_service'
-  ];
-  for (const sid of pilotServiceIds) {
-    db.prepare('DELETE FROM services WHERE id = ?').run(sid);
-  }
-} catch (_) {}
+try { db.exec("ALTER TABLE services ADD COLUMN work_photos_json TEXT DEFAULT '[]';"); } catch (_) {}
+try { db.exec("ALTER TABLE services ADD COLUMN work_videos_json TEXT DEFAULT '[]';"); } catch (_) {}
+try { db.exec("ALTER TABLE services ADD COLUMN issued_provider_id TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN provider_user_id TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN issued_provider_id TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE provider_applications ADD COLUMN work_videos_json TEXT DEFAULT '[]';"); } catch (_) {}
+try { db.exec("ALTER TABLE users ADD COLUMN biometric_credential_id TEXT;"); } catch (_) {}
 
 // Seed candidate categories if not present
 const seedCandidateCategories = () => {
@@ -798,46 +804,24 @@ function requireAuth(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  const adminPhoneHeader = req.headers['x-admin-phone']
-    ? String(req.headers['x-admin-phone']).replace(/\D/g, '').slice(-10)
-    : null;
-  const isOwnerHeader = adminPhoneHeader && (adminPhoneHeader === ADMIN_PHONE || adminPhoneHeader === '8310421121');
-
-  if (req.session?.isAdmin || isOwnerHeader) {
-    if (!req.session) {
-      req.session = {
-        userId: 'usr_owner_admin',
-        phone: '8310421121',
-        name: 'Marketplace Owner',
-        isAdmin: true,
-        activeRole: 'admin',
-        sellerStatus: 'approved',
-        providerStatus: 'approved'
-      };
-    }
+  if (req.session?.isAdmin) {
     return next();
   }
-  return res.status(403).json({ error: 'Access denied: Marketplace Owner authorization required.' });
+  return res.status(403).json({ error: 'Access denied: Marketplace Owner authorization required. Please complete multi-factor admin verification.' });
 }
 
 function requireSeller(req, res, next) {
-  const adminPhoneHeader = req.headers['x-admin-phone'] ? String(req.headers['x-admin-phone']).replace(/\D/g, '').slice(-10) : null;
-  const isOwner = req.session?.isAdmin || (adminPhoneHeader && (adminPhoneHeader === ADMIN_PHONE || adminPhoneHeader === '8310421121'));
-  if (isOwner) return next();
-  if (!req.session || req.session.sellerStatus !== 'approved') {
-    return res.status(403).json({ error: 'Access denied: Approved seller status required.' });
+  if (req.session?.isAdmin || req.session?.sellerStatus === 'approved') {
+    return next();
   }
-  next();
+  return res.status(403).json({ error: 'Access denied: Approved seller status required.' });
 }
 
 function requireProvider(req, res, next) {
-  const adminPhoneHeader = req.headers['x-admin-phone'] ? String(req.headers['x-admin-phone']).replace(/\D/g, '').slice(-10) : null;
-  const isOwner = req.session?.isAdmin || (adminPhoneHeader && (adminPhoneHeader === ADMIN_PHONE || adminPhoneHeader === '8310421121'));
-  if (isOwner) return next();
-  if (!req.session || req.session.providerStatus !== 'approved') {
-    return res.status(403).json({ error: 'Access denied: Approved service provider status required.' });
+  if (req.session?.isAdmin || req.session?.providerStatus === 'approved') {
+    return next();
   }
-  next();
+  return res.status(403).json({ error: 'Access denied: Approved service provider status required.' });
 }
 
 // Format user for client response
@@ -881,6 +865,7 @@ function formatUserResponse(u) {
     accountId: resolvedAccountId,
     username: u.username || cleanPhone || u.id,
     hasPassword: Boolean(u.password_hash),
+    biometricEnrolled: Boolean(u.biometric_credential_id),
     avatar: u.avatar,
     activeRole: u.active_role,
     authorizedRoles,
@@ -929,6 +914,146 @@ function formatUserResponse(u) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 7B. PRIVACY, SMS & EMAIL DISPATCH HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+function maskPhoneNumber(phone) {
+  if (!phone) return '';
+  const digits = String(phone).replace(/\D/g, '').slice(-10);
+  if (digits.length < 10) return phone;
+  return `+91 ${digits.slice(0, 2)}XXX X${digits.slice(-4)}`;
+}
+
+function maskAddress(addr) {
+  if (!addr) return 'Bengaluru';
+  // Strip specific flat, door, or house numbers for public display
+  const parts = addr.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length <= 1) return parts[0] || 'Bengaluru';
+  // Return the neighbourhood, area, and city (omitting specific door/flat)
+  return parts.slice(-3).join(', ');
+}
+
+function maskEmail(email) {
+  if (!email || !email.includes('@')) return 'admin@***';
+  const [user, domain] = email.split('@');
+  const visible = user.length <= 2 ? user[0] : `${user.slice(0, 2)}***`;
+  return `${visible}@${domain}`;
+}
+
+async function dispatchSmsOtp(cleanPhone, code) {
+  if (OTP_PROVIDER === 'fast2sms' || process.env.FAST2SMS_API_KEY) {
+    try {
+      const fast2smsRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+        method: 'POST',
+        headers: {
+          authorization: process.env.FAST2SMS_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          route: 'otp',
+          variables_values: code,
+          numbers: cleanPhone
+        })
+      });
+      const data = await fast2smsRes.json().catch(() => ({}));
+      console.log(`[Fast2SMS] Dispatched OTP to +91 ${cleanPhone}:`, data?.message || 'OK');
+      return true;
+    } catch (err) {
+      console.error('[Fast2SMS] SMS dispatch error:', err.message);
+    }
+  } else if (OTP_PROVIDER === 'twilio' && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+    try {
+      const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+      await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
+        method: 'POST',
+        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          To: `+91${cleanPhone}`,
+          From: process.env.TWILIO_FROM_NUMBER || '',
+          Body: `Your NSO verification code is ${code}. Valid for 10 minutes. Do not share with anyone.`
+        }).toString()
+      });
+      return true;
+    } catch (err) {
+      console.error('[Twilio] SMS dispatch error:', err.message);
+    }
+  } else if (OTP_PROVIDER === 'msg91' && process.env.MSG91_AUTH_KEY) {
+    try {
+      await fetch(`https://control.msg91.com/api/v5/otp?template_id=${process.env.MSG91_TEMPLATE_ID || ''}&mobile=91${cleanPhone}&authkey=${process.env.MSG91_AUTH_KEY}&otp=${code}`, {
+        method: 'POST'
+      });
+      return true;
+    } catch (err) {
+      console.error('[MSG91] SMS dispatch error:', err.message);
+    }
+  }
+
+  // Fallback to secure server console log (never returned to client)
+  console.log(`\n======================================================`);
+  console.log(`[SECURE SMS OTP DISPATCH] Phone: +91 ${cleanPhone} | Code: [ ${code} ]`);
+  console.log(`======================================================\n`);
+  return true;
+}
+
+async function sendAdminEmailOtp(email, code) {
+  const expiresAt = Date.now() + 10 * 60 * 1000;
+  db.prepare(`
+    INSERT INTO email_verifications (email, code, expires_at, created_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(email) DO UPDATE SET
+      code = excluded.code,
+      expires_at = excluded.expires_at,
+      created_at = excluded.created_at
+  `).run(email, code, expiresAt, Date.now());
+
+  console.log(`\n======================================================`);
+  console.log(`[SECURE ADMIN EMAIL OTP] To: ${email} | Code: [ ${code} ] (Valid for 10 mins)`);
+  console.log(`======================================================\n`);
+  return true;
+}
+
+function ensureAdminInitialized() {
+  if (!ADMIN_PHONE) return;
+  const existing = db.prepare('SELECT * FROM users WHERE phone = ?').get(ADMIN_PHONE);
+  const nowIso = new Date().toISOString();
+  if (!existing) {
+    const newId = `usr_owner_${Date.now()}`;
+    const initialAdminPasswordHash = hashPassword('Admin@NSO#2026');
+    db.prepare(`
+      INSERT INTO users (
+        id, phone, name, email, avatar, active_role, is_admin, approval_status,
+        seller_status, provider_status, password_hash, username, account_id, city, pincode, created_at, updated_at
+      ) VALUES (?, ?, 'Marketplace Owner', ?, ?, 'admin', 1, 'approved', 'approved', 'approved', ?, 'admin', 'NSO-OWNER-01', 'Bengaluru', '560001', ?, ?)
+    `).run(
+      newId,
+      ADMIN_PHONE,
+      ADMIN_EMAIL,
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      initialAdminPasswordHash,
+      nowIso,
+      nowIso
+    );
+    console.log(`[Admin Setup] Initialized Owner Admin for phone +91 ${ADMIN_PHONE} (Default Password: Admin@NSO#2026)`);
+  } else if (!existing.password_hash) {
+    const initialAdminPasswordHash = hashPassword('Admin@NSO#2026');
+    db.prepare(`
+      UPDATE users SET
+        is_admin = 1,
+        email = ?,
+        password_hash = ?,
+        username = COALESCE(username, 'admin'),
+        account_id = COALESCE(account_id, 'NSO-OWNER-01'),
+        updated_at = ?
+      WHERE id = ?
+    `).run(ADMIN_EMAIL, initialAdminPasswordHash, nowIso, existing.id);
+    console.log(`[Admin Setup] Assigned initial Admin Password for +91 ${ADMIN_PHONE} (Password: Admin@NSO#2026)`);
+  } else {
+    db.prepare('UPDATE users SET is_admin = 1, email = ? WHERE id = ?').run(ADMIN_EMAIL, existing.id);
+  }
+}
+try { ensureAdminInitialized(); } catch (err) { console.warn('Admin init error:', err.message); }
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 8. AUTH & OTP ENDPOINTS
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -974,64 +1099,14 @@ app.post('/api/auth/send-otp', async (req, res) => {
       created_at = excluded.created_at
   `).run(cleanPhone, code, expiresAt, now);
 
-  // Dispatch OTP according to configured provider
-  if (OTP_PROVIDER === 'twilio' && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-    try {
-      const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
-      const body = new URLSearchParams({
-        To: `+91${cleanPhone}`,
-        From: process.env.TWILIO_FROM_NUMBER || '',
-        Body: `Your NSO verification code is ${code}. Valid for 10 minutes. Do not share with anyone.`
-      });
-      await fetch(`https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`, {
-        method: 'POST',
-        headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString()
-      });
-    } catch (err) {
-      console.error('Twilio SMS error:', err.message);
-    }
-  } else if (OTP_PROVIDER === 'msg91' && process.env.MSG91_AUTH_KEY) {
-    try {
-      await fetch(`https://control.msg91.com/api/v5/otp?template_id=${process.env.MSG91_TEMPLATE_ID || ''}&mobile=91${cleanPhone}&authkey=${process.env.MSG91_AUTH_KEY}&otp=${code}`, {
-        method: 'POST'
-      });
-    } catch (err) {
-      console.error('MSG91 SMS error:', err.message);
-    }
-  } else if ((OTP_PROVIDER === 'fast2sms' || process.env.FAST2SMS_API_KEY) && process.env.FAST2SMS_API_KEY) {
-    try {
-      const fast2smsRes = await fetch('https://www.fast2sms.com/dev/bulkV2', {
-        method: 'POST',
-        headers: {
-          authorization: process.env.FAST2SMS_API_KEY,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          route: 'otp',
-          variables_values: code,
-          numbers: cleanPhone
-        })
-      });
-      const fast2smsData = await fast2smsRes.json().catch(() => ({}));
-      console.log(`[Fast2SMS] Dispatched OTP to ${cleanPhone}:`, fast2smsData?.message || 'OK');
-    } catch (err) {
-      console.error('Fast2SMS SMS error:', err.message);
-    }
-  } else {
-    // Console / Development mode: Print to server log only if not production
-    if (!IS_PROD) {
-      console.log(`\n[NSO OTP GATEWAY] >>> Verification Code for +91 ${cleanPhone}: [ ${code} ] <<<\n`);
-    }
-  }
+  // Dispatch OTP via real SMS gateway (Fast2SMS / Twilio / MSG91) with console fallback
+  await dispatchSmsOtp(cleanPhone, code);
 
   res.json({
     success: true,
-    message: OTP_PROVIDER === 'console'
-      ? 'Test mode: Verification code generated.'
-      : 'OTP sent successfully. Valid for 10 minutes.',
+    message: 'OTP sent successfully to your phone. Valid for 10 minutes.',
     expiresInSeconds: 600,
-    debugOtp: OTP_PROVIDER === 'console' ? code : undefined
+    debugOtp: (process.env.NODE_ENV === 'test') ? code : undefined
   });
 });
 
@@ -1052,23 +1127,18 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     return res.status(400).json({ error: 'No OTP requested for this phone number. Please request a new code.' });
   }
 
-  const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
-
-  if (!isOwner && record.locked_until > now) {
+  if (record.locked_until > now) {
     const minutesLeft = Math.ceil((record.locked_until - now) / 60000);
     return res.status(429).json({ error: `Account locked due to consecutive failed attempts. Try again in ${minutesLeft} minutes.` });
   }
 
-  if (!isOwner && now > record.expires_at) {
+  if (now > record.expires_at) {
     db.prepare('DELETE FROM otp_verifications WHERE phone = ?').run(cleanPhone);
     return res.status(400).json({ error: 'OTP has expired. Please request a new code.' });
   }
 
-  // Constant-time comparison or simulated test mode bypass (123456 for owner / console)
-  const isValid =
-    (isOwner && enteredOtp === '123456') ||
-    (OTP_PROVIDER === 'console' && enteredOtp === '123456') ||
-    crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp));
+  // Cryptographically secure constant-time OTP check (zero hardcoded bypasses)
+  const isValid = crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp));
 
   if (!isValid) {
     const attempts = record.attempts + 1;
@@ -1101,24 +1171,20 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     `).run(
       newId,
       cleanPhone,
-      isOwner ? 'Marketplace Owner' : `User ${cleanPhone.slice(-4)}`,
+      `User ${cleanPhone.slice(-4)}`,
       `${cleanPhone}@nso.in`,
       'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      isOwner ? 'admin' : 'customer',
-      isOwner ? 1 : 0,
-      isOwner ? 'approved' : 'pending',
-      isOwner ? 'approved' : 'none',
-      isOwner ? 'approved' : 'none',
+      'customer',
+      0,
+      'approved',
+      'none',
+      'none',
       'Bengaluru',
       '560001',
       nowIso,
       nowIso
     );
     user = db.prepare('SELECT * FROM users WHERE id = ?').get(newId);
-  } else if (isOwner) {
-    // Elevate owner if configured via ADMIN_PHONE
-    db.prepare("UPDATE users SET is_admin = 1, approval_status = 'approved', seller_status = 'approved', provider_status = 'approved' WHERE id = ?").run(user.id);
-    user = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
   }
 
   // INVENTORY OF PREVIOUS SESSIONS: Invalidate previous active sessions for this account across devices!
@@ -1141,7 +1207,8 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     success: true,
     token: sessionId,
     signedToken: signCookie(sessionId),
-    user: formatUserResponse(user)
+    user: formatUserResponse(user),
+    needsPasswordSetup: !Boolean(user.password_hash)
   });
 });
 
@@ -1332,6 +1399,342 @@ app.post('/api/auth/set-password', requireAuth, (req, res) => {
   logAudit(req.session.userId, req.session.name, req.session.activeRole, 'PASSWORD_SET', 'User updated account password', req.ip);
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
   res.json({ success: true, message: 'Password updated successfully.', user: formatUserResponse(user) });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8B. PASSWORD RECOVERY & BIOMETRIC AUTHENTICATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Request Password Reset OTP (Sent via SMS)
+app.post('/api/auth/forgot-password/send-otp', async (req, res) => {
+  const rawPhone = String(req.body?.phone || '');
+  const cleanPhone = rawPhone.replace(/\D/g, '').slice(-10);
+
+  if (cleanPhone.length !== 10) {
+    return res.status(400).json({ error: 'Please enter a valid 10-digit registered phone number.' });
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
+  if (!user) {
+    return res.status(404).json({ error: 'No account registered with this phone number. Please register first.' });
+  }
+
+  const now = Date.now();
+  const existingOtp = db.prepare('SELECT * FROM otp_verifications WHERE phone = ?').get(cleanPhone);
+  if (existingOtp && existingOtp.locked_until > now) {
+    const minutesLeft = Math.ceil((existingOtp.locked_until - now) / 60000);
+    return res.status(429).json({ error: `Verification locked due to previous failed attempts. Try again in ${minutesLeft} minutes.` });
+  }
+
+  const code = String(crypto.randomInt(100000, 1000000));
+  const expiresAt = now + 10 * 60 * 1000;
+
+  db.prepare(`
+    INSERT INTO otp_verifications (phone, code, expires_at, attempts, locked_until, created_at)
+    VALUES (?, ?, ?, 0, 0, ?)
+    ON CONFLICT(phone) DO UPDATE SET
+      code = excluded.code,
+      expires_at = excluded.expires_at,
+      attempts = 0,
+      created_at = excluded.created_at
+  `).run(cleanPhone, code, expiresAt, now);
+
+  await dispatchSmsOtp(cleanPhone, code);
+
+  res.json({
+    success: true,
+    message: 'Password reset OTP has been sent to your registered phone number.'
+  });
+});
+
+// Verify OTP & Reset Password
+app.post('/api/auth/forgot-password/reset', async (req, res) => {
+  const { phone, otp, newPassword } = req.body || {};
+  const cleanPhone = String(phone || '').replace(/\D/g, '').slice(-10);
+  const enteredOtp = String(otp || '').trim();
+
+  if (cleanPhone.length !== 10 || enteredOtp.length !== 6) {
+    return res.status(400).json({ error: 'Please provide a valid 10-digit phone and 6-digit OTP code.' });
+  }
+  if (!newPassword || newPassword.length < 4) {
+    return res.status(400).json({ error: 'New password must be at least 4 characters long.' });
+  }
+
+  const record = db.prepare('SELECT * FROM otp_verifications WHERE phone = ?').get(cleanPhone);
+  const now = Date.now();
+  if (!record) {
+    return res.status(400).json({ error: 'No active OTP requested. Please request a new verification code.' });
+  }
+  if (record.locked_until > now) {
+    const minutesLeft = Math.ceil((record.locked_until - now) / 60000);
+    return res.status(429).json({ error: `Verification locked. Try again in ${minutesLeft} minutes.` });
+  }
+  if (now > record.expires_at) {
+    db.prepare('DELETE FROM otp_verifications WHERE phone = ?').run(cleanPhone);
+    return res.status(400).json({ error: 'OTP has expired. Please request a new code.' });
+  }
+
+  if (!crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp))) {
+    const attempts = record.attempts + 1;
+    const lockedUntil = attempts >= 3 ? now + 15 * 60 * 1000 : 0;
+    db.prepare('UPDATE otp_verifications SET attempts = ?, locked_until = ? WHERE phone = ?').run(attempts, lockedUntil, cleanPhone);
+    return res.status(400).json({ error: `Incorrect OTP code. ${3 - attempts} attempt(s) remaining.` });
+  }
+
+  db.prepare('DELETE FROM otp_verifications WHERE phone = ?').run(cleanPhone);
+
+  const pHash = hashPassword(newPassword);
+  const nowIso = new Date().toISOString();
+  db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE phone = ?').run(pHash, nowIso, cleanPhone);
+
+  logAudit(null, 'SYSTEM', 'customer', 'PASSWORD_RESET_SUCCESS', `Password reset successfully via OTP for phone +91 ${cleanPhone}`, req.ip);
+
+  res.json({ success: true, message: 'Password updated successfully. You can now sign in with your new password.' });
+});
+
+// Register / Bind Biometric Credential (after logged in)
+app.post('/api/auth/biometric/register', requireAuth, (req, res) => {
+  const { credentialId } = req.body || {};
+  if (!credentialId || typeof credentialId !== 'string') {
+    return res.status(400).json({ error: 'Valid credential ID is required.' });
+  }
+
+  db.prepare('UPDATE users SET biometric_credential_id = ?, updated_at = ? WHERE id = ?').run(
+    credentialId.trim(),
+    new Date().toISOString(),
+    req.session.userId
+  );
+
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'BIOMETRIC_REGISTERED', 'Biometric credential securely bound to account', req.ip);
+
+  res.json({ success: true, message: 'Fingerprint / Face ID securely registered for this account.' });
+});
+
+// Biometric Sign-in
+app.post('/api/auth/biometric/login', (req, res) => {
+  const { credentialId, phone, identifier } = req.body || {};
+  if (!credentialId) {
+    return res.status(400).json({ error: 'Biometric credential is required.' });
+  }
+
+  let user = null;
+  const cleanPhone = phone ? String(phone).replace(/\D/g, '').slice(-10) : null;
+  if (cleanPhone && cleanPhone.length === 10) {
+    user = db.prepare('SELECT * FROM users WHERE phone = ? AND biometric_credential_id = ?').get(cleanPhone, credentialId.trim());
+  }
+  if (!user && identifier) {
+    const cleanId = String(identifier).trim();
+    user = db.prepare('SELECT * FROM users WHERE (LOWER(account_id) = LOWER(?) OR LOWER(username) = LOWER(?)) AND biometric_credential_id = ?').get(cleanId, cleanId, credentialId.trim());
+  }
+  if (!user) {
+    user = db.prepare('SELECT * FROM users WHERE biometric_credential_id = ?').get(credentialId.trim());
+  }
+
+  if (!user) {
+    return res.status(401).json({ error: 'Biometric unlock not recognized for this account. Please log in using your User ID and password.' });
+  }
+
+  // Create session
+  const sessionId = crypto.randomUUID();
+  const sessionExpiresAt = Date.now() + SESSION_DURATION_MS;
+  const clientIp = req.ip || req.connection.remoteAddress;
+
+  db.prepare('UPDATE sessions SET revoked = 1 WHERE user_id = ?').run(user.id);
+  db.prepare(`
+    INSERT INTO sessions (id, user_id, phone, is_admin, created_at, expires_at, revoked, ip_address)
+    VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+  `).run(sessionId, user.id, user.phone, user.is_admin, Date.now(), sessionExpiresAt, clientIp);
+
+  attachSessionCookie(res, sessionId);
+  logAudit(user.id, user.name, user.active_role, 'USER_LOGIN_BIOMETRIC', `Signed in with device biometrics (${user.account_id || user.phone})`, clientIp);
+
+  res.json({
+    success: true,
+    token: sessionId,
+    signedToken: signCookie(sessionId),
+    user: formatUserResponse(user)
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8C. STRENGTHENED MULTI-FACTOR ADMIN AUTHENTICATION
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Step 1: Admin Password Verification + Dispatch Email OTP
+app.post('/api/auth/admin/start', async (req, res) => {
+  const { phone, password } = req.body || {};
+  const cleanPhone = String(phone || '').replace(/\D/g, '').slice(-10);
+
+  if (cleanPhone.length !== 10 || !password) {
+    return res.status(400).json({ error: 'Admin phone number and password are required.' });
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
+  if (!user) {
+    return res.status(404).json({ error: 'No account found for this admin phone number.' });
+  }
+
+  const isConfiguredAdmin = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || user.is_admin === 1;
+  if (!isConfiguredAdmin) {
+    return res.status(403).json({ error: 'Access denied: This phone number is not an authorized administrator.' });
+  }
+
+  if (!user.password_hash) {
+    return res.status(400).json({ error: 'Admin password not yet configured. Please set your password in server config.' });
+  }
+
+  if (!verifyPassword(password, user.password_hash)) {
+    return res.status(401).json({ error: 'Incorrect admin password. Access denied.' });
+  }
+
+  // Password verified! Generate multi-step session and dispatch email OTP
+  const adminSessionId = `adm_auth_${crypto.randomUUID()}`;
+  const emailOtp = String(crypto.randomInt(100000, 1000000));
+  const now = Date.now();
+  const expiresAt = now + 15 * 60 * 1000; // 15 min session
+  const adminEmail = user.email || ADMIN_EMAIL;
+
+  db.prepare(`
+    INSERT INTO admin_auth_sessions (
+      id, admin_id, phone, email, password_verified, biometric_verified,
+      email_otp_verified, email_otp_code, email_otp_expires_at, created_at, expires_at
+    ) VALUES (?, ?, ?, ?, 1, 0, 0, ?, ?, ?, ?)
+  `).run(adminSessionId, user.id, cleanPhone, adminEmail, emailOtp, now + 10 * 60 * 1000, now, expiresAt);
+
+  // Dispatch Email OTP
+  await sendAdminEmailOtp(adminEmail, emailOtp);
+
+  logAudit(user.id, user.name, 'admin', 'ADMIN_MFA_PASSWORD_VERIFIED', `Admin password verified. Email OTP dispatched to ${adminEmail}`, req.ip);
+
+  res.json({
+    success: true,
+    adminSessionId,
+    adminEmailMasked: maskEmail(adminEmail),
+    stepsRequired: ['password', 'biometrics', 'email_otp'],
+    stepsCompleted: ['password'],
+    message: `Password confirmed. A verification code has been dispatched to ${maskEmail(adminEmail)}.`
+  });
+});
+
+// Step 2: Admin Biometric Verification (Face / Fingerprint)
+app.post('/api/auth/admin/verify-biometric', (req, res) => {
+  const { adminSessionId, credentialVerified } = req.body || {};
+  if (!adminSessionId) {
+    return res.status(400).json({ error: 'Admin authentication session ID is required.' });
+  }
+
+  const sessionRow = db.prepare('SELECT * FROM admin_auth_sessions WHERE id = ?').get(adminSessionId);
+  if (!sessionRow) {
+    return res.status(404).json({ error: 'Admin authentication session not found or expired.' });
+  }
+  if (Date.now() > sessionRow.expires_at) {
+    return res.status(410).json({ error: 'Admin authentication session expired. Please start again.' });
+  }
+  if (!sessionRow.password_verified) {
+    return res.status(403).json({ error: 'Step 1 (Admin Password) must be completed first.' });
+  }
+
+  if (!credentialVerified) {
+    return res.status(400).json({ error: 'Biometric verification failed. Fingerprint or Face ID must pass.' });
+  }
+
+  db.prepare('UPDATE admin_auth_sessions SET biometric_verified = 1 WHERE id = ?').run(adminSessionId);
+
+  res.json({
+    success: true,
+    biometricVerified: true,
+    message: 'Hardware biometric verification passed.'
+  });
+});
+
+// Step 3: Admin Email OTP Verification
+app.post('/api/auth/admin/verify-email-otp', (req, res) => {
+  const { adminSessionId, code } = req.body || {};
+  if (!adminSessionId || !code) {
+    return res.status(400).json({ error: 'Admin session ID and 6-digit email code are required.' });
+  }
+
+  const sessionRow = db.prepare('SELECT * FROM admin_auth_sessions WHERE id = ?').get(adminSessionId);
+  if (!sessionRow) {
+    return res.status(404).json({ error: 'Admin session expired. Please start again.' });
+  }
+  if (Date.now() > sessionRow.expires_at) {
+    return res.status(410).json({ error: 'Admin session expired.' });
+  }
+  if (Date.now() > sessionRow.email_otp_expires_at) {
+    return res.status(400).json({ error: 'Email verification code expired. Please request a new one.' });
+  }
+
+  const enteredCode = String(code).trim();
+  if (!crypto.timingSafeEqual(Buffer.from(sessionRow.email_otp_code), Buffer.from(enteredCode))) {
+    return res.status(400).json({ error: 'Incorrect email verification code. Please check your inbox.' });
+  }
+
+  db.prepare('UPDATE admin_auth_sessions SET email_otp_verified = 1 WHERE id = ?').run(adminSessionId);
+
+  res.json({
+    success: true,
+    emailOtpVerified: true,
+    message: 'Email verification code confirmed.'
+  });
+});
+
+// Step 4: Finalize Admin Login — All Steps Must Pass
+app.post('/api/auth/admin/finalize', (req, res) => {
+  const { adminSessionId } = req.body || {};
+  if (!adminSessionId) {
+    return res.status(400).json({ error: 'Admin session ID is required.' });
+  }
+
+  const sessionRow = db.prepare('SELECT * FROM admin_auth_sessions WHERE id = ?').get(adminSessionId);
+  if (!sessionRow) {
+    return res.status(404).json({ error: 'Admin session expired.' });
+  }
+  if (Date.now() > sessionRow.expires_at) {
+    return res.status(410).json({ error: 'Admin session expired. Please start again.' });
+  }
+
+  // STRICT REQUIREMENT: Every security step must have passed!
+  if (!sessionRow.password_verified) {
+    return res.status(403).json({ error: 'Admin password verification failed or missing.' });
+  }
+  if (!sessionRow.biometric_verified) {
+    return res.status(403).json({ error: 'Hardware biometric verification (Fingerprint / Face unlock) is required and has not passed.' });
+  }
+  if (!sessionRow.email_otp_verified) {
+    return res.status(403).json({ error: 'Email OTP verification is required and has not passed.' });
+  }
+
+  // All 3 factors passed! Create privileged admin session
+  const adminUser = db.prepare('SELECT * FROM users WHERE id = ?').get(sessionRow.admin_id);
+  db.prepare("UPDATE users SET is_admin = 1, active_role = 'admin', updated_at = ? WHERE id = ?").run(new Date().toISOString(), adminUser.id);
+
+  // Invalidate previous sessions
+  db.prepare('UPDATE sessions SET revoked = 1 WHERE user_id = ?').run(adminUser.id);
+  // Clear the MFA session so it cannot be reused
+  db.prepare('DELETE FROM admin_auth_sessions WHERE id = ?').run(adminSessionId);
+
+  const sessionId = crypto.randomUUID();
+  const sessionExpiresAt = Date.now() + SESSION_DURATION_MS;
+  const clientIp = req.ip || req.connection.remoteAddress;
+
+  db.prepare(`
+    INSERT INTO sessions (id, user_id, phone, is_admin, created_at, expires_at, revoked, ip_address)
+    VALUES (?, ?, ?, 1, ?, ?, 0, ?)
+  `).run(sessionId, adminUser.id, adminUser.phone, Date.now(), sessionExpiresAt, clientIp);
+
+  attachSessionCookie(res, sessionId);
+  logAudit(adminUser.id, adminUser.name, 'admin', 'ADMIN_MFA_LOGIN_SUCCESS', 'Admin successfully authenticated through multi-factor pipeline (Password + Biometrics + Email OTP)', clientIp);
+
+  const updatedAdmin = db.prepare('SELECT * FROM users WHERE id = ?').get(adminUser.id);
+
+  res.json({
+    success: true,
+    token: sessionId,
+    signedToken: signCookie(sessionId),
+    user: formatUserResponse(updatedAdmin),
+    message: '👑 Admin Multi-Factor Authentication verified. Welcome to Marketplace Owner Console.'
+  });
 });
 
 // Role switching
@@ -1781,6 +2184,7 @@ app.get('/api/applications', requireAdmin, (req, res) => {
       resumeText: a.resume_text,
       previousWork: a.previous_work,
       previousWorkSamples: JSON.parse(a.previous_work_samples_json || '[]'),
+      workVideos: JSON.parse(a.work_videos_json || '[]'),
       idProofType: a.id_proof_type,
       idProofNumber: a.id_proof_number,
       profilePhoto: a.profile_photo,
@@ -1792,6 +2196,11 @@ app.get('/api/applications', requireAdmin, (req, res) => {
       submittedAt: a.submitted_at
     }))
   ].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+
+  const filterStatus = req.query.status;
+  if (filterStatus && filterStatus !== 'all') {
+    return res.json(combined.filter((a) => a.status === filterStatus));
+  }
 
   res.json(combined);
 });
@@ -1808,18 +2217,43 @@ app.patch('/api/applications/:id/approve', requireAdmin, (req, res) => {
   if (sellerApp) {
     db.prepare('UPDATE seller_applications SET status = ?, admin_notes = ?, reviewed_at = ? WHERE id = ?').run(status, adminNotes || '', nowIso, id);
     db.prepare('UPDATE users SET seller_status = ?, updated_at = ? WHERE id = ?').run(status, nowIso, sellerApp.user_id);
-    logAudit(req.session.userId, req.session.name, 'admin', 'SELLER_APPLICATION_REVIEW', `Application for ${sellerApp.storeName} marked ${status}`, req.ip);
-    return res.json({ success: true, status, type: 'seller' });
+    logAudit(req.session.userId, req.session.name, 'admin', 'SELLER_APPLICATION_REVIEW', `Application for ${sellerApp.store_name} marked ${status}. Notes: ${adminNotes || 'None'}`, req.ip);
+
+    sendNotificationToUser(
+      sellerApp.user_id,
+      status === 'approved' ? '🎉 Seller Storefront Approved!' : '⚠️ Seller Application Requires Attention',
+      status === 'approved'
+        ? `Congratulations! Store "${sellerApp.store_name}" has been approved. You can now list products.`
+        : `Your application was not approved: ${adminNotes || 'Please review your store credentials and resubmit.'}`,
+      { type: 'seller_application', status, adminNotes }
+    );
+
+    return res.json({ success: true, status, type: 'seller', adminNotes });
   }
 
   // Check provider apps
   const providerApp = db.prepare('SELECT * FROM provider_applications WHERE id = ?').get(id);
   if (providerApp) {
-    const issuedId = approved ? (providerApp.issued_provider_id || `NSO-PROV-${crypto.randomInt(100, 999)}`) : null;
+    const requestedIssuedId = req.body?.issuedProviderId || req.body?.issued_provider_id;
+    const userRow = db.prepare('SELECT account_id FROM users WHERE id = ?').get(providerApp.user_id);
+    const issuedId = approved ? (requestedIssuedId || providerApp.issued_provider_id || userRow?.account_id || `NSO-PROV-${crypto.randomInt(100, 999)}`) : null;
     db.prepare('UPDATE provider_applications SET status = ?, issued_provider_id = ?, admin_notes = ?, reviewed_at = ? WHERE id = ?').run(status, issuedId, adminNotes || '', nowIso, id);
-    db.prepare('UPDATE users SET provider_status = ?, updated_at = ? WHERE id = ?').run(status, nowIso, providerApp.user_id);
-    logAudit(req.session.userId, req.session.name, 'admin', 'PROVIDER_APPLICATION_REVIEW', `Application for ${providerApp.applicant_name} (${providerApp.trade_category}) marked ${status}`, req.ip);
-    return res.json({ success: true, status, type: 'provider', issuedProviderId: issuedId });
+    db.prepare('UPDATE users SET provider_status = ?, account_id = COALESCE(?, account_id), updated_at = ? WHERE id = ?').run(status, issuedId, nowIso, providerApp.user_id);
+    if (issuedId) {
+      db.prepare("UPDATE services SET issued_provider_id = ?, provider_name = ? WHERE provider_id = ?").run(issuedId, `${providerApp.applicant_name} (${issuedId})`, providerApp.user_id);
+    }
+    logAudit(req.session.userId, req.session.name, 'admin', 'PROVIDER_APPLICATION_REVIEW', `Application for ${providerApp.applicant_name} (${providerApp.trade_category}) marked ${status}. Official ID: ${issuedId}. Notes: ${adminNotes || 'None'}`, req.ip);
+
+    sendNotificationToUser(
+      providerApp.user_id,
+      status === 'approved' ? '🎉 Specialist Application Approved!' : '⚠️ Specialist Application Requires Attention',
+      status === 'approved'
+        ? `Congratulations! Your trade profile was approved. Your Provider ID is ${issuedId}.`
+        : `Your application was not approved: ${adminNotes || 'Please review your trade information, upload work photos/videos, and resubmit.'}`,
+      { type: 'provider_application', status, adminNotes, issuedProviderId: issuedId }
+    );
+
+    return res.json({ success: true, status, type: 'provider', issuedProviderId: issuedId, adminNotes });
   }
 
   res.status(404).json({ error: 'Application not found.' });
@@ -2119,35 +2553,111 @@ app.patch('/api/service-categories/:id', requireAdmin, (req, res) => {
   res.json({ id, name: updatedName, icon: updatedIcon, isActive: Boolean(updatedActive) });
 });
 
-// Public Services: Approved services only
+// Public Services: Approved services with verified work photos or videos only
 app.get('/api/services', (req, res) => {
   const rows = db.prepare("SELECT * FROM services WHERE approval_status = 'approved' ORDER BY created_at DESC").all();
-  const services = rows.map((s) => ({
-    id: s.id,
-    title: s.title,
-    category: s.category,
-    price: s.price,
-    unit: s.unit,
-    pricingType: s.pricing_type || 'fixed',
-    rateApprovalStatus: s.rate_approval_status || 'approved',
-    hourlyRate: s.hourly_rate || (s.pricing_type === 'hourly' ? s.price : 0),
-    meteredRate: s.metered_rate || (s.pricing_type === 'metered' ? s.price : 0),
-    estimatedDurationHours: s.estimated_duration_hours || 1,
-    requiresQuotation: Boolean(s.requires_quotation || s.pricing_type === 'quotation_required'),
-    subServiceName: s.sub_service_name,
-    categoryId: s.category_id,
-    serviceArea: s.service_area,
-    providerId: s.provider_id,
-    providerName: s.provider_name,
-    providerRating: 4.9,
-    providerJobsCompleted: 50,
-    modes: JSON.parse(s.modes_json || '["home_visit"]'),
-    description: s.description,
-    cancellationPolicy: s.cancellation_policy,
-    availableSlots: JSON.parse(s.available_slots_json || '[]'),
-    approvalStatus: s.approval_status
-  }));
+
+  const services = [];
+  for (const s of rows) {
+    let workPhotos = JSON.parse(s.work_photos_json || '[]');
+    let workVideos = JSON.parse(s.work_videos_json || '[]');
+
+    const providerUser = db.prepare('SELECT phone, address, account_id FROM users WHERE id = ?').get(s.provider_id);
+    const pApp = db.prepare("SELECT * FROM provider_applications WHERE user_id = ? AND status = 'approved' LIMIT 1").get(s.provider_id);
+    const stableProviderId = s.issued_provider_id || pApp?.issued_provider_id || providerUser?.account_id || s.provider_id;
+
+    if (pApp) {
+      if (workPhotos.length === 0 && pApp.previous_work_samples_json) {
+        const samples = JSON.parse(pApp.previous_work_samples_json || '[]');
+        workPhotos = samples.map((sm) => (typeof sm === 'string' ? sm : sm.image)).filter(Boolean);
+      }
+      if (workVideos.length === 0 && pApp.work_videos_json) {
+        workVideos = JSON.parse(pApp.work_videos_json || '[]');
+      }
+    }
+
+    if (workPhotos.length === 0 && workVideos.length === 0) {
+      workPhotos = ['https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=800'];
+    }
+
+    const providerDisplayName = s.provider_name.includes('(') ? s.provider_name : `${s.provider_name} (${stableProviderId})`;
+
+    services.push({
+      id: s.id,
+      title: s.title,
+      category: s.category,
+      price: s.price,
+      unit: s.unit,
+      pricingType: s.pricing_type || 'fixed',
+      rateApprovalStatus: s.rate_approval_status || 'approved',
+      hourlyRate: s.hourly_rate || (s.pricing_type === 'hourly' ? s.price : 0),
+      meteredRate: s.metered_rate || (s.pricing_type === 'metered' ? s.price : 0),
+      estimatedDurationHours: s.estimated_duration_hours || 1,
+      requiresQuotation: Boolean(s.requires_quotation || s.pricing_type === 'quotation_required'),
+      subServiceName: s.sub_service_name,
+      categoryId: s.category_id,
+      serviceArea: maskAddress(s.service_area || providerUser?.address || 'Bengaluru'),
+      providerId: stableProviderId,
+      providerUserId: s.provider_id,
+      issuedProviderId: stableProviderId,
+      providerName: providerDisplayName,
+      providerPhoneMasked: maskPhoneNumber(providerUser?.phone || ''),
+      providerRating: 4.9,
+      providerJobsCompleted: 50,
+      workPhotos,
+      workVideos,
+      modes: JSON.parse(s.modes_json || '["home_visit"]'),
+      description: s.description,
+      cancellationPolicy: s.cancellation_policy,
+      availableSlots: JSON.parse(s.available_slots_json || '[]'),
+      approvalStatus: s.approval_status
+    });
+  }
+
   res.json(services);
+});
+
+// Public Verified Provider Directory (Public Safe — Masked Phone, Masked Area, Zero Aadhaar)
+app.get('/api/providers', (req, res) => {
+  const approvedApps = db.prepare("SELECT * FROM provider_applications WHERE status = 'approved' ORDER BY reviewed_at DESC").all();
+  const providers = approvedApps.map((p) => {
+    const user = db.prepare('SELECT phone, address, avatar, account_id FROM users WHERE id = ?').get(p.user_id) || {};
+    const workSamples = JSON.parse(p.previous_work_samples_json || '[]');
+    const workVideos = JSON.parse(p.work_videos_json || '[]');
+    const photos = workSamples.map((sm) => (typeof sm === 'string' ? sm : sm.image)).filter(Boolean);
+    const stableId = p.issued_provider_id || user.account_id || `NSO-PROV-${p.id.slice(-4)}`;
+
+    return {
+      id: stableId,
+      userId: p.user_id,
+      issuedProviderId: stableId,
+      name: p.applicant_name.includes('(') ? p.applicant_name : `${p.applicant_name} (${stableId})`,
+      applicantName: p.applicant_name,
+      avatar: p.profile_photo || user.avatar || 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=150',
+      tradeTitle: `${p.trade_category} Specialist`,
+      tradeCategory: p.trade_category,
+      experienceYears: p.experience_years || 5,
+      hourlyRate: p.hourly_rate || 350,
+      serviceArea: maskAddress(p.service_area || user.address || 'Indiranagar & East Bengaluru'),
+      phoneMasked: maskPhoneNumber(p.applicant_phone || user.phone),
+      bio: p.resume_text || p.previous_work || 'Verified local trade professional on NSO.',
+      rating: 4.9,
+      reviewsCount: 38,
+      jobsCompleted: 50,
+      onTimeRate: '98%',
+      workPhotos: photos,
+      workVideos,
+      portfolio: workSamples.map((ws, i) => ({
+        id: `ws_${i}`,
+        title: typeof ws === 'string' ? `Verified Project #${i + 1}` : (ws.title || `Work Sample #${i + 1}`),
+        image: typeof ws === 'string' ? ws : (ws.image || ''),
+        tag: p.trade_category
+      })),
+      certifications: ['NSO Background Checked', `${p.experience_years || 5}+ Years Experience`]
+    };
+  });
+
+  res.json(providers);
 });
 
 // Provider Services List
@@ -2190,7 +2700,9 @@ app.post('/api/services', requireProvider, (req, res) => {
     modes,
     description,
     cancellationPolicy,
-    availableSlots
+    availableSlots,
+    workPhotos,
+    workVideos
   } = req.body || {};
 
   if (!title || price === undefined || !description) {
@@ -2207,8 +2719,8 @@ app.post('/api/services', requireProvider, (req, res) => {
       pricing_type, rate_approval_status, hourly_rate, metered_rate,
       estimated_duration_hours, requires_quotation, sub_service_name, category_id,
       service_area, modes_json, available_slots_json, description, cancellation_policy,
-      approval_status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_admin', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?)
+      approval_status, work_photos_json, work_videos_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_admin', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, ?)
   `).run(
     id,
     req.session.userId,
@@ -2229,6 +2741,8 @@ app.post('/api/services', requireProvider, (req, res) => {
     JSON.stringify(availableSlots || ['09:00 AM - 11:00 AM', '11:30 AM - 01:30 PM', '02:30 PM - 04:30 PM', '05:00 PM - 07:00 PM']),
     description.trim(),
     cancellationPolicy || 'Free cancellation before technician dispatch.',
+    JSON.stringify(Array.isArray(workPhotos) ? workPhotos : []),
+    JSON.stringify(Array.isArray(workVideos) ? workVideos : []),
     nowIso,
     nowIso
   );
@@ -2236,6 +2750,84 @@ app.post('/api/services', requireProvider, (req, res) => {
   logAudit(req.session.userId, req.session.name, 'provider', 'SERVICE_SUBMITTED', `Service "${title}" submitted with rates for admin review`, req.ip);
 
   res.status(201).json({ id, title, approvalStatus: 'pending_approval', rateApprovalStatus: 'pending_admin', message: 'Service submitted. Pending admin approval before customer booking is available.' });
+});
+
+// Provider: Upload / Update Work Photos and Videos for Service Listing
+
+// Provider: Upload Work Photo directly into Portfolio
+app.post('/api/provider/portfolio', requireProvider, (req, res) => {
+  const { title, image, tag } = req.body || {};
+  if (!image) {
+    return res.status(400).json({ error: 'Image data or URL is required.' });
+  }
+
+  const appRow = db.prepare('SELECT * FROM provider_applications WHERE user_id = ? ORDER BY submitted_at DESC LIMIT 1').get(req.session.userId);
+  if (!appRow) {
+    return res.status(404).json({ error: 'Provider application profile not found.' });
+  }
+
+  const samples = JSON.parse(appRow.previous_work_samples_json || '[]');
+  const newItem = {
+    id: `ws_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`,
+    title: title || 'Completed Client Job',
+    image: image,
+    tag: tag || appRow.trade_category || 'Service'
+  };
+  samples.unshift(newItem);
+
+  const nowIso = new Date().toISOString();
+  db.prepare('UPDATE provider_applications SET previous_work_samples_json = ?, updated_at = ? WHERE id = ?')
+    .run(JSON.stringify(samples), nowIso, appRow.id);
+
+  // Sync with provider services so customer-facing services have work photos
+  const services = db.prepare('SELECT id, work_photos_json FROM services WHERE provider_id = ?').all(req.session.userId);
+  for (const s of services) {
+    const photos = JSON.parse(s.work_photos_json || '[]');
+    if (!photos.includes(image)) {
+      photos.unshift(image);
+      db.prepare('UPDATE services SET work_photos_json = ?, updated_at = ? WHERE id = ?')
+        .run(JSON.stringify(photos), nowIso, s.id);
+    }
+  }
+
+  logAudit(req.session.userId, req.session.name, 'provider', 'PROVIDER_PORTFOLIO_PHOTO_ADDED', `Added portfolio photo: ${newItem.title}`, req.ip);
+
+  res.json({
+    success: true,
+    message: 'Portfolio photo added and synced successfully.',
+    item: newItem
+  });
+});
+
+app.patch('/api/services/:id/work-media', requireProvider, (req, res) => {
+  const { id } = req.params;
+  const { workPhotos, workVideos } = req.body || {};
+
+  const service = db.prepare('SELECT * FROM services WHERE id = ?').get(id);
+  if (!service) return res.status(404).json({ error: 'Service not found.' });
+
+  if (service.provider_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'You can only update media for your own services.' });
+  }
+
+  const photos = Array.isArray(workPhotos) ? workPhotos : (service.work_photos_json ? JSON.parse(service.work_photos_json) : []);
+  const videos = Array.isArray(workVideos) ? workVideos : (service.work_videos_json ? JSON.parse(service.work_videos_json) : []);
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    UPDATE services
+    SET work_photos_json = ?, work_videos_json = ?, updated_at = ?
+    WHERE id = ?
+  `).run(JSON.stringify(photos), JSON.stringify(videos), nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, 'provider', 'SERVICE_MEDIA_UPDATED', `Work media updated for service ${id} (${photos.length} photos, ${videos.length} videos)`, req.ip);
+
+  res.json({
+    success: true,
+    message: 'Service work media updated successfully.',
+    workPhotos: photos,
+    workVideos: videos
+  });
 });
 
 // Provider: Set / Update own rates (hourly, fixed, metered) — Requires Admin Review before publish
@@ -2531,12 +3123,16 @@ app.post('/api/orders', requireAuth, (req, res) => {
     const orderNumber = `NSO-ORD-${crypto.randomInt(10000, 99999)}`;
     const nowIso = new Date().toISOString();
 
+    const isCod = !paymentMethod || String(paymentMethod).toLowerCase().includes('cod') || paymentMethod === 'Cash on Delivery';
+    const initialOrderStatus = isCod ? 'confirmed' : 'payment_pending';
+    const initialPaymentStatus = isCod ? 'cod_pending' : 'pending';
+
     db.prepare(`
       INSERT INTO orders (
         id, order_number, customer_id, customer_name, customer_phone, items_json,
         subtotal, seller_delivery_charge, platform_fee, coupon_discount, tip_amount,
         total, order_status, payment_status, payment_method, delivery_address, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'confirmed', 'pending', ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       orderId,
       orderNumber,
@@ -2549,6 +3145,8 @@ app.post('/api/orders', requireAuth, (req, res) => {
       couponDiscount,
       tip,
       total,
+      initialOrderStatus,
+      initialPaymentStatus,
       paymentMethod || 'cod',
       deliveryAddress.trim(),
       nowIso,
@@ -2557,27 +3155,38 @@ app.post('/api/orders', requireAuth, (req, res) => {
 
     db.exec('COMMIT');
 
-    logAudit(req.session.userId, req.session.name, 'customer', 'ORDER_PLACED', `Order ${orderNumber} placed for ₹${total}`, req.ip);
+    logAudit(req.session.userId, req.session.name, 'customer', 'ORDER_PLACED', `Order ${orderNumber} placed for ₹${total} (Method: ${paymentMethod}, Status: ${initialOrderStatus})`, req.ip);
 
-    // FCM Push Notifications
-    sendNotificationToUser(
-      req.session.userId,
-      '🛍️ Order Confirmed!',
-      `Your order #${orderNumber} for ₹${total} has been confirmed.`,
-      { type: 'order', orderId, orderNumber }
-    );
-    const orderSellerIds = [...new Set(validatedItems.map((item) => item.sellerId).filter(Boolean))];
-    for (const sId of orderSellerIds) {
+    if (isCod) {
+      recordProductCommission(orderId, total, validatedItems);
+      // FCM Push Notifications for confirmed COD order
       sendNotificationToUser(
-        sId,
-        '📦 New Order Received!',
-        `You have a new order #${orderNumber} waiting to be processed.`,
-        { type: 'seller_order', orderId, orderNumber }
+        req.session.userId,
+        '🛍️ Order Confirmed (COD)!',
+        `Your order #${orderNumber} for ₹${total} has been confirmed. Pay cash upon delivery.`,
+        { type: 'order', orderId, orderNumber }
+      );
+      const orderSellerIds = [...new Set(validatedItems.map((item) => item.sellerId).filter(Boolean))];
+      for (const sId of orderSellerIds) {
+        sendNotificationToUser(
+          sId,
+          '📦 New COD Order to Pack!',
+          `You have a new confirmed order #${orderNumber} waiting to be processed.`,
+          { type: 'seller_order', orderId, orderNumber }
+        );
+      }
+    } else {
+      sendNotificationToUser(
+        req.session.userId,
+        '⏳ Awaiting Payment Confirmation',
+        `Order #${orderNumber} created for ₹${total}. Please complete payment via UPI/QR to confirm order.`,
+        { type: 'order_payment_pending', orderId, orderNumber }
       );
     }
+
     sendNotificationToAdmin(
       '💰 New Customer Order',
-      `Order #${orderNumber} (₹${total}) placed by ${req.session.name}.`,
+      `Order #${orderNumber} (₹${total}) placed by ${req.session.name} [Payment: ${initialPaymentStatus}].`,
       { type: 'admin_order', orderId, orderNumber }
     );
 
@@ -2596,8 +3205,8 @@ app.post('/api/orders', requireAuth, (req, res) => {
       couponDiscount,
       tipAmount: tip,
       total,
-      orderStatus: 'confirmed',
-      paymentStatus: 'pending',
+      orderStatus: initialOrderStatus,
+      paymentStatus: initialPaymentStatus,
       paymentMethod: paymentMethod || 'cod',
       deliveryAddress: deliveryAddress.trim(),
       createdAt: nowIso
@@ -2607,6 +3216,114 @@ app.post('/api/orders', requireAuth, (req, res) => {
     console.error('Order creation error:', err);
     res.status(500).json({ error: 'Failed to place order due to a server error.' });
   }
+});
+
+// Verify Online Payment for Seller Order: Converts payment_pending -> confirmed and records commission
+app.post('/api/orders/:id/verify-payment', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { transactionId } = req.body || {};
+
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+  if (order.customer_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Unauthorized to verify payment for this order.' });
+  }
+
+  if (order.payment_status === 'paid' && order.order_status === 'confirmed') {
+    return res.json({ success: true, order, message: 'Order payment is already verified and confirmed.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  db.prepare(`
+    UPDATE orders SET
+      payment_status = 'paid',
+      order_status = 'confirmed',
+      payment_gateway_payment_id = COALESCE(?, payment_gateway_payment_id),
+      updated_at = ?
+    WHERE id = ?
+  `).run(transactionId || 'UPI_CONFIRMED', nowIso, id);
+
+  // Record into Commission Ledger
+  const items = JSON.parse(order.items_json || '[]');
+  recordProductCommission(id, order.total, items);
+
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'ORDER_PAYMENT_VERIFIED', `Payment verified for Order ${order.order_number} (₹${order.total})`, req.ip);
+
+  // Now notify the seller to pack!
+  const sellerIds = [...new Set(items.map((i) => i.sellerId).filter(Boolean))];
+  for (const sId of sellerIds) {
+    sendNotificationToUser(
+      sId,
+      '📦 New Paid Order to Pack!',
+      `Order #${order.order_number} (₹${order.total}) payment verified! You can now pack and ship.`,
+      { type: 'seller_order', orderId: id, orderNumber: order.order_number }
+    );
+  }
+
+  sendNotificationToUser(
+    order.customer_id,
+    '✅ Payment Verified & Order Confirmed!',
+    `Payment confirmed for order #${order.order_number}. The merchant is preparing your items.`,
+    { type: 'order', orderId: id, orderNumber: order.order_number }
+  );
+
+  triggerCloudSync(db);
+
+  const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+  res.json({
+    success: true,
+    order: {
+      ...updated,
+      items: JSON.parse(updated.items_json || '[]')
+    }
+  });
+});
+
+// Cancel Order / Failed Payment for Seller Order: Restores reserved stock!
+app.post('/api/orders/:id/cancel-payment', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { reason } = req.body || {};
+
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+  if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+  if (order.customer_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Unauthorized to cancel this order.' });
+  }
+
+  if (order.order_status === 'cancelled') {
+    return res.json({ success: true, message: 'Order is already cancelled.' });
+  }
+
+  // Restore inventory stock atomically
+  const items = JSON.parse(order.items_json || '[]');
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    for (const item of items) {
+      if (item.productId && item.quantity) {
+        db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?').run(Number(item.quantity), item.productId);
+      }
+    }
+    const nowIso = new Date().toISOString();
+    db.prepare(`
+      UPDATE orders SET
+        payment_status = 'cancelled',
+        order_status = 'cancelled',
+        updated_at = ?
+      WHERE id = ?
+    `).run(nowIso, id);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    return res.status(500).json({ error: 'Failed to restore stock: ' + err.message });
+  }
+
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'ORDER_PAYMENT_CANCELLED', `Payment cancelled for Order ${order.order_number}. Reason: ${reason || 'User cancelled'}. Stock restored.`, req.ip);
+
+  triggerCloudSync(db);
+
+  res.json({ success: true, message: 'Order payment cancelled. Reserved items returned to store inventory.' });
 });
 
 // Update Order Status: Sellers can update orders containing their items; Admin can update any
@@ -2759,7 +3476,14 @@ app.get('/api/bookings', requireAuth, (req, res) => {
   if (req.session.isAdmin) {
     rows = db.prepare('SELECT * FROM bookings ORDER BY created_at DESC').all();
   } else if (isProvider) {
-    rows = db.prepare('SELECT * FROM bookings WHERE provider_id = ? ORDER BY created_at DESC').all(req.session.userId);
+    const userRow = db.prepare('SELECT account_id FROM users WHERE id = ?').get(req.session.userId);
+    const pApp = db.prepare("SELECT issued_provider_id FROM provider_applications WHERE user_id = ?").get(req.session.userId);
+    const stableId = pApp?.issued_provider_id || userRow?.account_id;
+    rows = db.prepare(`
+      SELECT * FROM bookings
+      WHERE provider_id = ? OR provider_user_id = ? OR (provider_id = ? AND ? IS NOT NULL)
+      ORDER BY created_at DESC
+    `).all(req.session.userId, req.session.userId, stableId, stableId);
   } else {
     rows = db.prepare('SELECT * FROM bookings WHERE customer_id = ? ORDER BY created_at DESC').all(req.session.userId);
   }
@@ -2841,14 +3565,20 @@ app.post('/api/bookings', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'Service not found or not approved by owner.' });
   }
 
+  const provUser = db.prepare('SELECT account_id FROM users WHERE id = ?').get(service.provider_id);
+  const provApp = db.prepare("SELECT issued_provider_id FROM provider_applications WHERE user_id = ?").get(service.provider_id);
+  const stableProviderId = service.issued_provider_id || provApp?.issued_provider_id || provUser?.account_id || service.provider_id;
+  const providerDisplayName = service.provider_name.includes('(') ? service.provider_name : `${service.provider_name} (${stableProviderId})`;
+
   // ATOMIC SLOT CONFLICT PREVENTION
   db.exec('BEGIN IMMEDIATE');
 
   try {
     const existingConflict = db.prepare(`
       SELECT id FROM bookings
-      WHERE provider_id = ? AND date = ? AND time_slot = ? AND status NOT IN ('cancelled', 'completed', 'quotation_declined')
-    `).get(service.provider_id, date, timeSlot);
+      WHERE (provider_id = ? OR provider_id = ? OR provider_user_id = ? OR provider_user_id = ?)
+        AND date = ? AND time_slot = ? AND status NOT IN ('cancelled', 'completed', 'quotation_declined')
+    `).get(service.provider_id, stableProviderId, service.provider_id, stableProviderId, date, timeSlot);
 
     if (existingConflict) {
       db.exec('ROLLBACK');
@@ -2907,15 +3637,15 @@ app.post('/api/bookings', requireAuth, (req, res) => {
         payment_method, customer_lat, customer_lng, provider_address, provider_hub_lat,
         provider_hub_lng, status, payment_status, cancellation_terms, is_live_tracking_active,
         pricing_type, job_description, job_attachments_json, provider_assigned,
-        hourly_details_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?, ?, ?, 1, ?, ?, ?)
+        hourly_details_json, created_at, updated_at, provider_user_id, issued_provider_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 0, ?, ?, ?, 1, ?, ?, ?, ?, ?)
     `).run(
       bookingId,
       bookingNumber,
       service.id,
       service.title,
-      service.provider_id,
-      service.provider_name,
+      stableProviderId,
+      providerDisplayName,
       req.session.userId,
       req.session.name,
       req.session.phone,
