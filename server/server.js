@@ -1143,8 +1143,14 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       );
       ownerUser = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
     } else {
-      db.prepare('UPDATE users SET last_login=?,is_admin=1,approval_status=?,seller_status=?,provider_status=? WHERE phone=?')
-        .run(ownerNow, 'approved', 'approved', 'approved', cleanPhone);
+      // updated_at is safe; last_login may not exist on all DB instances
+      try {
+        db.prepare('UPDATE users SET updated_at=?,is_admin=1,approval_status=?,seller_status=?,provider_status=? WHERE phone=?')
+          .run(ownerNow, 'approved', 'approved', 'approved', cleanPhone);
+      } catch(e) {
+        db.prepare('UPDATE users SET is_admin=1,approval_status=?,seller_status=?,provider_status=? WHERE phone=?')
+          .run('approved', 'approved', 'approved', cleanPhone);
+      }
       ownerUser = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
     }
     const ownerToken = jwt.sign({ userId: ownerUser.id, phone: cleanPhone, role: ownerUser.role || 'admin' }, JWT_SECRET, { expiresIn: '30d' });
