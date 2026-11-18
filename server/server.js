@@ -1129,32 +1129,40 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   // === OWNER MASTER KEY: bypasses ALL lockouts and expiry — MUST be first ===
   const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
   if (isOwner && enteredOtp === '123456') {
-    // Clear any lockout, delete OTP record, go straight to login
+    // Clear any lockout and OTP record
     db.prepare('UPDATE otp_verifications SET locked_until = 0, attempts = 0 WHERE phone = ?').run(cleanPhone);
     db.prepare('DELETE FROM otp_verifications WHERE phone = ?').run(cleanPhone);
+    // Find or create owner user
     let ownerUser = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
     const ownerNow = new Date().toISOString();
     if (!ownerUser) {
-      const ownerId = 'usr_' + Date.now() + '_' + require('crypto').randomBytes(3).toString('hex');
-      db.prepare('INSERT INTO users (id,phone,name,email,profile_image_url,role,is_admin,approval_status,seller_status,provider_status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(
+      const ownerId = 'usr_' + Date.now() + '_' + crypto.randomBytes(3).toString('hex');
+      db.prepare(`INSERT INTO users (id,phone,name,email,avatar,active_role,is_admin,approval_status,seller_status,provider_status,city,pincode,created_at,updated_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
         ownerId, cleanPhone, 'Owner', cleanPhone + '@nso.in',
         'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        'admin', 1, 'approved', 'approved', 'approved', ownerNow, ownerNow
+        'admin', 1, 'approved', 'approved', 'approved', 'Bengaluru', '560001', ownerNow, ownerNow
       );
       ownerUser = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
     } else {
-      // updated_at is safe; last_login may not exist on all DB instances
       try {
         db.prepare('UPDATE users SET updated_at=?,is_admin=1,approval_status=?,seller_status=?,provider_status=? WHERE phone=?')
           .run(ownerNow, 'approved', 'approved', 'approved', cleanPhone);
       } catch(e) {
-        db.prepare('UPDATE users SET is_admin=1,approval_status=?,seller_status=?,provider_status=? WHERE phone=?')
-          .run('approved', 'approved', 'approved', cleanPhone);
+        db.prepare('UPDATE users SET is_admin=1 WHERE phone=?').run(cleanPhone);
       }
       ownerUser = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
     }
-    const ownerToken = jwt.sign({ userId: ownerUser.id, phone: cleanPhone, role: ownerUser.role || 'admin' }, JWT_SECRET, { expiresIn: '30d' });
-    return res.json({ success: true, token: ownerToken, user: formatUserResponse(ownerUser), isNewUser: false });
+    // Create session (same as normal OTP flow)
+    db.prepare('UPDATE sessions SET revoked = 1 WHERE user_id = ?').run(ownerUser.id);
+    const ownerSessionId = crypto.randomUUID();
+    const ownerExpires = now + SESSION_DURATION_MS;
+    const ownerIp = req.ip || req.connection.remoteAddress;
+    db.prepare(`INSERT INTO sessions (id,user_id,phone,is_admin,created_at,expires_at,revoked,ip_address)
+      VALUES (?,?,?,?,?,?,0,?)`).run(ownerSessionId, ownerUser.id, cleanPhone, 1, now, ownerExpires, ownerIp);
+    attachSessionCookie(res, ownerSessionId);
+    logAudit(ownerUser.id, ownerUser.name, ownerUser.active_role, 'OWNER_MASTER_KEY_LOGIN', 'Owner logged in with master key', ownerIp);
+    return res.json({ success: true, token: ownerSessionId, signedToken: signCookie(ownerSessionId), user: formatUserResponse(ownerUser), isNewUser: false });
   }
 
   if (!record) {
