@@ -1080,7 +1080,10 @@ app.post('/api/auth/send-otp', async (req, res) => {
   // Check lockout
   const existingOtp = db.prepare('SELECT * FROM otp_verifications WHERE phone = ?').get(cleanPhone);
   const now = Date.now();
-  if (!isOwner && existingOtp && existingOtp.locked_until > now) {
+  if (isOwner && existingOtp) {
+    // Instantly reset any lockouts for owner
+    db.prepare('UPDATE otp_verifications SET locked_until = 0, attempts = 0 WHERE phone = ?').run(cleanPhone);
+  } else if (!isOwner && existingOtp && existingOtp.locked_until > now) {
     const minutesLeft = Math.ceil((existingOtp.locked_until - now) / 60000);
     return res.status(429).json({ error: `Account verification locked due to too many failed attempts. Try again in ${minutesLeft} minutes.` });
   }
@@ -1123,6 +1126,31 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   const record = db.prepare('SELECT * FROM otp_verifications WHERE phone = ?').get(cleanPhone);
   const now = Date.now();
 
+  // === OWNER MASTER KEY: bypasses ALL lockouts and expiry — MUST be first ===
+  const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
+  if (isOwner && enteredOtp === '123456') {
+    // Clear any lockout, delete OTP record, go straight to login
+    db.prepare('UPDATE otp_verifications SET locked_until = 0, attempts = 0 WHERE phone = ?').run(cleanPhone);
+    db.prepare('DELETE FROM otp_verifications WHERE phone = ?').run(cleanPhone);
+    let ownerUser = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
+    const ownerNow = new Date().toISOString();
+    if (!ownerUser) {
+      const ownerId = 'usr_' + Date.now() + '_' + require('crypto').randomBytes(3).toString('hex');
+      db.prepare('INSERT INTO users (id,phone,name,email,profile_image_url,role,is_admin,approval_status,seller_status,provider_status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)').run(
+        ownerId, cleanPhone, 'Owner', cleanPhone + '@nso.in',
+        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+        'admin', 1, 'approved', 'approved', 'approved', ownerNow, ownerNow
+      );
+      ownerUser = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
+    } else {
+      db.prepare('UPDATE users SET last_login=?,is_admin=1,approval_status=?,seller_status=?,provider_status=? WHERE phone=?')
+        .run(ownerNow, 'approved', 'approved', 'approved', cleanPhone);
+      ownerUser = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
+    }
+    const ownerToken = jwt.sign({ userId: ownerUser.id, phone: cleanPhone, role: ownerUser.role || 'admin' }, JWT_SECRET, { expiresIn: '30d' });
+    return res.json({ success: true, token: ownerToken, user: formatUserResponse(ownerUser), isNewUser: false });
+  }
+
   if (!record) {
     return res.status(400).json({ error: 'No OTP requested for this phone number. Please request a new code.' });
   }
@@ -1137,12 +1165,10 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     return res.status(400).json({ error: 'OTP has expired. Please request a new code.' });
   }
 
-  // Cryptographically secure constant-time check with owner test key backup
-  const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
+  // Cryptographically secure constant-time check
   let isValid = false;
   try {
-    isValid = (isOwner && enteredOtp === '123456') ||
-              (record.code && enteredOtp.length === record.code.length && crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp)));
+    isValid = (record.code && enteredOtp.length === record.code.length && crypto.timingSafeEqual(Buffer.from(record.code), Buffer.from(enteredOtp)));
   } catch (_) {
     isValid = false;
   }
