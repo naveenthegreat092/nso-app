@@ -407,6 +407,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fetchUsers();
   }, []);
 
+  // ── Initialize Push Notifications (FCM) on Native App Launch ────────────
+  useEffect(() => {
+    const initPush = async () => {
+      if (!Capacitor.isNativePlatform()) return;
+      try {
+        const { PushNotifications } = await import('@capacitor/push-notifications');
+        const permStatus = await PushNotifications.requestPermissions();
+        if (permStatus.receive === 'granted') {
+          await PushNotifications.register();
+        }
+
+        // Create high-priority notification channel for Android 8+
+        await PushNotifications.createChannel({
+          id: 'nso_orders',
+          name: 'NSO Orders & Bookings',
+          description: 'Live order updates, delivery tracking, and technician booking notifications',
+          importance: 5,
+          visibility: 1,
+          vibration: true
+        }).catch(() => {});
+
+        PushNotifications.removeAllListeners().catch(() => {});
+
+        PushNotifications.addListener('registration', async (tokenData) => {
+          await api.registerPushToken(tokenData.value, 'android', 'capacitor');
+        });
+
+        PushNotifications.addListener('pushNotificationReceived', (notification) => {
+          if (notification.title) {
+            showToast(`🔔 ${notification.title}: ${notification.body || ''}`);
+          }
+        });
+
+        PushNotifications.addListener('pushNotificationActionPerformed', () => {
+          setActiveTab('orders');
+        });
+      } catch {
+        // FCM not available or running in web preview
+      }
+    };
+    initPush();
+  }, []);
+
   // ── Real-time Admin Synchronization (Polls every 3 seconds) ───────────────
   const refreshAdminData = async () => {
     try {
