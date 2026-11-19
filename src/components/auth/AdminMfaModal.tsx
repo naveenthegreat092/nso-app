@@ -26,8 +26,8 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
   // Steps: 'password' -> 'biometric' -> 'success'
   const [currentStep, setCurrentStep] = useState<'password' | 'biometric' | 'success'>('password');
   
-  // Step 1: Admin Password & Phone
-  const [adminPhone, setAdminPhone] = useState(() => (user.phone ? user.phone.replace(/\D/g, '').slice(-10) : (localStorage.getItem('nso_admin_phone') || '')));
+  // Step 1: Admin Password & Phone - Always default to the authorized admin number
+  const [adminPhone, setAdminPhone] = useState('8310421121');
   const [adminPassword, setAdminPassword] = useState('');
   const [step1Loading, setStep1Loading] = useState(false);
   const [step1Error, setStep1Error] = useState<string | null>(null);
@@ -46,7 +46,8 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
       setStep1Error(null);
       setStep2Error(null);
       setBiometricPassed(false);
-      const phoneToUse = user.phone ? user.phone.replace(/\D/g, '').slice(-10) : (localStorage.getItem('nso_admin_phone') || '');
+      const cleanUserPhone = user.phone ? user.phone.replace(/\D/g, '').slice(-10) : '';
+      const phoneToUse = cleanUserPhone === '8310421121' ? '8310421121' : (localStorage.getItem('nso_admin_phone') || '8310421121');
       setAdminPhone(phoneToUse);
       checkBiometricSupport().then((res) => {
         setBiometricSupported(res.isAvailable);
@@ -200,16 +201,28 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block mb-1">
-                    Superadmin Phone
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
+                      Superadmin Phone
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setAdminPhone('8310421121')}
+                      className="text-[10px] text-purple-700 font-bold hover:underline"
+                    >
+                      Set 8310421121
+                    </button>
+                  </div>
                   <input
                     type="tel"
                     value={adminPhone}
                     onChange={(e) => setAdminPhone(e.target.value)}
-                    placeholder="Enter 10-digit Phone"
+                    placeholder="8310421121"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-purple-600 focus:bg-white"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Authorized Administrator: <span className="font-mono font-bold text-purple-900">8310421121</span>
+                  </p>
                 </div>
 
                 <div>
