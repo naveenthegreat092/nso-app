@@ -41,6 +41,10 @@ export const getAuthHeaders = (extra?: Record<string, string>): Record<string, s
   if (userPhone) {
     headers['x-user-phone'] = userPhone;
   }
+  const adminPhone = localStorage.getItem('nso_admin_phone');
+  if (adminPhone) {
+    headers['x-admin-phone'] = adminPhone;
+  }
   return headers;
 };
 
@@ -1545,6 +1549,62 @@ export const api = {
       return await res.json();
     } catch {
       return [];
+    }
+  },
+
+  getCommission: async (): Promise<any> => {
+    try {
+      const res = await fetch(`${API_BASE}/commission`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  updateCommissionSettings: async (payload: { productsRate?: number; servicesRate?: number }): Promise<any> => {
+    try {
+      const res = await fetch(`${API_BASE}/commission/settings`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  settleCommission: async (id: string, settlementRef?: string): Promise<any> => {
+    try {
+      const res = await fetch(`${API_BASE}/commission/${id}/settle`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ settlementRef })
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  settleAllCommission: async (settlementRef?: string): Promise<any> => {
+    try {
+      const res = await fetch(`${API_BASE}/commission/settle-all`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ settlementRef })
+      });
+      return await res.json();
+    } catch {
+      return null;
     }
   },
 

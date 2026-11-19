@@ -24,16 +24,16 @@ export const ProviderProfileModal: React.FC<{
   onBookService: () => void;
   onOpenChat: (providerName: string) => void;
 }> = ({ provider, onClose, onBookService, onOpenChat }) => {
-  const { showToast, user } = useApp();
+  const { showToast, user, openMaskedCall } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'reviews'>('overview');
   const [selectedPortfolioImg, setSelectedPortfolioImg] = useState<string | null>(null);
 
   const handleMaskedCall = () => {
-    showToast(`Connecting via NSO Masked Calling Relay (${provider.phoneMasked})`);
+    openMaskedCall(provider.name, provider.phoneMasked, provider.id);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
       <div className="w-full max-w-md bg-white rounded-t-[32px] sm:rounded-[32px] shadow-2xl overflow-hidden border border-slate-100 max-h-[92vh] flex flex-col">
         {/* Top Header */}
         <div className="relative bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 p-5 text-white">

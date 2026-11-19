@@ -19,6 +19,7 @@ import { ProviderDashboard } from './components/provider/ProviderDashboard';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { ProviderProfileModal } from './components/provider/ProviderProfileModal';
 import { ChatModal } from './components/common/ChatModal';
+import { MaskedCallModal } from './components/common/MaskedCallModal';
 import { TrackingMapModal } from './components/common/TrackingMapModal';
 import { AddressModal } from './components/common/AddressModal';
 import { ReviewModal } from './components/common/ReviewModal';
@@ -46,6 +47,8 @@ export const AppContent: React.FC = () => {
     openChat,
     chatPeerName,
     closeChat,
+    activeMaskedCall,
+    closeMaskedCall,
     trackingModalData,
     closeTracking,
     reviewModalData,
@@ -236,6 +239,17 @@ export const AppContent: React.FC = () => {
           isOpen={!!chatPeerName}
           peerName={chatPeerName}
           onClose={closeChat}
+        />
+      )}
+
+      {/* ── In-App Masked Voice Calling Modal ── */}
+      {activeMaskedCall && (
+        <MaskedCallModal
+          isOpen={!!activeMaskedCall}
+          peerName={activeMaskedCall.peerName}
+          phoneMasked={activeMaskedCall.phoneMasked}
+          providerId={activeMaskedCall.providerId}
+          onClose={closeMaskedCall}
         />
       )}
 

@@ -178,8 +178,8 @@ export const AdminDashboard: React.FC = () => {
 
   const fetchCommission = async () => {
     try {
-      const res = await fetch(`${API}/commission`);
-      if (res.ok) setCommissionStats(await res.json());
+      const data = await api.getCommission();
+      if (data) setCommissionStats(data);
     } catch {}
   };
 
@@ -258,12 +258,13 @@ export const AdminDashboard: React.FC = () => {
   const handleUpdateCommissionRate = async (type: 'products' | 'services', rate: number) => {
     try {
       const payload = type === 'products' ? { productsRate: rate } : { servicesRate: rate };
-      const res = await fetch(`${API}/commission/settings`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) { setCommissionStats(await res.json()); showToast(`Commission rate updated to ${rate}%`); }
+      const data = await api.updateCommissionSettings(payload);
+      if (data) {
+        setCommissionStats(prev => ({ ...prev, ...data }));
+        showToast(`Commission rate updated to ${rate}%`);
+      } else {
+        showToast(`Commission rate updated locally to ${rate}%`);
+      }
     } catch { showToast('Commission rate updated locally.'); }
   };
 
@@ -273,12 +274,8 @@ export const AdminDashboard: React.FC = () => {
     if (ref === null) return;
     setSettlingId(id);
     try {
-      const res = await fetch(`${API}/commission/${id}/settle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settlementRef: ref })
-      });
-      if (res.ok) {
+      const res = await api.settleCommission(id, ref);
+      if (res && res.success) {
         showToast('✅ Payout marked settled via UPI!');
         fetchCommission();
       } else {
@@ -294,14 +291,9 @@ export const AdminDashboard: React.FC = () => {
   const handleSettleAllPayouts = async () => {
     if (!window.confirm('Are you sure you want to mark all pending vendor payouts as settled via UPI?')) return;
     try {
-      const res = await fetch(`${API}/commission/settle-all`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settlementRef: `BULK_UPI_${Date.now().toString().slice(-6)}` })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        showToast(`✅ Settled ${data.settledCount || 0} vendor payouts!`);
+      const res = await api.settleAllCommission(`BULK_UPI_${Date.now().toString().slice(-6)}`);
+      if (res && res.success) {
+        showToast(`✅ Settled vendor payouts!`);
         fetchCommission();
       }
     } catch {

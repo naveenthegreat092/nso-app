@@ -13,14 +13,15 @@ import {
   AlertTriangle,
   Sparkles,
   Info,
-  MessageSquare
+  MessageSquare,
+  PhoneCall
 } from 'lucide-react';
 
 export const ServiceBookingModal: React.FC<{
   service: Service;
   onClose: () => void;
 }> = ({ service, onClose }) => {
-  const { createBooking, bookings, user, addresses, providers, openProviderProfile, openChat, showToast } = useApp();
+  const { createBooking, bookings, user, addresses, providers, openProviderProfile, openChat, openMaskedCall, showToast } = useApp();
 
   // ── Dynamic date generation (always today, tomorrow, day after) ───────────
   const dynamicDates = (() => {
@@ -176,6 +177,36 @@ export const ServiceBookingModal: React.FC<{
             <div className="p-3 bg-blue-50 border border-blue-200/80 rounded-xl text-left text-[11px] text-blue-900 space-y-1">
               <span className="font-black block">Scheduling Protection:</span>
               <p>Overlapping bookings for this provider are automatically locked during this time slot. No extra charges can be billed without an Admin-reviewed quote approved by you.</p>
+            </div>
+
+            {/* Quick Actions with Specialist */}
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => openProviderProfile(isConfirmed.providerId)}
+                className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold flex flex-col items-center gap-1 active:scale-95 transition-all"
+              >
+                <Star className="w-4 h-4 text-amber-500" />
+                <span className="text-[10px]">View Profile</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openMaskedCall(isConfirmed.providerName, undefined, isConfirmed.providerId)}
+                className="p-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex flex-col items-center gap-1 active:scale-95 transition-all"
+              >
+                <PhoneCall className="w-4 h-4 text-emerald-600" />
+                <span className="text-[10px]">Call (Masked)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openChat(isConfirmed.providerName)}
+                className="p-2.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl text-xs font-bold flex flex-col items-center gap-1 active:scale-95 transition-all"
+              >
+                <MessageSquare className="w-4 h-4 text-blue-600" />
+                <span className="text-[10px]">Chat Now</span>
+              </button>
             </div>
 
             <button

@@ -26,7 +26,8 @@ import {
   X,
   ShieldCheck,
   Key,
-  QrCode
+  QrCode,
+  PhoneCall
 } from 'lucide-react';
 
 export const OrdersScreen: React.FC = () => {
@@ -38,6 +39,7 @@ export const OrdersScreen: React.FC = () => {
     openTracking,
     openReviewModal,
     openChat,
+    openMaskedCall,
     openProviderProfile,
     cancelOrder,
     cancelBooking,
@@ -573,16 +575,26 @@ export const OrdersScreen: React.FC = () => {
                       </button>
                       {/* View Provider Profile */}
                       <button
-                        onClick={() => openProviderProfile(booking.providerId)}
-                        className="flex items-center gap-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded-lg"
+                        onClick={() => openProviderProfile(booking.providerId || booking.issuedProviderId || booking.providerName)}
+                        className="flex items-center gap-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded-lg active:scale-95 transition-all"
+                        title="View specialist profile, portfolio & ratings"
                       >
                         <Star className="w-3 h-3 text-amber-500" />
                         Provider Profile
                       </button>
+                      {/* Masked Call with Provider */}
+                      <button
+                        onClick={() => openMaskedCall(booking.providerName, undefined, booking.providerId)}
+                        className="flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1.5 rounded-lg active:scale-95 transition-all"
+                        title="Call specialist securely via encrypted masked bridge"
+                      >
+                        <PhoneCall className="w-3 h-3 text-emerald-600" />
+                        Call (Masked)
+                      </button>
                       {/* Chat with Provider */}
                       <button
                         onClick={() => openChat(booking.providerName)}
-                        className="flex items-center gap-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded-lg"
+                        className="flex items-center gap-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded-lg active:scale-95 transition-all"
                       >
                         <MessageSquare className="w-3 h-3 text-blue-500" />
                         Message

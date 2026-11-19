@@ -18,6 +18,14 @@ import {
   Home,
   Sparkles,
   Scissors,
+  Car,
+  BookOpen,
+  UtensilsCrossed,
+  Briefcase,
+  Stethoscope,
+  ShieldCheck,
+  Plane,
+  MapPin,
   X
 } from 'lucide-react';
 
@@ -52,12 +60,20 @@ export const ExploreScreen: React.FC<{
     if (lower.includes('grocer')) return ShoppingBasket;
     if (lower.includes('electr')) return Headphones;
     if (lower.includes('fashion') || lower.includes('cloth')) return Shirt;
-    if (lower.includes('repair') || lower.includes('plumb')) return Wrench;
-    if (lower.includes('clean') || lower.includes('care')) return Sparkles;
+    if (lower.includes('repair') || lower.includes('plumb') || lower.includes('construct') || lower.includes('design')) return Wrench;
+    if (lower.includes('clean') || lower.includes('care') || lower.includes('housekeep')) return Sparkles;
     if (lower.includes('kitchen') || lower.includes('home') || lower.includes('living')) return Home;
-    if (lower.includes('salon') || lower.includes('spa') || lower.includes('wellness')) return Scissors;
-    if (lower.includes('mov') || lower.includes('deliver') || lower.includes('transport')) return Package;
-    return Sparkles;
+    if (lower.includes('salon') || lower.includes('spa') || lower.includes('wellness') || lower.includes('beauty')) return Scissors;
+    if (lower.includes('mov') || lower.includes('deliver') || lower.includes('transport') || lower.includes('courier')) return Package;
+    if (lower.includes('vehicle') || lower.includes('car') || lower.includes('cab')) return Car;
+    if (lower.includes('educat') || lower.includes('tutor') || lower.includes('class')) return BookOpen;
+    if (lower.includes('food') || lower.includes('cook') || lower.includes('chef') || lower.includes('meal')) return UtensilsCrossed;
+    if (lower.includes('profess') || lower.includes('legal') || lower.includes('tax') || lower.includes('help')) return Briefcase;
+    if (lower.includes('health') || lower.includes('medic') || lower.includes('doctor')) return Stethoscope;
+    if (lower.includes('secur') || lower.includes('guard')) return ShieldCheck;
+    if (lower.includes('travel') || lower.includes('hotel') || lower.includes('flight')) return Plane;
+    if (lower.includes('local') || lower.includes('other')) return MapPin;
+    return Wrench;
   };
 
   const getProductCartQuantity = (productId: string) => {

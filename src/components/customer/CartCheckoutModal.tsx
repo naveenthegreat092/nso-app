@@ -23,6 +23,7 @@ import {
   Crosshair,
   ExternalLink,
   Loader2,
+  Banknote,
   Edit3
 } from 'lucide-react';
 
@@ -35,7 +36,7 @@ export const CartCheckoutModal: React.FC<{
     user.address || ''
   );
   const [addressError, setAddressError] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
+  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'netbanking' | 'cod'>('upi');
   const [deliveryInstruction, setDeliveryInstruction] = useState('Ring doorbell');
   const [tipAmount, setTipAmount] = useState<number>(0);
   const [couponCode, setCouponCode] = useState('');
@@ -155,7 +156,7 @@ export const CartCheckoutModal: React.FC<{
     try {
       const order = await createOrder(
         deliveryAddress,
-        paymentMethod === 'upi' ? 'Direct UPI' : paymentMethod === 'card' ? 'Credit/Debit Card' : 'Net Banking',
+        paymentMethod === 'upi' ? 'Direct UPI' : paymentMethod === 'cod' ? 'Cash on Delivery' : paymentMethod === 'card' ? 'Credit/Debit Card' : 'Net Banking',
         appliedCoupon || undefined,
         tipAmount
       );
@@ -518,9 +519,10 @@ export const CartCheckoutModal: React.FC<{
             {/* Payment Method Selector */}
             <div className="space-y-1.5">
               <span className="text-xs font-extrabold text-slate-800">Select Payment Method</span>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {[
                   { id: 'upi', label: 'Direct UPI', icon: QrCode },
+                  { id: 'cod', label: 'Cash on Del.', icon: Banknote },
                   { id: 'card', label: 'Cards', icon: CreditCard },
                   { id: 'netbanking', label: 'NetBank', icon: Building }
                 ].map((m) => {
@@ -530,18 +532,28 @@ export const CartCheckoutModal: React.FC<{
                       key={m.id}
                       type="button"
                       onClick={() => setPaymentMethod(m.id as any)}
-                      className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                      className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${
                         paymentMethod === m.id
                           ? 'border-emerald-600 bg-emerald-50 text-emerald-700 font-black shadow-sm ring-2 ring-emerald-100'
                           : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
-                      <span className="text-[10px] font-bold">{m.label}</span>
+                      <span className="text-[9px] font-bold text-center leading-tight">{m.label}</span>
                     </button>
                   );
                 })}
               </div>
+
+              {/* Cash on Delivery Notice */}
+              {paymentMethod === 'cod' && (
+                <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-3.5 text-xs text-amber-900 space-y-1 animate-in fade-in duration-150">
+                  <span className="font-extrabold block">💵 Cash on Delivery Selected</span>
+                  <p className="text-[11px] leading-relaxed text-amber-800">
+                    Pay ₹{fullTotal.toLocaleString('en-IN')} in cash or via delivery agent UPI QR code when your order arrives at your doorstep.
+                  </p>
+                </div>
+              )}
 
               {/* Direct UPI Intent & QR Box (Zero Razorpay required) */}
               {paymentMethod === 'upi' && (() => {
@@ -583,20 +595,27 @@ export const CartCheckoutModal: React.FC<{
                             }
                             showToast('UPI ID copied to clipboard!');
                           }}
-                          className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-sans font-bold hover:bg-slate-300 ml-1"
+                          className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-sans font-bold hover:bg-slate-300 ml-1 cursor-pointer"
                         >
                           Copy
                         </button>
                       </div>
                     </div>
 
-                    <a
-                      href={upiIntent}
-                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 active:scale-98"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          window.location.href = upiIntent;
+                        } catch {
+                          window.open(upiIntent, '_system');
+                        }
+                      }}
+                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 active:scale-98 cursor-pointer"
                     >
                       <Zap className="w-3.5 h-3.5" />
                       <span>Open GPay / PhonePe / Paytm</span>
-                    </a>
+                    </button>
                   </div>
                 );
               })()}
