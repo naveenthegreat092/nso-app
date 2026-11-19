@@ -22,7 +22,7 @@ interface AdminMfaModalProps {
 
 export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { user, showToast, unlockAdmin } = useApp();
-  const cleanUserPhone = (user.phone || '').replace(/\D/g, '').slice(-10);
+  const cleanUserPhone = (user.phone || localStorage.getItem('nso_user_phone') || localStorage.getItem('nso_admin_phone') || '8310421121').replace(/\D/g, '').slice(-10);
   const isAuthorizedOwner = cleanUserPhone === '8310421121';
 
   // Steps: 'password' -> 'biometric' -> 'success'

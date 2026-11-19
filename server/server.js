@@ -953,7 +953,7 @@ function getProviderMetrics(userId, stableId) {
 }
 
 // Format user for client response
-function formatUserResponse(u) {
+function formatUserResponse(u, options = {}) {
   const cleanPhone = u.phone ? String(u.phone).replace(/\D/g, '').slice(-10) : '';
   const isOwner = Boolean(ADMIN_PHONE && cleanPhone === ADMIN_PHONE);
 
@@ -965,7 +965,7 @@ function formatUserResponse(u) {
   } else {
     if (u.seller_status === 'approved') authorizedRoles.push('seller');
     if (u.provider_status === 'approved') authorizedRoles.push('provider');
-    if (u.is_admin === 1) authorizedRoles.push('admin');
+    // Strict isolation: 'admin' is never granted to non-owner phone numbers
   }
 
   // Look up latest applications if any
@@ -995,12 +995,13 @@ function formatUserResponse(u) {
     hasPassword: Boolean(u.password_hash),
     biometricEnrolled: Boolean(u.biometric_credential_id),
     avatar: u.avatar,
-    activeRole: u.active_role,
+    activeRole: isOwner ? u.active_role : (u.active_role === 'admin' ? 'customer' : u.active_role),
     authorizedRoles,
     approvalStatus: isOwner ? 'approved' : u.approval_status,
     sellerStatus: isOwner ? 'approved' : u.seller_status,
     providerStatus: isOwner ? 'approved' : u.provider_status,
-    adminVerified: false, // Strict: Must pass password and biometric MFA every time
+    isAdmin: isOwner,
+    adminVerified: Boolean(isOwner && (options.adminVerified !== undefined ? options.adminVerified : (u.active_role === 'admin' && u.is_admin === 1))),
     houseNumber: u.house_number,
     streetNumber: u.street_number,
     landmark: u.landmark,
@@ -1959,8 +1960,8 @@ app.post('/api/auth/switch-role', (req, res) => {
     if (role === 'provider' && user.provider_status !== 'approved') {
       return res.status(403).json({ error: 'Service provider account is not approved by admin.' });
     }
-    if (role === 'admin' && !user.is_admin) {
-      return res.status(403).json({ error: 'Admin access denied.' });
+    if (role === 'admin') {
+      return res.status(403).json({ error: 'Admin access restricted exclusively to the authorized marketplace owner.' });
     }
   }
 
@@ -2023,7 +2024,10 @@ app.get('/api/auth/me', (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'User not found.' });
   }
-  res.json(formatUserResponse(user));
+  const cleanPhone = user.phone ? String(user.phone).replace(/\D/g, '').slice(-10) : '';
+  const isOwner = Boolean(ADMIN_PHONE && cleanPhone === ADMIN_PHONE);
+  const isSessionAdmin = Boolean(isOwner && (req.session?.isAdmin === 1 || user.active_role === 'admin'));
+  res.json(formatUserResponse(user, { adminVerified: isSessionAdmin }));
 });
 
 // Customer Profile Registration / Update

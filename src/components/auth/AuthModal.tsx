@@ -176,7 +176,7 @@ export const AuthModal: React.FC = () => {
     }
 
     showToast('✅ Mobile number verified successfully!');
-    await loginUser();
+    await loginUser(cleanNumber);
     setStep('welcome');
     closeAuthModal();
   };
@@ -220,7 +220,7 @@ export const AuthModal: React.FC = () => {
     }
 
     showToast('✅ Successfully logged in!');
-    await loginUser();
+    await loginUser(identifier.replace(/\D/g, ''));
     closeAuthModal();
   };
 
@@ -251,7 +251,7 @@ export const AuthModal: React.FC = () => {
     }
 
     showToast('✅ Account registered and signed in!');
-    await loginUser();
+    await loginUser(cleanPhone);
     closeAuthModal();
   };
 

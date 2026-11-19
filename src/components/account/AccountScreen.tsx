@@ -48,7 +48,7 @@ export const AccountScreen: React.FC<{
     showToast
   } = useApp();
 
-  const cleanUserPhone = (user.phone || '').replace(/\D/g, '').slice(-10);
+  const cleanUserPhone = (user.phone || localStorage.getItem('nso_user_phone') || '').replace(/\D/g, '').slice(-10);
   const isAuthorizedAdminPhone = cleanUserPhone === '8310421121';
 
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
@@ -399,7 +399,11 @@ export const AccountScreen: React.FC<{
 
           <div
             onClick={() => {
-              setShowAdminMfa(true);
+              if (user.adminVerified) {
+                switchRole('admin');
+              } else {
+                setShowAdminMfa(true);
+              }
             }}
             className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-4 text-white shadow-card cursor-pointer hover:brightness-105 active:scale-98 transition-all flex items-center justify-between border border-slate-800"
           >

@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { PaymentTracker } from './PaymentTracker';
 import { promptBiometricAuth, checkBiometricSupport } from '../../utils/biometrics';
+import { AdminMfaModal } from '../auth/AdminMfaModal';
 import {
   ShieldAlert,
   UserCheck,
@@ -115,8 +116,11 @@ export const AdminDashboard: React.FC = () => {
     adminClearBookingPayment,
     adminClearOrderPayment,
     removeUser,
-    refreshAdminData
+    refreshAdminData,
+    unlockAdmin
   } = useApp();
+
+  const [showAdminMfa, setShowAdminMfa] = useState(false);
 
   // Live applications from backend only (no fake demo applications)
   const [applications, setApplications] = useState<Application[]>([]);
@@ -363,23 +367,49 @@ export const AdminDashboard: React.FC = () => {
 
   // Restricted Access Screen for non-admins
   if (user.activeRole !== 'admin' || !user.adminVerified) {
+    const cleanUserPhone = (user.phone || localStorage.getItem('nso_user_phone') || localStorage.getItem('nso_admin_phone') || '').replace(/\D/g, '').slice(-10);
+    const isAuthorizedOwner = cleanUserPhone === '8310421121';
+
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-[500px] text-center space-y-4">
-        <div className="w-16 h-16 rounded-3xl bg-red-100 text-red-600 flex items-center justify-center mx-auto shadow-inner">
+        <div className="w-16 h-16 rounded-3xl bg-purple-100 text-purple-700 flex items-center justify-center mx-auto shadow-inner">
           <ShieldAlert className="w-8 h-8" />
         </div>
         <div>
           <h3 className="text-lg font-black text-gray-900">Owner Access Required</h3>
           <p className="text-xs text-gray-500 max-w-xs mx-auto mt-1 leading-relaxed">
-            The Admin Console is reserved exclusively for the marketplace owner, verified securely on the backend server.
+            {isAuthorizedOwner
+              ? 'Authorized Owner detected (8310421121). Authenticate with password and biometrics to unlock the Admin Console.'
+              : 'The Admin Console is reserved exclusively for the marketplace owner (8310421121).'}
           </p>
         </div>
-        <button
-          onClick={() => switchRole('customer')}
-          className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-md active:scale-95 transition-all"
-        >
-          Return to Customer Mode
-        </button>
+        <div className="flex flex-col gap-2 w-full max-w-xs">
+          {isAuthorizedOwner && (
+            <button
+              onClick={() => setShowAdminMfa(true)}
+              className="w-full py-3 bg-purple-900 hover:bg-purple-950 text-white font-extrabold text-xs rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <Key className="w-4 h-4" />
+              <span>Unlock Admin Console</span>
+            </button>
+          )}
+          <button
+            onClick={() => switchRole('customer')}
+            className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl active:scale-95 transition-all"
+          >
+            Return to Customer Mode
+          </button>
+        </div>
+        {isAuthorizedOwner && (
+          <AdminMfaModal
+            isOpen={showAdminMfa}
+            onClose={() => setShowAdminMfa(false)}
+            onSuccess={() => {
+              setShowAdminMfa(false);
+              unlockAdmin();
+            }}
+          />
+        )}
       </div>
     );
   }

@@ -18,6 +18,8 @@ export const JourneyNavigator: React.FC<{
   onRestartOnboarding: () => void;
 }> = ({ currentSection, onSelectSection, onRestartOnboarding }) => {
   const { user } = useApp();
+  const cleanUserPhone = (user.phone || localStorage.getItem('nso_user_phone') || '').replace(/\D/g, '').slice(-10);
+  const isOwner = cleanUserPhone === '8310421121';
 
   const allJourneys = [
     { id: 'onboarding', label: '1. Onboarding & Splash', icon: Play, color: 'text-rose-400' },
@@ -26,7 +28,7 @@ export const JourneyNavigator: React.FC<{
     { id: 'special_request', label: '4. Special Request (Admin)', icon: Sparkles, color: 'text-yellow-400' },
     { id: 'seller', label: '5. Seller Journey', icon: Store, color: 'text-emerald-400' },
     { id: 'provider', label: '6. Provider Hub', icon: Wrench, color: 'text-orange-400' },
-    { id: 'admin', label: 'Admin Center (Superadmin)', icon: ShieldAlert, color: 'text-purple-400' }
+    ...(isOwner ? [{ id: 'admin', label: 'Admin Center (Superadmin)', icon: ShieldAlert, color: 'text-purple-400' }] : [])
   ];
 
   return (

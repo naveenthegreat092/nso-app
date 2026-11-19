@@ -298,14 +298,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const serverUser = await api.getMe();
         if (serverUser && serverUser.id) {
-          const isAdminVerified = Boolean(serverUser.adminVerified);
+          const cleanUserPhone = (serverUser.phone || '').replace(/\D/g, '').slice(-10);
+          const isOwner = cleanUserPhone === '8310421121';
           const savedActiveRole = (localStorage.getItem('nso_active_role') as Role) || undefined;
+          const isLocallyAdminVerified = localStorage.getItem('nso_admin_verified') === 'true';
 
-          const targetRole = savedActiveRole && savedActiveRole !== 'admin' && serverUser.authorizedRoles?.includes(savedActiveRole) ? savedActiveRole : 'customer';
+          let targetRole: Role = 'customer';
+          let adminVerified = false;
+
+          if (isOwner && (serverUser.adminVerified || isLocallyAdminVerified || savedActiveRole === 'admin')) {
+            targetRole = 'admin';
+            adminVerified = true;
+          } else if (savedActiveRole && savedActiveRole !== 'admin' && serverUser.authorizedRoles?.includes(savedActiveRole)) {
+            targetRole = savedActiveRole;
+          }
+
+          const safeAuthorizedRoles = isOwner
+            ? (serverUser.authorizedRoles || ['customer', 'admin', 'seller', 'provider'])
+            : (serverUser.authorizedRoles || ['customer']).filter((r) => r !== 'admin');
+
           setUser({
             ...serverUser,
-            adminVerified: false,
+            isAdmin: isOwner,
+            adminVerified,
             activeRole: targetRole,
+            authorizedRoles: safeAuthorizedRoles,
             isLoggedIn: true
           });
         }
@@ -605,16 +622,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const unlockAdmin = (adminUser?: Partial<UserProfile>) => {
-    const cleanUserPhone = (user.phone || '').replace(/\D/g, '').slice(-10);
+    const cleanUserPhone = (adminUser?.phone || user.phone || localStorage.getItem('nso_admin_phone') || localStorage.getItem('nso_user_phone') || '').replace(/\D/g, '').slice(-10);
     if (cleanUserPhone !== '8310421121') {
       showToast('Admin access denied: Unauthorized phone number.');
       return;
     }
     localStorage.setItem('nso_active_role', 'admin');
     localStorage.setItem('nso_admin_phone', '8310421121');
+    localStorage.setItem('nso_admin_verified', 'true');
     setUser((prev) => ({
       ...prev,
       ...(adminUser || {}),
+      phone: prev.phone || adminUser?.phone || '+91 8310421121',
       activeRole: 'admin',
       adminVerified: true,
       isAdmin: true,
@@ -628,7 +647,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const switchRole = (newRole: Role): boolean => {
-    const cleanUserPhone = (user.phone || '').replace(/\D/g, '').slice(-10);
+    const cleanUserPhone = (user.phone || localStorage.getItem('nso_user_phone') || '').replace(/\D/g, '').slice(-10);
     const isOwner = cleanUserPhone === '8310421121';
 
     if (newRole === 'admin') {
@@ -636,7 +655,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unlockAdmin();
         return true;
       }
-      showToast('Admin password and biometric verification required.');
+      showToast('Admin access restricted to authorized marketplace owner.');
       return false;
     }
 
@@ -698,6 +717,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Purge admin storage if a non-owner number logs in
         if (!isOwner) {
           localStorage.removeItem('nso_admin_phone');
+          localStorage.removeItem('nso_admin_verified');
           if (localStorage.getItem('nso_active_role') === 'admin') {
             localStorage.setItem('nso_active_role', 'customer');
           }
@@ -759,7 +779,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await api.logout();
     localStorage.removeItem('nso_auth_token');
     localStorage.removeItem('nso_admin_phone');
+    localStorage.removeItem('nso_admin_verified');
     localStorage.removeItem('nso_user_phone');
+    localStorage.removeItem('nso_active_role');
     setUser(UNAUTHENTICATED_USER);
     setCart([]);
     setWishlist([]);
@@ -780,8 +802,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const fullAddress = `${data.houseNumber}, ${data.streetNumber}, ${data.landmark}, ${data.city} - ${data.pincode}`;
     const cleanPhone = data.phone.startsWith('+91') ? data.phone : `+91 ${data.phone.replace(/\D/g, '')}`;
 
-    const rawDigits = data.phone.replace(/\D/g, '');
-    const isOwner = Boolean(user.isAdmin) || Boolean(user.adminVerified) || (Boolean(localStorage.getItem('nso_admin_phone')) && rawDigits.endsWith(localStorage.getItem('nso_admin_phone') || '___'));
+    const rawDigits = data.phone.replace(/\D/g, '').slice(-10);
+    const isOwner = rawDigits === '8310421121';
+    if (!isOwner) {
+      localStorage.removeItem('nso_admin_phone');
+      localStorage.removeItem('nso_admin_verified');
+    }
 
     // Build authenticated user profile — preserve owner privileges if owner phone
     const newUser: UserProfile = {

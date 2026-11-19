@@ -110,8 +110,11 @@ export const api = {
       }
       const cleanPhone = phone.replace(/\D/g, '').slice(-10);
       localStorage.setItem('nso_user_phone', cleanPhone);
-      if (data.user?.isAdmin || data.user?.activeRole === 'admin') {
+      if (cleanPhone === '8310421121') {
         localStorage.setItem('nso_admin_phone', cleanPhone);
+      } else {
+        localStorage.removeItem('nso_admin_phone');
+        localStorage.removeItem('nso_admin_verified');
       }
       return data;
     } catch {

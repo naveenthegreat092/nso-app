@@ -24,6 +24,7 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
     applyForProvider,
     switchRole,
     loginUser,
+    unlockAdmin,
     user,
     showToast
   } = useApp();
@@ -767,6 +768,7 @@ export const OnboardingFlow: React.FC<{ onComplete: () => void }> = ({ onComplet
         onClose={() => setShowAdminMfa(false)}
         onSuccess={() => {
           setShowAdminMfa(false);
+          unlockAdmin();
           onComplete();
         }}
       />
