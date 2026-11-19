@@ -138,9 +138,16 @@ interface AppContextType {
   updateOrderDeliveryFee: (orderId: string, fee: number) => Promise<boolean>;
   updateBookingStatus: (bookingId: string, status: Booking['status']) => void;
   updateBookingPaymentStatus: (bookingId: string, status: Booking['paymentStatus']) => void;
-  submitRevisedQuote: (bookingId: string, amount: number, reason: string) => void;
-  sendProviderQuotation: (bookingId: string, amount: number, reason: string) => void;
-  respondToRevisedQuote: (bookingId: string, approvedByAdmin: boolean, customerApproved?: boolean) => void;
+  submitRevisedQuote: (bookingId: string, amount: number, reason: string) => Promise<void>;
+  sendProviderQuotation: (bookingId: string, amount: number, reason: string) => Promise<void>;
+  respondToRevisedQuote: (bookingId: string, approvedByAdmin: boolean, customerApproved?: boolean) => Promise<void>;
+  submitServiceReview: (bookingId: string, reviewData: {
+    rating: number;
+    reviewComment: string;
+    punctualityRating?: number;
+    qualityRating?: number;
+    behaviorRating?: number;
+  }) => Promise<boolean>;
   submitJobQuotation: (bookingId: string, quoteData: Partial<JobQuotation>) => Promise<void>;
   adminReviewQuotation: (bookingId: string, decision: 'approve' | 'return' | 'request_info', adminFeedback?: string) => Promise<void>;
   customerDecideQuotation: (bookingId: string, decision: 'accept' | 'request_changes' | 'decline', customerFeedback?: string) => Promise<void>;
@@ -215,7 +222,8 @@ interface AppContextType {
   clearDemoProducts: () => void;
   updateProductStock: (productId: string, stock: number) => void;
   deleteAddress: (addressId: string) => void;
-  addProviderPortfolioImage: (providerId: string, item: { id: string; title: string; image: string; tag: string }) => void;
+  addProviderPortfolioImage: (providerId: string, item: { id: string; title: string; image: string; tag: string }) => Promise<void>;
+  deleteProviderPortfolioImage: (providerId: string, itemId: string) => Promise<void>;
   showToast: (msg: string) => void;
   resetAllDemoData: () => void;
 }
@@ -434,8 +442,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (p as any).userId?.toLowerCase() === target ||
         p.name.toLowerCase().includes(target) ||
         target.includes(p.name.toLowerCase())
-      ) ||
-      providers[0];
+      );
     setSelectedProviderDetail(prov || null);
   };
 
@@ -571,19 +578,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const submitReview = (rating: number, comment: string, _tags: string[]) => {
+  const submitReview = async (rating: number, comment: string, _tags: string[]) => {
     if (!reviewModalData) return;
 
     if (reviewModalData.type === 'service') {
+      const targetId = reviewModalData.targetId;
       setBookings((prev) =>
-        prev.map((b) => (b.id === reviewModalData.targetId ? { ...b, rating, reviewComment: comment } : b))
+        prev.map((b) => (b.id === targetId ? { ...b, rating, reviewComment: comment } : b))
       );
+      try {
+        await api.submitServiceReview(targetId, { rating, reviewComment: comment });
+        const refreshedProviders = await api.getProviders();
+        if (refreshedProviders && refreshedProviders.length > 0) {
+          setProviders(refreshedProviders);
+        }
+      } catch (e) {
+        console.error('Error submitting service review:', e);
+      }
     } else {
       setOrders((prev) =>
         prev.map((o) => (o.id === reviewModalData.targetId ? { ...o, rating, reviewComment: comment } : o))
       );
     }
     addAuditLog('REVIEW_SUBMITTED', `Customer rated ${reviewModalData.title} with ${rating}★: "${comment}"`);
+    showToast('Review submitted successfully!');
   };
 
   const unlockAdmin = (adminUser?: Partial<UserProfile>) => {
@@ -1148,20 +1166,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Try server first
     try {
-      const res = await fetch(`/api/bookings`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.status === 409) {
-        showToast('This time slot is no longer available. Please choose another.');
-        return null;
-      }
-
-      if (res.ok) {
-        const serverBooking: Booking = await res.json();
+      const serverBooking = await api.createBooking(payload as any);
+      if (serverBooking) {
         setBookings((prev) => [serverBooking, ...prev]);
         addAuditLog('BOOKING_CREATED', `Booking ${serverBooking.bookingNumber} confirmed for ${service.title}`);
         showToast(`Service Booked! Ref: ${serverBooking.bookingNumber}`);
@@ -1295,7 +1301,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast(`Booking payment status updated to ${status.toUpperCase()}`);
   };
 
-  const submitRevisedQuote = (bookingId: string, amount: number, reason: string) => {
+  const submitRevisedQuote = async (bookingId: string, amount: number, reason: string) => {
+    try {
+      const res = await api.submitRevisedQuote(bookingId, {
+        revisedPrice: amount,
+        extraScopeDescription: reason
+      });
+      if (res && res.success && res.booking) {
+        setBookings((prev) =>
+          prev.map((b) => (b.id === bookingId ? { ...b, ...res.booking } : b))
+        );
+        addAuditLog('REVISED_QUOTE_SUBMITTED', `Provider submitted revised quote of ₹${amount} for Booking ${bookingId}`);
+        showToast('Revised quote submitted for Admin review.');
+        return;
+      }
+    } catch (e) {
+      console.error('Error submitting revised quote:', e);
+    }
+
     const revisedQuote: RevisedQuote = {
       amount,
       reason,
@@ -1312,7 +1335,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const sendProviderQuotation = submitRevisedQuote;
 
-  const respondToRevisedQuote = (bookingId: string, approvedByAdmin: boolean, customerApproved?: boolean) => {
+  const respondToRevisedQuote = async (bookingId: string, approvedByAdmin: boolean, customerApproved?: boolean) => {
+    try {
+      if (customerApproved !== undefined) {
+        const decision = customerApproved ? 'accept' : 'decline';
+        const res = await api.customerDecideRevisedQuote(bookingId, decision);
+        if (res && res.success && res.booking) {
+          setBookings((prev) =>
+            prev.map((b) => (b.id === bookingId ? { ...b, ...res.booking } : b))
+          );
+          return;
+        }
+      } else {
+        const decision = approvedByAdmin ? 'approve' : 'reject';
+        const res = await api.adminReviewRevisedQuote(bookingId, decision);
+        if (res && res.success && res.booking) {
+          setBookings((prev) =>
+            prev.map((b) => (b.id === bookingId ? { ...b, ...res.booking } : b))
+          );
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('Error in respondToRevisedQuote:', e);
+    }
+
     setBookings((prev) =>
       prev.map((b) => {
         if (b.id !== bookingId || !b.revisedQuote) return b;
@@ -2079,18 +2126,76 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Address removed');
   };
 
-  const addProviderPortfolioImage = (
+  const addProviderPortfolioImage = async (
     providerId: string,
     item: { id: string; title: string; image: string; tag: string }
   ) => {
+    try {
+      const res = await api.addProviderPortfolioPhoto({
+        title: item.title,
+        image: item.image,
+        tag: item.tag
+      });
+      if (res && res.success && res.item) {
+        item = { ...item, id: res.item.id };
+      }
+    } catch (e) {
+      console.error('Error adding portfolio photo:', e);
+    }
     setProviders((prev) =>
       prev.map((prov) =>
-        prov.id === providerId
+        prov.id === providerId || (prov as any).userId === providerId || (prov as any).issuedProviderId === providerId
           ? { ...prov, portfolio: [item, ...prov.portfolio] }
           : prov
       )
     );
     showToast('Work photo added to portfolio!');
+  };
+
+  const deleteProviderPortfolioImage = async (providerId: string, itemId: string) => {
+    try {
+      await api.deleteProviderPortfolioPhoto(itemId);
+    } catch (e) {
+      console.error('Error deleting portfolio photo:', e);
+    }
+    setProviders((prev) =>
+      prev.map((prov) =>
+        prov.id === providerId || (prov as any).userId === providerId || (prov as any).issuedProviderId === providerId
+          ? { ...prov, portfolio: prov.portfolio.filter((p) => p.id !== itemId) }
+          : prov
+      )
+    );
+    showToast('Portfolio photo deleted.');
+  };
+
+  const submitServiceReview = async (bookingId: string, reviewData: {
+    rating: number;
+    reviewComment: string;
+    punctualityRating?: number;
+    qualityRating?: number;
+    behaviorRating?: number;
+  }) => {
+    try {
+      const res = await api.submitServiceReview(bookingId, reviewData);
+      if (res && res.success) {
+        setBookings((prev) =>
+          prev.map((b) =>
+            b.id === bookingId
+              ? { ...b, rating: reviewData.rating, reviewComment: reviewData.reviewComment }
+              : b
+          )
+        );
+        const refreshedProviders = await api.getProviders();
+        if (refreshedProviders && refreshedProviders.length > 0) {
+          setProviders(refreshedProviders);
+        }
+        showToast('Review submitted successfully!');
+        return true;
+      }
+    } catch (e) {
+      console.error('Error submitting review:', e);
+    }
+    return false;
   };
 
   /**
@@ -2235,6 +2340,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateProductStock,
         deleteAddress,
         addProviderPortfolioImage,
+        deleteProviderPortfolioImage,
+        submitServiceReview,
         showToast,
         resetAllDemoData,
         isAppLoading

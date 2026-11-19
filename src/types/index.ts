@@ -114,8 +114,11 @@ export interface ProviderDetail {
   issuedProviderId?: string;
   userId?: string;
   name: string;
+  applicantName?: string;
   avatar: string;
   tradeTitle: string;
+  tradeCategory?: string;
+  serviceArea?: string;
   experienceYears: number;
   rating: number;
   reviewsCount: number;
@@ -152,8 +155,6 @@ export interface ProviderDetail {
     punctuality: number;
     behavior: number;
   };
-  applicantName?: string;
-  tradeCategory?: string;
 }
 
 export interface Service {

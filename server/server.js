@@ -502,6 +502,42 @@ try { db.exec("ALTER TABLE bookings ADD COLUMN issued_provider_id TEXT;"); } cat
 try { db.exec("ALTER TABLE provider_applications ADD COLUMN work_videos_json TEXT DEFAULT '[]';"); } catch (_) {}
 try { db.exec("ALTER TABLE users ADD COLUMN biometric_credential_id TEXT;"); } catch (_) {}
 
+// Provider Schedules & Service Reviews Tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS provider_schedules (
+    provider_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    working_days_json TEXT NOT NULL DEFAULT '["Mon","Tue","Wed","Thu","Fri","Sat"]',
+    available_slots_json TEXT NOT NULL DEFAULT '["09:00 AM - 11:00 AM","11:30 AM - 01:30 PM","02:30 PM - 04:30 PM","05:00 PM - 07:00 PM"]',
+    off_duty_slots_json TEXT NOT NULL DEFAULT '[]',
+    unavailable_dates_json TEXT NOT NULL DEFAULT '[]',
+    service_area TEXT NOT NULL DEFAULT 'Indiranagar & East Bengaluru',
+    supported_modes_json TEXT NOT NULL DEFAULT '["home_visit","provider_location"]',
+    hub_address TEXT,
+    hub_lat REAL,
+    hub_lng REAL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS service_reviews (
+    id TEXT PRIMARY KEY,
+    booking_id TEXT NOT NULL,
+    service_id TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    customer_id TEXT NOT NULL,
+    customer_name TEXT NOT NULL,
+    rating REAL NOT NULL,
+    comment TEXT,
+    tags_json TEXT DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+  );
+`);
+
+try { db.exec("ALTER TABLE bookings ADD COLUMN rating REAL;"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN review_comment TEXT;"); } catch (_) {}
+try { db.exec("ALTER TABLE bookings ADD COLUMN completion_otp TEXT;"); } catch (_) {}
+
 // Seed candidate categories if not present
 const seedCandidateCategories = () => {
   const countRow = db.prepare('SELECT count(*) as count FROM service_categories').get();
@@ -825,6 +861,95 @@ function requireProvider(req, res, next) {
     return next();
   }
   return res.status(403).json({ error: 'Access denied: Approved service provider status required.' });
+}
+
+
+// Helper: Accurately checks if the session user is the assigned provider for a booking
+function isAssignedProvider(booking, session) {
+  if (!booking || !session) return false;
+  if (session.isAdmin) return true;
+  const userId = session.userId;
+  if (booking.provider_user_id && booking.provider_user_id === userId) return true;
+  if (booking.provider_id && booking.provider_id === userId) return true;
+  try {
+    const pApp = db.prepare("SELECT issued_provider_id FROM provider_applications WHERE user_id = ?").get(userId);
+    const uRow = db.prepare('SELECT account_id FROM users WHERE id = ?').get(userId);
+    const stableId = pApp?.issued_provider_id || uRow?.account_id;
+    if (stableId && (booking.provider_id === stableId || booking.issued_provider_id === stableId)) return true;
+  } catch (_) {}
+  return false;
+}
+
+
+function getProviderMetrics(userId, stableId) {
+  try {
+    const completedRow = db.prepare(`
+      SELECT count(*) as count FROM bookings
+      WHERE (provider_user_id = ? OR provider_id = ? OR provider_id = ?)
+        AND status IN ('completed', 'completed_pending_review', 'completed_pending_payment')
+    `).get(userId, userId, stableId);
+    const jobsCompleted = completedRow?.count || 0;
+
+    const totalRow = db.prepare(`
+      SELECT count(*) as count FROM bookings
+      WHERE (provider_user_id = ? OR provider_id = ? OR provider_id = ?)
+    `).get(userId, userId, stableId);
+    const totalBookings = totalRow?.count || 0;
+
+    const cancelRow = db.prepare(`
+      SELECT count(*) as count FROM bookings
+      WHERE (provider_user_id = ? OR provider_id = ? OR provider_id = ?)
+        AND status = 'cancelled'
+    `).get(userId, userId, stableId);
+    const cancelledBookings = cancelRow?.count || 0;
+
+    const revRow = db.prepare(`
+      SELECT count(*) as count, AVG(rating) as avg_rating FROM service_reviews
+      WHERE provider_id = ? OR provider_id = ?
+    `).get(userId, stableId);
+
+    const reviewsCount = revRow?.count || 0;
+    const rating = reviewsCount > 0 && revRow?.avg_rating ? Number(revRow.avg_rating.toFixed(1)) : 5.0;
+    const onTimeRate = totalBookings > 0
+      ? `${Math.max(0, Math.min(100, Math.round(((totalBookings - cancelledBookings) / totalBookings) * 100)))}%`
+      : '100%';
+
+    const reviews = db.prepare(`
+      SELECT id, customer_name as customerName, rating, created_at as date, comment, tags_json
+      FROM service_reviews
+      WHERE provider_id = ? OR provider_id = ?
+      ORDER BY created_at DESC LIMIT 20
+    `).all(userId, stableId).map((r) => ({
+      id: r.id,
+      customerName: r.customerName,
+      rating: r.rating,
+      date: r.date ? r.date.substring(0, 10) : 'Recent',
+      comment: r.comment || 'Verified job completed.',
+      tags: JSON.parse(r.tags_json || '[]')
+    }));
+
+    return {
+      jobsCompleted,
+      reviewsCount,
+      rating,
+      onTimeRate,
+      reviews,
+      ratingsBreakdown: {
+        quality: rating,
+        punctuality: rating,
+        behavior: rating
+      }
+    };
+  } catch (_) {
+    return {
+      jobsCompleted: 0,
+      reviewsCount: 0,
+      rating: 5.0,
+      onTimeRate: '100%',
+      reviews: [],
+      ratingsBreakdown: { quality: 5.0, punctuality: 5.0, behavior: 5.0 }
+    };
+  }
 }
 
 // Format user for client response
@@ -2688,6 +2813,7 @@ app.get('/api/providers', (req, res) => {
     const workVideos = JSON.parse(p.work_videos_json || '[]');
     const photos = workSamples.map((sm) => (typeof sm === 'string' ? sm : sm.image)).filter(Boolean);
     const stableId = p.issued_provider_id || user.account_id || `NSO-PROV-${p.id.slice(-4)}`;
+    const metrics = getProviderMetrics(p.user_id, stableId);
 
     return {
       id: stableId,
@@ -2704,10 +2830,10 @@ app.get('/api/providers', (req, res) => {
       phoneMasked: maskPhoneNumber(p.applicant_phone || user.phone),
       fullPhone: req.session?.isAdmin ? (p.applicant_phone || user.phone) : undefined,
       bio: p.resume_text || p.previous_work || 'Verified local trade professional on NSO.',
-      rating: 4.9,
-      reviewsCount: 38,
-      jobsCompleted: 50,
-      onTimeRate: '98%',
+      rating: metrics.rating,
+      reviewsCount: metrics.reviewsCount,
+      jobsCompleted: metrics.jobsCompleted,
+      onTimeRate: metrics.onTimeRate,
       workPhotos: photos,
       workVideos,
       portfolio: workSamples.map((ws, i) => ({
@@ -3813,7 +3939,7 @@ app.post('/api/bookings/:id/quotation', requireAuth, (req, res) => {
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
-  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+  if (!isAssignedProvider(booking, req.session) && !req.session.isAdmin) {
     return res.status(403).json({ error: 'Only assigned provider can submit quotation.' });
   }
 
@@ -3964,7 +4090,7 @@ app.post('/api/bookings/:id/hourly/extra-time', requireAuth, (req, res) => {
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
-  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+  if (!isAssignedProvider(booking, req.session) && !req.session.isAdmin) {
     return res.status(403).json({ error: 'Only provider can request extra time.' });
   }
 
@@ -4053,7 +4179,7 @@ app.patch('/api/bookings/:id/hourly/time-used', requireAuth, (req, res) => {
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
-  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+  if (!isAssignedProvider(booking, req.session) && !req.session.isAdmin) {
     return res.status(403).json({ error: 'Only provider can update logged time.' });
   }
 
@@ -4082,7 +4208,7 @@ app.post('/api/bookings/:id/complete', requireAuth, (req, res) => {
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
-  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+  if (!isAssignedProvider(booking, req.session) && !req.session.isAdmin) {
     return res.status(403).json({ error: 'Only assigned provider can mark job complete.' });
   }
 
@@ -4515,7 +4641,7 @@ app.patch('/api/bookings/:id/tracking', requireAuth, (req, res) => {
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
-  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+  if (!isAssignedProvider(booking, req.session) && !req.session.isAdmin) {
     return res.status(403).json({ error: 'Only the assigned provider can start or stop location sharing.' });
   }
 
@@ -4560,7 +4686,7 @@ app.post('/api/bookings/:id/location', requireAuth, (req, res) => {
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
-  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+  if (!isAssignedProvider(booking, req.session) && !req.session.isAdmin) {
     return res.status(403).json({ error: 'Only the assigned provider can stream telemetry for this job.' });
   }
 
@@ -4680,7 +4806,7 @@ app.patch('/api/bookings/:id/status', requireAuth, (req, res) => {
   const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
   if (!booking) return res.status(404).json({ error: 'Booking not found.' });
 
-  if (booking.provider_id !== req.session.userId && !req.session.isAdmin) {
+  if (!isAssignedProvider(booking, req.session) && !req.session.isAdmin) {
     return res.status(403).json({ error: 'Access denied: You can only update bookings for your own services.' });
   }
 
@@ -5537,3 +5663,358 @@ if (process.argv[1] && process.argv[1].endsWith('server.js')) {
     }
   });
 }
+
+
+// ── PROVIDER SCHEDULE & AVAILABILITY ENDPOINTS ────────────────────────────────
+app.get('/api/provider/schedule', requireProvider, (req, res) => {
+  const userId = req.session.userId;
+  const pApp = db.prepare("SELECT * FROM provider_applications WHERE user_id = ?").get(userId);
+  const userRow = db.prepare("SELECT account_id FROM users WHERE id = ?").get(userId);
+  const stableId = pApp?.issued_provider_id || userRow?.account_id || userId;
+
+  let schedule = db.prepare('SELECT * FROM provider_schedules WHERE provider_id = ? OR user_id = ?').get(stableId, userId);
+  if (!schedule) {
+    const nowIso = new Date().toISOString();
+    db.prepare(`
+      INSERT INTO provider_schedules (provider_id, user_id, working_days_json, available_slots_json, off_duty_slots_json, unavailable_dates_json, service_area, supported_modes_json, hub_address, hub_lat, hub_lng, updated_at)
+      VALUES (?, ?, '["Mon","Tue","Wed","Thu","Fri","Sat"]', '["09:00 AM - 11:00 AM","11:30 AM - 01:30 PM","02:30 PM - 04:30 PM","05:00 PM - 07:00 PM"]', '[]', '[]', ?, '["home_visit","provider_location"]', ?, 12.9784, 77.6408, ?)
+    `).run(stableId, userId, pApp?.service_area || 'Indiranagar & East Bengaluru', pApp?.service_area || 'NSO Verified Specialist Hub, Bengaluru', nowIso);
+    schedule = db.prepare('SELECT * FROM provider_schedules WHERE provider_id = ?').get(stableId);
+  }
+
+  res.json({
+    providerId: schedule.provider_id,
+    workingDays: JSON.parse(schedule.working_days_json || '[]'),
+    availableSlots: JSON.parse(schedule.available_slots_json || '[]'),
+    offDutySlots: JSON.parse(schedule.off_duty_slots_json || '[]'),
+    unavailableDates: JSON.parse(schedule.unavailable_dates_json || '[]'),
+    serviceArea: schedule.service_area,
+    supportedModes: JSON.parse(schedule.supported_modes_json || '["home_visit"]'),
+    hubAddress: schedule.hub_address,
+    hubLat: schedule.hub_lat,
+    hubLng: schedule.hub_lng
+  });
+});
+
+app.put('/api/provider/schedule', requireProvider, (req, res) => {
+  const userId = req.session.userId;
+  const pApp = db.prepare("SELECT * FROM provider_applications WHERE user_id = ?").get(userId);
+  const userRow = db.prepare("SELECT account_id FROM users WHERE id = ?").get(userId);
+  const stableId = pApp?.issued_provider_id || userRow?.account_id || userId;
+
+  const {
+    workingDays,
+    availableSlots,
+    offDutySlots,
+    unavailableDates,
+    serviceArea,
+    supportedModes,
+    hubAddress,
+    hubLat,
+    hubLng
+  } = req.body || {};
+
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO provider_schedules (
+      provider_id, user_id, working_days_json, available_slots_json,
+      off_duty_slots_json, unavailable_dates_json, service_area,
+      supported_modes_json, hub_address, hub_lat, hub_lng, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(provider_id) DO UPDATE SET
+      working_days_json = excluded.working_days_json,
+      available_slots_json = excluded.available_slots_json,
+      off_duty_slots_json = excluded.off_duty_slots_json,
+      unavailable_dates_json = excluded.unavailable_dates_json,
+      service_area = excluded.service_area,
+      supported_modes_json = excluded.supported_modes_json,
+      hub_address = excluded.hub_address,
+      hub_lat = excluded.hub_lat,
+      hub_lng = excluded.hub_lng,
+      updated_at = excluded.updated_at
+  `).run(
+    stableId,
+    userId,
+    JSON.stringify(workingDays || ['Mon','Tue','Wed','Thu','Fri','Sat']),
+    JSON.stringify(availableSlots || ['09:00 AM - 11:00 AM', '11:30 AM - 01:30 PM', '02:30 PM - 04:30 PM', '05:00 PM - 07:00 PM']),
+    JSON.stringify(offDutySlots || []),
+    JSON.stringify(unavailableDates || []),
+    serviceArea || pApp?.service_area || 'Indiranagar & East Bengaluru',
+    JSON.stringify(supportedModes || ['home_visit','provider_location']),
+    hubAddress || null,
+    hubLat || 12.9784,
+    hubLng || 77.6408,
+    nowIso
+  );
+
+  // Sync slots to provider services
+  if (Array.isArray(availableSlots)) {
+    db.prepare('UPDATE services SET available_slots_json = ?, updated_at = ? WHERE provider_id = ?')
+      .run(JSON.stringify(availableSlots), nowIso, userId);
+  }
+
+  res.json({ success: true, message: 'Provider schedule and availability persisted successfully.' });
+});
+
+// ── PROVIDER PROFILE & PORTFOLIO MANAGEMENT ──────────────────────────────────
+app.get('/api/provider/profile', requireProvider, (req, res) => {
+  const userId = req.session.userId;
+  const user = db.prepare('SELECT phone, address, avatar, account_id, name FROM users WHERE id = ?').get(userId);
+  const pApp = db.prepare("SELECT * FROM provider_applications WHERE user_id = ?").get(userId);
+  const stableId = pApp?.issued_provider_id || user?.account_id || userId;
+  const metrics = getProviderMetrics(userId, stableId);
+
+  const workSamples = JSON.parse(pApp?.previous_work_samples_json || '[]');
+
+  res.json({
+    id: stableId,
+    userId,
+    issuedProviderId: stableId,
+    name: pApp?.applicant_name || user?.name || req.session.name,
+    avatar: pApp?.profile_photo || user?.avatar || 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?w=150',
+    tradeTitle: `${pApp?.trade_category || 'Service'} Specialist`,
+    tradeCategory: pApp?.trade_category || 'Home Services',
+    experienceYears: pApp?.experience_years || 5,
+    hourlyRate: pApp?.hourly_rate || 350,
+    serviceArea: pApp?.service_area || user?.address || 'Indiranagar & East Bengaluru',
+    phoneMasked: maskPhoneNumber(pApp?.applicant_phone || user?.phone),
+    fullPhone: pApp?.applicant_phone || user?.phone,
+    bio: pApp?.resume_text || pApp?.previous_work || 'Verified local trade professional on NSO.',
+    portfolio: workSamples.map((ws, i) => ({
+      id: ws.id || `ws_${i}`,
+      title: typeof ws === 'string' ? `Verified Project #${i + 1}` : (ws.title || `Work Sample #${i + 1}`),
+      image: typeof ws === 'string' ? ws : (ws.image || ''),
+      tag: ws.tag || pApp?.trade_category || 'Service'
+    })),
+    rating: metrics.rating,
+    reviewsCount: metrics.reviewsCount,
+    jobsCompleted: metrics.jobsCompleted,
+    onTimeRate: metrics.onTimeRate,
+    reviews: metrics.reviews,
+    approvalStatus: pApp?.status || 'approved'
+  });
+});
+
+app.patch('/api/provider/profile', requireProvider, (req, res) => {
+  const userId = req.session.userId;
+  const { bio, hourlyRate, serviceArea, experienceYears } = req.body || {};
+  const nowIso = new Date().toISOString();
+
+  const pApp = db.prepare("SELECT id FROM provider_applications WHERE user_id = ?").get(userId);
+  if (pApp) {
+    db.prepare(`
+      UPDATE provider_applications
+      SET resume_text = COALESCE(?, resume_text),
+          hourly_rate = COALESCE(?, hourly_rate),
+          service_area = COALESCE(?, service_area),
+          experience_years = COALESCE(?, experience_years),
+          updated_at = ?
+      WHERE id = ?
+    `).run(bio || null, hourlyRate ? Number(hourlyRate) : null, serviceArea || null, experienceYears ? Number(experienceYears) : null, nowIso, pApp.id);
+  }
+
+  res.json({ success: true, message: 'Provider profile updated successfully.' });
+});
+
+app.delete('/api/provider/portfolio/:itemId', requireProvider, (req, res) => {
+  const userId = req.session.userId;
+  const { itemId } = req.params;
+
+  const appRow = db.prepare('SELECT * FROM provider_applications WHERE user_id = ?').get(userId);
+  if (!appRow) return res.status(404).json({ error: 'Profile not found.' });
+
+  let samples = JSON.parse(appRow.previous_work_samples_json || '[]');
+  samples = samples.filter((s) => s.id !== itemId && s.image !== itemId);
+
+  const nowIso = new Date().toISOString();
+  db.prepare('UPDATE provider_applications SET previous_work_samples_json = ?, updated_at = ? WHERE id = ?')
+    .run(JSON.stringify(samples), nowIso, appRow.id);
+
+  res.json({ success: true, portfolio: samples });
+});
+
+// ── REVISED QUOTE ENDPOINTS (GUARDRAIL SEQUENCE) ─────────────────────────────
+app.post('/api/bookings/:id/revised-quote', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { amount, reason } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (!isAssignedProvider(booking, req.session) && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only assigned provider can submit revised quote.' });
+  }
+
+  const numAmount = Number(amount);
+  if (!numAmount || numAmount <= 0) {
+    return res.status(400).json({ error: 'Valid quote amount is required.' });
+  }
+
+  const nowIso = new Date().toISOString();
+  const revisedQuote = {
+    amount: numAmount,
+    reason: reason ? String(reason).trim() : 'Additional materials and on-site labor required',
+    status: 'pending_admin',
+    submittedAt: nowIso
+  };
+
+  db.prepare(`
+    UPDATE bookings
+    SET revised_quote_json = ?, updated_at = ?
+    WHERE id = ?
+  `).run(JSON.stringify(revisedQuote), nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, 'provider', 'REVISED_QUOTE_SUBMITTED', `Provider submitted revised quote of ₹${numAmount} for Booking ${booking.booking_number}. Awaiting Admin Review.`, req.ip);
+
+  sendNotificationToAdmin('⚖️ Extra Work Quote Submitted', `Provider submitted revised quote +₹${numAmount} for #${booking.booking_number}. Requires Admin moderation.`, { type: 'revised_quote', bookingId: id });
+
+  res.json({ success: true, revisedQuote });
+});
+
+app.patch('/api/bookings/:id/revised-quote/admin-review', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { decision, adminNotes } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking || !booking.revised_quote_json) {
+    return res.status(404).json({ error: 'Booking or revised quote not found.' });
+  }
+
+  const quote = JSON.parse(booking.revised_quote_json);
+  const nowIso = new Date().toISOString();
+
+  if (decision === 'approve') {
+    quote.status = 'admin_approved';
+    quote.adminNotes = adminNotes || 'Approved by Admin';
+    quote.reviewedAt = nowIso;
+
+    db.prepare(`
+      UPDATE bookings
+      SET revised_quote_json = ?, updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(quote), nowIso, id);
+
+    logAudit(req.session.userId, req.session.name, 'admin', 'REVISED_QUOTE_ADMIN_APPROVED', `Admin approved revised quote (+₹${quote.amount}) for Booking ${booking.booking_number}. Sent to customer for explicit acceptance.`, req.ip);
+
+    sendNotificationToUser(booking.customer_id, '📋 Extra Work Quote Awaiting Your Approval', `Specialist requested +₹${quote.amount} for extra work on #${booking.booking_number}. Admin approved. Tap to accept or decline.`, { type: 'revised_quote_decision', bookingId: id });
+
+    return res.json({ success: true, revisedQuote: quote });
+  } else {
+    quote.status = 'rejected';
+    quote.adminNotes = adminNotes || 'Rejected by Admin';
+    quote.reviewedAt = nowIso;
+
+    db.prepare(`
+      UPDATE bookings
+      SET revised_quote_json = ?, updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(quote), nowIso, id);
+
+    logAudit(req.session.userId, req.session.name, 'admin', 'REVISED_QUOTE_ADMIN_REJECTED', `Admin rejected revised quote for Booking ${booking.booking_number}: ${adminNotes || 'None'}`, req.ip);
+
+    return res.json({ success: true, revisedQuote: quote });
+  }
+});
+
+app.patch('/api/bookings/:id/revised-quote/customer-decision', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { decision } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking || !booking.revised_quote_json) {
+    return res.status(404).json({ error: 'Booking or revised quote not found.' });
+  }
+
+  if (booking.customer_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only the customer can accept or decline this quote.' });
+  }
+
+  const quote = JSON.parse(booking.revised_quote_json);
+  if (quote.status !== 'admin_approved' && !req.session.isAdmin) {
+    return res.status(400).json({ error: 'Quote must be approved by admin before customer can decide.' });
+  }
+
+  const nowIso = new Date().toISOString();
+
+  if (decision === 'accept') {
+    quote.status = 'customer_approved';
+    quote.decidedAt = nowIso;
+
+    const newTotalPrice = Number(booking.total_price) + Number(quote.amount);
+
+    db.prepare(`
+      UPDATE bookings
+      SET revised_quote_json = ?, total_price = ?, updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(quote), newTotalPrice, nowIso, id);
+
+    logAudit(req.session.userId, req.session.name, 'customer', 'REVISED_QUOTE_ACCEPTED', `Customer explicitly accepted revised quote +₹${quote.amount} for Booking ${booking.booking_number}. New total: ₹${newTotalPrice}. Extra work authorized.`, req.ip);
+
+    sendNotificationToUser(booking.provider_user_id || booking.provider_id, '🎉 Extra Work Approved!', `Customer accepted the +₹${quote.amount} quote for #${booking.booking_number}. You may now proceed with extra work.`, { type: 'revised_quote_accepted', bookingId: id });
+
+    return res.json({ success: true, revisedQuote: quote, totalPrice: newTotalPrice });
+  } else {
+    quote.status = 'rejected';
+    quote.decidedAt = nowIso;
+
+    db.prepare(`
+      UPDATE bookings
+      SET revised_quote_json = ?, updated_at = ?
+      WHERE id = ?
+    `).run(JSON.stringify(quote), nowIso, id);
+
+    logAudit(req.session.userId, req.session.name, 'customer', 'REVISED_QUOTE_DECLINED', `Customer declined extra work quote for Booking ${booking.booking_number}. Original scope and price remain in force.`, req.ip);
+
+    sendNotificationToUser(booking.provider_user_id || booking.provider_id, '⚠️ Extra Work Declined', `Customer declined extra work quote for #${booking.booking_number}. Please proceed only with the original scope.`, { type: 'revised_quote_declined', bookingId: id });
+
+    return res.json({ success: true, revisedQuote: quote, totalPrice: booking.total_price });
+  }
+});
+
+// ── CUSTOMER SERVICE REVIEWS ─────────────────────────────────────────────────
+app.post('/api/bookings/:id/review', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { rating, comment, tags } = req.body || {};
+
+  const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(id);
+  if (!booking) return res.status(404).json({ error: 'Booking not found.' });
+
+  if (booking.customer_id !== req.session.userId && !req.session.isAdmin) {
+    return res.status(403).json({ error: 'Only the customer who booked this service can submit a review.' });
+  }
+
+  const numRating = Number(rating);
+  if (!numRating || numRating < 1 || numRating > 5) {
+    return res.status(400).json({ error: 'Rating must be between 1 and 5 stars.' });
+  }
+
+  const reviewId = `rev_${Date.now()}_${crypto.randomBytes(2).toString('hex')}`;
+  const nowIso = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO service_reviews (id, booking_id, service_id, provider_id, customer_id, customer_name, rating, comment, tags_json, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    reviewId,
+    id,
+    booking.service_id,
+    booking.provider_user_id || booking.provider_id,
+    req.session.userId,
+    req.session.name,
+    numRating,
+    comment ? String(comment).trim() : '',
+    JSON.stringify(tags || []),
+    nowIso
+  );
+
+  db.prepare(`
+    UPDATE bookings
+    SET rating = ?, review_comment = ?, updated_at = ?
+    WHERE id = ?
+  `).run(numRating, comment ? String(comment).trim() : '', nowIso, id);
+
+  logAudit(req.session.userId, req.session.name, 'customer', 'SERVICE_REVIEWED', `Customer rated Booking ${booking.booking_number} with ${numRating}★: "${comment}"`, req.ip);
+
+  res.status(201).json({ success: true, reviewId, rating: numRating, comment });
+});

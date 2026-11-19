@@ -22,19 +22,47 @@ export const ProviderMapDiscoveryModal: React.FC<{
 }> = ({ isOpen, onClose, onSelectService }) => {
   const { providers, services, openProviderProfile, openChat, showToast } = useApp();
 
-  const mapLocations = [
-    { providerId: 'prov_1', name: 'Kiran Electricals', x: '52%', y: '42%', area: 'Indiranagar 100ft Rd', dist: '1.2 km', eta: '14 mins', category: 'Electrical' },
-    { providerId: 'prov_2', name: 'UrbanCare Pros', x: '35%', y: '58%', area: 'Koramangala 4th Block', dist: '2.4 km', eta: '22 mins', category: 'Cleaning' },
-    { providerId: 'prov_3', name: 'QuickFix Plumbing', x: '68%', y: '32%', area: 'Old Airport Road', dist: '3.1 km', eta: '28 mins', category: 'Plumbing' },
-    { providerId: 'prov_4', name: 'Elite Salon At Home', x: '45%', y: '72%', area: 'HSR Layout Sector 1', dist: '4.5 km', eta: '35 mins', category: 'Personal Care' }
+  const defaultCoords = [
+    { x: '52%', y: '42%', dist: '1.2 km', eta: '14 mins' },
+    { x: '35%', y: '58%', dist: '2.4 km', eta: '22 mins' },
+    { x: '68%', y: '32%', dist: '3.1 km', eta: '28 mins' },
+    { x: '45%', y: '72%', dist: '4.5 km', eta: '35 mins' },
+    { x: '60%', y: '65%', dist: '5.2 km', eta: '40 mins' },
+    { x: '25%', y: '35%', dist: '3.8 km', eta: '30 mins' }
   ];
 
-  const [selectedLoc, setSelectedLoc] = useState(mapLocations[0]);
+  const mapLocations = providers.map((p, idx) => {
+    const coord = defaultCoords[idx % defaultCoords.length];
+    return {
+      providerId: p.id,
+      provider: p,
+      name: p.name,
+      x: coord.x,
+      y: coord.y,
+      area: p.serviceArea || 'Indiranagar & East Bengaluru',
+      dist: coord.dist,
+      eta: coord.eta,
+      category: p.tradeCategory || 'Services'
+    };
+  });
+
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const currentProvider = providers.find((p) => p.id === selectedLoc.providerId) || providers[0];
-  const matchingService = services.find((s) => s.providerId === selectedLoc.providerId) || services[0];
+  const selectedLoc = mapLocations.find((l) => l.providerId === selectedProviderId) || mapLocations[0];
+  const currentProvider = selectedLoc?.provider || providers[0];
+  const matchingService =
+    services.find(
+      (s) =>
+        s.providerId === currentProvider?.id ||
+        s.providerId === (currentProvider as any)?.userId ||
+        s.providerId === (currentProvider as any)?.issuedProviderId
+    ) ||
+    services.find((s) =>
+      currentProvider?.tradeCategory && s.category?.toLowerCase().includes(currentProvider.tradeCategory.toLowerCase())
+    ) ||
+    services[0];
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
@@ -90,7 +118,7 @@ export const ProviderMapDiscoveryModal: React.FC<{
             return (
               <div
                 key={loc.providerId}
-                onClick={() => setSelectedLoc(loc)}
+                onClick={() => setSelectedProviderId(loc.providerId)}
                 style={{ left: loc.x, top: loc.y }}
                 className="absolute -translate-x-1/2 -translate-y-1/2 z-30 cursor-pointer group"
               >

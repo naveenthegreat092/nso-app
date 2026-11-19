@@ -63,6 +63,17 @@ export const OrdersScreen: React.FC = () => {
   const [problemType, setProblemType] = useState<'poor_quality' | 'incomplete_work' | 'damage' | 'other'>('poor_quality');
   const [problemDescription, setProblemDescription] = useState('');
 
+  const customerBookings = bookings.filter((b) => {
+    if (!user || !user.id) return true;
+    if (b.customerId === user.id || (b as any).customer_id === user.id) return true;
+    if (user.phone && b.customerPhone) {
+      const uDigits = user.phone.replace(/\D/g, '').slice(-10);
+      const bDigits = b.customerPhone.replace(/\D/g, '').slice(-10);
+      if (uDigits && bDigits && uDigits === bDigits) return true;
+    }
+    return false;
+  });
+
   const handleCancelOrder = (id: string) => {
     setConfirmCancelType('order');
     setConfirmCancelId(id);
@@ -205,7 +216,7 @@ export const OrdersScreen: React.FC = () => {
             }`}
           >
             <Wrench className="w-3.5 h-3.5" />
-            <span>Service Bookings ({bookings.length})</span>
+            <span>Service Bookings ({customerBookings.length})</span>
           </button>
         </div>
       </div>
@@ -448,7 +459,7 @@ export const OrdersScreen: React.FC = () => {
         {/* Service Bookings */}
         {subTab === 'services' && (
           <>
-            {bookings.length === 0 ? (
+            {customerBookings.length === 0 ? (
               <div className="text-center py-12 px-4 bg-white rounded-3xl border border-gray-150 shadow-sm space-y-3">
                 <div className="w-14 h-14 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto">
                   <Wrench className="w-7 h-7 text-red-600 stroke-[1.5]" />
@@ -468,7 +479,7 @@ export const OrdersScreen: React.FC = () => {
                 </button>
               </div>
             ) : (
-              bookings.map((booking) => {
+              customerBookings.map((booking) => {
                 const hasPendingCustomerQuote = booking.revisedQuote?.status === 'admin_approved';
 
                 return (

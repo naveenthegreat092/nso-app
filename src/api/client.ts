@@ -593,6 +593,185 @@ export const api = {
     }
   },
 
+  // ── Revised Quotes ──────────────────────────────────────────────────────────
+
+  submitRevisedQuote: async (bookingId: string, quoteData: {
+    revisedPrice: number;
+    extraScopeDescription: string;
+    materialCost?: number;
+    reason?: string;
+  }): Promise<{ success: boolean; booking?: Booking; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/revised-quote`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(quoteData)
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false, error: 'Network error submitting revised quote.' };
+    }
+  },
+
+  adminReviewRevisedQuote: async (bookingId: string, decision: 'approve' | 'reject', adminFeedback?: string): Promise<{ success: boolean; booking?: Booking; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/revised-quote/admin-review`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ decision, adminFeedback })
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false, error: 'Network error reviewing revised quote.' };
+    }
+  },
+
+  customerDecideRevisedQuote: async (bookingId: string, decision: 'accept' | 'decline', customerFeedback?: string): Promise<{ success: boolean; booking?: Booking; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/revised-quote/customer-decision`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ decision, customerFeedback })
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false, error: 'Network error deciding revised quote.' };
+    }
+  },
+
+  // ── Service Reviews ─────────────────────────────────────────────────────────
+
+  submitServiceReview: async (bookingId: string, reviewData: {
+    rating: number;
+    reviewComment: string;
+    punctualityRating?: number;
+    qualityRating?: number;
+    behaviorRating?: number;
+  }): Promise<{ success: boolean; booking?: Booking; review?: any; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/bookings/${bookingId}/review`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(reviewData)
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false, error: 'Network error submitting review.' };
+    }
+  },
+
+  // ── Provider Schedule & Profile ─────────────────────────────────────────────
+
+  getProviderSchedule: async (): Promise<{ success: boolean; schedule?: any; error?: string } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/provider/schedule`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  updateProviderSchedule: async (scheduleData: {
+    workingDays?: string[];
+    availableSlots?: string[];
+    offDutySlots?: string[];
+    serviceArea?: string;
+    supportedModes?: string[];
+    hubAddress?: string;
+  }): Promise<{ success: boolean; schedule?: any; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/provider/schedule`, {
+        ...defaultOpts,
+        method: 'PUT',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(scheduleData)
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false, error: 'Network error updating schedule.' };
+    }
+  },
+
+  getProviderProfile: async (): Promise<{ success: boolean; profile?: any; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/provider/profile`, {
+        ...defaultOpts,
+        headers: getAuthHeaders()
+      });
+      const data = await res.json();
+      return { success: res.ok, profile: data };
+    } catch {
+      return { success: false, error: 'Network error loading provider profile.' };
+    }
+  },
+
+  updateProviderProfile: async (profileData: {
+    bio?: string;
+    experienceYears?: number;
+    hourlyRate?: number;
+    serviceArea?: string;
+    tradeCategory?: string;
+  }): Promise<{ success: boolean; profile?: any; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/provider/profile`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(profileData)
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false, error: 'Network error updating provider profile.' };
+    }
+  },
+
+  addProviderPortfolioPhoto: async (item: {
+    title: string;
+    image: string;
+    tag?: string;
+  }): Promise<{ success: boolean; item?: any; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/provider/portfolio`, {
+        ...defaultOpts,
+        method: 'POST',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(item)
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false, error: 'Network error adding portfolio photo.' };
+    }
+  },
+
+  deleteProviderPortfolioPhoto: async (itemId: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/provider/portfolio/${itemId}`, {
+        ...defaultOpts,
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+      const data = await res.json();
+      return { success: res.ok, ...data };
+    } catch {
+      return { success: false, error: 'Network error deleting portfolio photo.' };
+    }
+  },
+
   // ── Hourly Work & Extra Time ────────────────────────────────────────────────
 
   requestExtraTime: async (bookingId: string, extraData: { requestedHours: number; reason: string; extraAmount?: number }): Promise<{ success: boolean; hourlyDetails?: HourlyDetails; error?: string }> => {
@@ -1562,20 +1741,6 @@ export const api = {
         method: 'PATCH',
         headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ workPhotos, workVideos })
-      });
-      return await res.json();
-    } catch (e: any) {
-      return { success: false, error: e.message };
-    }
-  },
-
-  addProviderPortfolioPhoto: async (item: { title: string; image: string; tag: string }): Promise<{ success: boolean; item?: any; message?: string; error?: string }> => {
-    try {
-      const res = await fetch(`${API_BASE}/provider/portfolio`, {
-        ...defaultOpts,
-        method: 'POST',
-        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(item)
       });
       return await res.json();
     } catch (e: any) {

@@ -26,9 +26,13 @@ import {
   Pause,
   Layers,
   FileText,
-  Tag
+  Tag,
+  Trash2,
+  Star,
+  Key
 } from 'lucide-react';
 import { api } from '../../api/client';
+import { Booking } from '../../types';
 
 export const ProviderDashboard: React.FC = () => {
   const {
@@ -37,6 +41,7 @@ export const ProviderDashboard: React.FC = () => {
     submitRevisedQuote,
     providers,
     addProviderPortfolioImage,
+    deleteProviderPortfolioImage,
     user,
     showToast,
     submitJobQuotation,
@@ -102,19 +107,207 @@ export const ProviderDashboard: React.FC = () => {
   const [photoTag, setPhotoTag] = useState('Installation');
   const [photoUrl, setPhotoUrl] = useState('https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=500&auto=format&fit=crop&q=80');
 
-  // Slots availability state
-  const [slotsState, setSlotsState] = useState([
-    { slot: '09:00 AM - 11:00 AM', active: true },
-    { slot: '11:30 AM - 01:30 PM', active: true },
-    { slot: '02:30 PM - 04:30 PM', active: true },
-    { slot: '05:00 PM - 07:00 PM', active: false }
-  ]);
+  // Provider Identity & Persisted Metrics
+  const myProviderId =
+    user.providerApplication?.issuedProviderId ||
+    user.accountId ||
+    providers.find((p) => (p as any).userId === user.id)?.id ||
+    'NSO-PROV-8310';
 
-  const providerBookings = bookings;
-  const currentProviderName = user.name || 'Service Specialist';
-  const currentProviderTrade = user.providerApplication?.tradeCategory || 'Home Services';
-  const currentProviderDetail = providers.find((p) => p.id === user.id) || null;
+  const currentProviderDetail =
+    providers.find(
+      (p) =>
+        (p as any).userId === user.id ||
+        p.id === myProviderId ||
+        p.id === user.id ||
+        (p as any).issuedProviderId === myProviderId
+    ) || null;
+
+  const currentProviderName =
+    user.name ||
+    currentProviderDetail?.applicantName ||
+    currentProviderDetail?.name?.replace(/\s*\([^)]*\)/, '') ||
+    'Service Specialist';
+
+  const currentProviderTrade =
+    user.providerApplication?.tradeCategory ||
+    currentProviderDetail?.tradeCategory ||
+    'Home Services';
+
+  const providerBookings = bookings.filter(
+    (b) =>
+      b.providerUserId === user.id ||
+      (b as any).provider_user_id === user.id ||
+      b.providerId === myProviderId ||
+      b.providerId === user.id
+  );
+
+  const completedBookings = providerBookings.filter(
+    (b) => b.status === 'completed' || b.status === 'completed_pending_review'
+  );
+  const reviewedBookings = completedBookings.filter((b) => b.rating && b.rating > 0);
+  const calculatedRating =
+    currentProviderDetail?.rating && currentProviderDetail.rating > 0
+      ? currentProviderDetail.rating
+      : reviewedBookings.length > 0
+      ? (
+          reviewedBookings.reduce((sum, b) => sum + (b.rating || 5), 0) /
+          reviewedBookings.length
+        ).toFixed(1)
+      : 'New';
+
+  const completedJobsCount =
+    currentProviderDetail?.jobsCompleted !== undefined
+      ? currentProviderDetail.jobsCompleted
+      : completedBookings.length;
+
   const portfolioItems = currentProviderDetail?.portfolio || [];
+
+  // Persisted Schedule & Availability state
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [workingDays, setWorkingDays] = useState<string[]>([
+    'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'
+  ]);
+  const [scheduleSlots, setScheduleSlots] = useState<string[]>([
+    '09:00 AM - 11:00 AM',
+    '11:30 AM - 01:30 PM',
+    '02:30 PM - 04:30 PM',
+    '05:00 PM - 07:00 PM'
+  ]);
+  const [offDutySlots, setOffDutySlots] = useState<string[]>([]);
+  const [scheduleArea, setScheduleArea] = useState(
+    currentProviderDetail?.serviceArea || 'Indiranagar & East Bengaluru'
+  );
+  const [supportedModes, setSupportedModes] = useState<string[]>(['home_visit', 'provider_location']);
+  const [hubAddress, setHubAddress] = useState('NSO Hub #14, 100ft Road, Indiranagar, Bengaluru');
+
+  useEffect(() => {
+    const fetchSchedule = async () => {
+      try {
+        const res = await api.getProviderSchedule();
+        if (res && res.success && res.schedule) {
+          const s = res.schedule;
+          if (s.workingDays) setWorkingDays(s.workingDays);
+          if (s.availableSlots) setScheduleSlots(s.availableSlots);
+          if (s.offDutySlots) setOffDutySlots(s.offDutySlots);
+          if (s.serviceArea) setScheduleArea(s.serviceArea);
+          if (s.supportedModes) setSupportedModes(s.supportedModes);
+          if (s.hubAddress) setHubAddress(s.hubAddress);
+        }
+      } catch (e) {
+        console.error('Error fetching provider schedule:', e);
+      }
+    };
+    fetchSchedule();
+  }, []);
+
+  const handleSaveSchedule = async () => {
+    setScheduleLoading(true);
+    try {
+      const res = await api.updateProviderSchedule({
+        workingDays,
+        availableSlots: scheduleSlots,
+        offDutySlots,
+        serviceArea: scheduleArea,
+        supportedModes,
+        hubAddress
+      });
+      if (res && res.success) {
+        showToast('Schedule & availability saved successfully!');
+      } else {
+        showToast('Saved schedule changes.');
+      }
+    } catch {
+      showToast('Could not save schedule. Please try again.');
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const toggleWorkingDay = (day: string) => {
+    setWorkingDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+    );
+  };
+
+  const toggleSlotDuty = (slot: string) => {
+    setOffDutySlots((prev) =>
+      prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]
+    );
+  };
+
+  // Completion OTP Modal state
+  const [completionModalBooking, setCompletionModalBooking] = useState<Booking | null>(null);
+  const [completionOtpInput, setCompletionOtpInput] = useState('');
+  const [completionError, setCompletionError] = useState<string | null>(null);
+  const [completingJob, setCompletingJob] = useState(false);
+
+  const handleConfirmCompletion = async () => {
+    if (!completionModalBooking) return;
+    if (!completionOtpInput || completionOtpInput.trim().length !== 4) {
+      setCompletionError('Please enter the 4-digit code provided by the customer.');
+      return;
+    }
+    setCompletingJob(true);
+    setCompletionError(null);
+    try {
+      if (sharingBookingId === completionModalBooking.id) {
+        await stopSharing(completionModalBooking.id);
+      }
+      await markServiceComplete(completionModalBooking.id, 'Work completed successfully on-site.', completionOtpInput.trim());
+      showToast('🎉 Service completed! Verified with customer OTP.');
+      setCompletionModalBooking(null);
+      setCompletionOtpInput('');
+    } catch (e: any) {
+      setCompletionError(e.message || 'OTP verification failed. Check code with customer.');
+    } finally {
+      setCompletingJob(false);
+    }
+  };
+
+  // New Service Listing Creation state
+  const [showAddServiceModal, setShowAddServiceModal] = useState(false);
+  const [newServiceTitle, setNewServiceTitle] = useState('');
+  const [newServiceCategory, setNewServiceCategory] = useState(currentProviderTrade);
+  const [newServicePrice, setNewServicePrice] = useState(399);
+  const [newServicePricingType, setNewServicePricingType] = useState<'fixed' | 'hourly' | 'metered' | 'quotation_required'>('fixed');
+  const [newServiceUnit, setNewServiceUnit] = useState('visit & inspection');
+  const [newServiceDuration, setNewServiceDuration] = useState(1);
+  const [newServiceDescription, setNewServiceDescription] = useState('');
+  const [newServiceModes, setNewServiceModes] = useState<('home_visit' | 'provider_location')[]>(['home_visit']);
+  const [newServiceCancellationPolicy, setNewServiceCancellationPolicy] = useState('Free cancellation before dispatch.');
+  const [creatingService, setCreatingService] = useState(false);
+
+  const handleCreateService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newServiceTitle.trim() || !newServiceDescription.trim()) {
+      showToast('Please enter title and description.');
+      return;
+    }
+    setCreatingService(true);
+    try {
+      await addNewService({
+        title: newServiceTitle.trim(),
+        category: newServiceCategory || currentProviderTrade,
+        price: Number(newServicePrice) || 299,
+        unit: newServiceUnit,
+        pricingType: newServicePricingType,
+        estimatedDurationHours: newServiceDuration,
+        description: newServiceDescription.trim(),
+        modes: newServiceModes,
+        cancellationPolicy: newServiceCancellationPolicy,
+        availableSlots: scheduleSlots
+      });
+      setShowAddServiceModal(false);
+      setNewServiceTitle('');
+      setNewServiceDescription('');
+      showToast('New service listing submitted! Pending Admin Review.');
+    } catch {
+      showToast('Failed to create service listing.');
+    } finally {
+      setCreatingService(false);
+    }
+  };
 
   // ── Live GPS sharing state (per booking) ──────────────────────────────────
   const [sharingBookingId, setSharingBookingId] = useState<string | null>(null);
@@ -218,10 +411,10 @@ export const ProviderDashboard: React.FC = () => {
     showToast('✅ Job started: Status marked In-Progress.');
   };
 
-  const handleAddPortfolio = (e: React.FormEvent) => {
+  const handleAddPortfolio = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!photoTitle.trim()) return;
-    addProviderPortfolioImage(user.id, {
+    await addProviderPortfolioImage(myProviderId, {
       id: `port_${Date.now()}`,
       title: photoTitle,
       image: photoUrl,
@@ -229,13 +422,6 @@ export const ProviderDashboard: React.FC = () => {
     });
     setShowAddPhotoModal(false);
     setPhotoTitle('');
-  };
-
-  const toggleSlot = (index: number) => {
-    setSlotsState((prev) =>
-      prev.map((s, i) => (i === index ? { ...s, active: !s.active } : s))
-    );
-    showToast(`Slot status updated`);
   };
 
   const handleUploadWorkMedia = async (serviceId: string) => {
@@ -275,7 +461,7 @@ export const ProviderDashboard: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-sm font-extrabold tracking-tight">Service Provider Hub</h2>
-                <p className="text-[10px] text-amber-100">{currentProviderName} ({currentProviderTrade})</p>
+                <p className="text-[10px] text-amber-100">{currentProviderName} • ID: <span className="font-mono font-bold">{myProviderId}</span></p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -287,7 +473,7 @@ export const ProviderDashboard: React.FC = () => {
                 <span>Store</span>
               </button>
               <span className="text-[10px] bg-amber-400/30 text-amber-100 border border-amber-300/30 px-2 py-0.5 rounded-full font-bold">
-                VERIFIED
+                {user.providerApplication?.status === 'approved' ? 'APPROVED' : 'ACTIVE'}
               </span>
             </div>
           </div>
@@ -299,11 +485,11 @@ export const ProviderDashboard: React.FC = () => {
             </div>
             <div>
               <span className="text-[10px] text-amber-100 block">Rating</span>
-              <span className="text-base font-extrabold">5.0 ★</span>
+              <span className="text-base font-extrabold">{calculatedRating} {calculatedRating !== 'New' ? '★' : ''}</span>
             </div>
             <div>
-              <span className="text-[10px] text-amber-100 block">Trade Domain</span>
-              <span className="text-base font-extrabold">{currentProviderTrade}</span>
+              <span className="text-[10px] text-amber-100 block">Completed</span>
+              <span className="text-base font-extrabold">{completedJobsCount}</span>
             </div>
           </div>
         </div>
@@ -621,25 +807,15 @@ export const ProviderDashboard: React.FC = () => {
                           Cancel Booking
                         </button>
                         <button
-                          onClick={async () => {
-                            const expectedOtp = b.completionOtp || (b.bookingNumber ? b.bookingNumber.replace(/\D/g, '').slice(-4) : '');
-                            let enteredOtp = '';
-                            if (expectedOtp) {
-                              const inputOtp = window.prompt(`🔒 Customer Completion OTP Verification:\n\nPlease enter the 4-digit Completion OTP shown on the customer's screen:`);
-                              if (!inputOtp) return;
-                              if (inputOtp.trim() !== expectedOtp.trim()) {
-                                showToast('❌ Incorrect OTP! Please ask the customer for their 4-digit completion code.');
-                                return;
-                              }
-                              enteredOtp = inputOtp.trim();
-                            }
-                            if (sharingBookingId === b.id) await stopSharing(b.id);
-                            await markServiceComplete(b.id, 'Work completed successfully on-site.', enteredOtp);
-                            showToast('🎉 Service completed with OTP verification! Customer notified.');
+                          onClick={() => {
+                            setCompletionModalBooking(b);
+                            setCompletionOtpInput('');
+                            setCompletionError(null);
                           }}
-                          className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] rounded-lg shadow-sm active:scale-95 transition-all"
+                          className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] rounded-lg shadow-sm active:scale-95 transition-all flex items-center gap-1"
                         >
-                          Finish &amp; Mark Completed
+                          <Key className="w-3.5 h-3.5" />
+                          <span>Finish &amp; Verify OTP</span>
                         </button>
                       </div>
                     </div>
@@ -679,45 +855,170 @@ export const ProviderDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Schedule Slots */}
+        {/* Schedule Slots & Availability */}
         {activeTab === 'schedule' && (
-          <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 text-xs">
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4 text-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-amber-600" />
-                <h4 className="font-bold text-gray-900">Working Slot Hours</h4>
+                <h4 className="font-bold text-gray-900">Working Days &amp; Slot Availability</h4>
               </div>
               <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold">
                 Auto Conflict Prevention ON
               </span>
             </div>
-            <p className="text-gray-600 leading-relaxed text-[11px]">
-              Tap any slot to toggle between Active and Off-Duty. Active slots are bookable by customers in real-time.
-            </p>
-            <div className="grid grid-cols-1 gap-2 pt-1">
-              {slotsState.map((s, idx) => (
-                <div
-                  key={s.slot}
-                  onClick={() => toggleSlot(idx)}
-                  className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                    s.active
-                      ? 'bg-amber-50/50 border-amber-200 text-amber-950 font-bold'
-                      : 'bg-gray-50 border-gray-200 text-gray-400'
+
+            {/* Working Days Selector */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-bold text-gray-700 block">Weekly Working Days:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => {
+                  const isWorkDay = workingDays.includes(day);
+                  return (
+                    <button
+                      key={day}
+                      type="button"
+                      onClick={() => toggleWorkingDay(day)}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                        isWorkDay
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Bookable Time Slots */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-gray-700 block">Bookable Time Slots:</span>
+                <span className="text-[10px] text-gray-400">Tap to toggle Off-Duty</span>
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                {scheduleSlots.map((slot) => {
+                  const isOffDuty = offDutySlots.includes(slot);
+                  return (
+                    <div
+                      key={slot}
+                      onClick={() => toggleSlotDuty(slot)}
+                      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                        !isOffDuty
+                          ? 'bg-amber-50/50 border-amber-200 text-amber-950 font-bold'
+                          : 'bg-gray-50 border-gray-200 text-gray-400'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Clock className={`w-3.5 h-3.5 ${!isOffDuty ? 'text-amber-600' : 'text-gray-400'}`} />
+                        <span>{slot}</span>
+                      </div>
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                          !isOffDuty ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'
+                        }`}
+                      >
+                        {!isOffDuty ? 'Accepting Bookings' : 'Off-Duty'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Service Modes & Hub Details */}
+            <div className="space-y-2 pt-2 border-t border-gray-100">
+              <span className="text-[11px] font-bold text-gray-700 block">Supported Service Modes:</span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSupportedModes((prev) =>
+                      prev.includes('home_visit') ? prev.filter((m) => m !== 'home_visit') : [...prev, 'home_visit']
+                    );
+                  }}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                    supportedModes.includes('home_visit')
+                      ? 'border-amber-400 bg-amber-50 text-amber-900'
+                      : 'border-gray-200 text-gray-400'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <Clock className={`w-3.5 h-3.5 ${s.active ? 'text-amber-600' : 'text-gray-400'}`} />
-                    <span>{s.slot}</span>
-                  </div>
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                      s.active ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'
-                    }`}
-                  >
-                    {s.active ? 'Accepting Bookings' : 'Off-Duty'}
-                  </span>
-                </div>
-              ))}
+                  <Check className={`w-3.5 h-3.5 ${supportedModes.includes('home_visit') ? 'text-amber-600' : 'opacity-0'}`} />
+                  <span>Doorstep Visit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSupportedModes((prev) =>
+                      prev.includes('provider_location') ? prev.filter((m) => m !== 'provider_location') : [...prev, 'provider_location']
+                    );
+                  }}
+                  className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                    supportedModes.includes('provider_location')
+                      ? 'border-amber-400 bg-amber-50 text-amber-900'
+                      : 'border-gray-200 text-gray-400'
+                  }`}
+                >
+                  <Check className={`w-3.5 h-3.5 ${supportedModes.includes('provider_location') ? 'text-amber-600' : 'opacity-0'}`} />
+                  <span>Provider Hub</span>
+                </button>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-gray-600 block mb-0.5">Service Operating Area:</label>
+                <input
+                  type="text"
+                  value={scheduleArea}
+                  onChange={(e) => setScheduleArea(e.target.value)}
+                  className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium"
+                  placeholder="e.g. Indiranagar, Koramangala & East Bengaluru"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-gray-600 block mb-0.5">Public Workshop / Hub Address:</label>
+                <input
+                  type="text"
+                  value={hubAddress}
+                  onChange={(e) => setHubAddress(e.target.value)}
+                  className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium"
+                  placeholder="e.g. NSO Hub #14, 100ft Road, Indiranagar, Bengaluru"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleSaveSchedule}
+              disabled={scheduleLoading}
+              className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow-md active:scale-98 transition-all flex items-center justify-center gap-1.5"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>{scheduleLoading ? 'Saving Schedule…' : 'Save Schedule & Availability'}</span>
+            </button>
+
+            {/* Today's Reserved Bookings on Calendar */}
+            <div className="pt-2 border-t border-gray-100 space-y-2">
+              <span className="text-[11px] font-bold text-gray-700 block">Accepted Bookings On Calendar:</span>
+              {providerBookings.filter((b) => b.status !== 'cancelled').length === 0 ? (
+                <p className="text-[11px] text-gray-400 italic">No bookings scheduled on the calendar yet.</p>
+              ) : (
+                providerBookings
+                  .filter((b) => b.status !== 'cancelled')
+                  .slice(0, 5)
+                  .map((b) => (
+                    <div key={b.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-[11px]">
+                      <div>
+                        <span className="font-bold text-slate-800">{b.serviceTitle}</span>
+                        <p className="text-[10px] text-slate-500">{b.customerName} • {b.date} ({b.timeSlot})</p>
+                      </div>
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full capitalize bg-emerald-100 text-emerald-800">
+                        {b.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                  ))
+              )}
             </div>
           </div>
         )}
@@ -746,8 +1047,16 @@ export const ProviderDashboard: React.FC = () => {
                 </div>
               ) : (
                 portfolioItems.map((item: any) => (
-                  <div key={item.id} className="rounded-xl overflow-hidden border border-gray-100 bg-gray-50 group">
+                  <div key={item.id} className="rounded-xl overflow-hidden border border-gray-100 bg-gray-50 group relative">
                     <img src={item.image} alt={item.title} className="w-full h-24 object-cover group-hover:scale-105 transition-transform" />
+                    <button
+                      type="button"
+                      onClick={() => deleteProviderPortfolioImage(myProviderId, item.id)}
+                      className="absolute top-1.5 right-1.5 p-1 bg-black/60 hover:bg-rose-600 text-white rounded-lg transition-colors shadow-xs"
+                      title="Delete photo"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                     <div className="p-2">
                       <span className="text-[9px] font-black text-amber-800 bg-amber-100/70 px-1.5 py-0.5 rounded uppercase">
                         {item.tag}
@@ -795,12 +1104,39 @@ export const ProviderDashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="font-extrabold text-sm text-gray-900">My Service Rates &amp; Listings</h4>
-                <p className="text-[11px] text-gray-500">Configure hourly rates, diagnostic fees, and transparent pricing</p>
+                <p className="text-[11px] text-gray-500">Create, manage, and price your approved service offerings</p>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowAddServiceModal(true)}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1 active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Listing</span>
+              </button>
             </div>
 
             <div className="space-y-2.5 pt-1">
-              {services.map((svc) => (
+              {services.filter(
+                (s) =>
+                  s.providerId === user.id ||
+                  s.providerId === myProviderId ||
+                  s.providerName === currentProviderName ||
+                  (currentProviderTrade && s.category.toLowerCase().includes(currentProviderTrade.toLowerCase()))
+              ).length === 0 ? (
+                <div className="text-center py-8 text-gray-400 bg-gray-50 rounded-2xl border border-gray-200 p-4 space-y-2">
+                  <Wrench className="w-8 h-8 text-gray-300 mx-auto" />
+                  <p className="text-xs font-bold text-gray-600">No Service Listings Yet</p>
+                  <p className="text-[11px] text-gray-500">Tap "Add Listing" above to publish your first trade service offering.</p>
+                </div>
+              ) : (
+                services.filter(
+                  (s) =>
+                    s.providerId === user.id ||
+                    s.providerId === myProviderId ||
+                    s.providerName === currentProviderName ||
+                    (currentProviderTrade && s.category.toLowerCase().includes(currentProviderTrade.toLowerCase()))
+                ).map((svc) => (
                 <div key={svc.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
@@ -954,7 +1290,7 @@ export const ProviderDashboard: React.FC = () => {
                     </div>
                   )}
                 </div>
-              ))}
+              )))}
             </div>
           </div>
         )}
@@ -1490,6 +1826,219 @@ export const ProviderDashboard: React.FC = () => {
                   className="py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-md"
                 >
                   Submit for Review
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Completion OTP Verification Modal */}
+      {completionModalBooking && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                  <Key className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm text-gray-900">Job Completion OTP</h4>
+                  <p className="text-[10px] text-gray-500 font-medium">Verify with 4-digit customer code</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCompletionModalBooking(null)}
+                className="p-1 rounded-full text-gray-400 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs space-y-1">
+              <div className="flex justify-between font-bold text-slate-800">
+                <span>Booking:</span>
+                <span className="font-mono">{completionModalBooking.bookingNumber}</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Customer:</span>
+                <span>{completionModalBooking.customerName}</span>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Agreed Fee:</span>
+                <span className="font-black text-slate-900">₹{completionModalBooking.totalPrice}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-gray-700 block">
+                Enter 4-Digit Code Shown on Customer Screen:
+              </label>
+              <input
+                type="text"
+                maxLength={4}
+                value={completionOtpInput}
+                onChange={(e) => {
+                  setCompletionOtpInput(e.target.value.replace(/\D/g, ''));
+                  setCompletionError(null);
+                }}
+                placeholder="4-digit OTP"
+                className="w-full p-3 bg-gray-50 border-2 border-emerald-300 rounded-2xl text-center font-mono font-black text-xl tracking-widest text-emerald-950 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              {completionError && (
+                <p className="text-[11px] text-rose-600 font-bold bg-rose-50 p-2 rounded-xl border border-rose-200">
+                  {completionError}
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setCompletionModalBooking(null)}
+                className="py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-xl transition-colors active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={completingJob}
+                onClick={handleConfirmCompletion}
+                className="py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-1"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>{completingJob ? 'Verifying…' : 'Verify & Complete'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Service Listing Modal */}
+      {showAddServiceModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-3 shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 font-black text-sm text-amber-950">
+                <Tag className="w-4 h-4 text-amber-700" />
+                <span>Add Service Listing</span>
+              </div>
+              <button
+                onClick={() => setShowAddServiceModal(false)}
+                className="p-1 rounded-full text-gray-400 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500">
+              New service listings are reviewed by Admin moderation before being publicly published.
+            </p>
+
+            <form onSubmit={handleCreateService} className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-gray-700 block mb-0.5">Service Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Copper Pipe Leak Repair & Valve Fitting"
+                  value={newServiceTitle}
+                  onChange={(e) => setNewServiceTitle(e.target.value)}
+                  className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-semibold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="font-bold text-gray-700 block mb-0.5">Category</label>
+                  <input
+                    type="text"
+                    value={newServiceCategory}
+                    onChange={(e) => setNewServiceCategory(e.target.value)}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 block mb-0.5">Pricing Model</label>
+                  <select
+                    value={newServicePricingType}
+                    onChange={(e) => setNewServicePricingType(e.target.value as any)}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-semibold"
+                  >
+                    <option value="fixed">Fixed Price</option>
+                    <option value="hourly">Hourly Rate</option>
+                    <option value="quotation_required">Quotation Required</option>
+                    <option value="metered">Metered Unit</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="font-bold text-gray-700 block mb-0.5">Price (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={newServicePrice}
+                    onChange={(e) => setNewServicePrice(Number(e.target.value))}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 block mb-0.5">Unit</label>
+                  <input
+                    type="text"
+                    value={newServiceUnit}
+                    onChange={(e) => setNewServiceUnit(e.target.value)}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-gray-700 block mb-0.5">Hours</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newServiceDuration}
+                    onChange={(e) => setNewServiceDuration(Number(e.target.value))}
+                    className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 block mb-0.5">Description *</label>
+                <textarea
+                  rows={2}
+                  required
+                  placeholder="Describe the inclusions, tools provided, and procedure..."
+                  value={newServiceDescription}
+                  onChange={(e) => setNewServiceDescription(e.target.value)}
+                  className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-gray-700 block mb-0.5">Cancellation Policy</label>
+                <input
+                  type="text"
+                  value={newServiceCancellationPolicy}
+                  onChange={(e) => setNewServiceCancellationPolicy(e.target.value)}
+                  className="w-full p-2 bg-gray-50 border border-gray-200 rounded-xl font-medium"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAddServiceModal(false)}
+                  className="py-2.5 bg-gray-100 text-gray-700 font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingService}
+                  className="py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold rounded-xl shadow-md"
+                >
+                  {creatingService ? 'Submitting…' : 'Submit for Admin Review'}
                 </button>
               </div>
             </form>
