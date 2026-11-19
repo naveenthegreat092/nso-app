@@ -67,7 +67,7 @@ export const ProductDetailModal: React.FC<{
 
           {/* Action buttons */}
           <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
-            <span className="bg-red-600 text-white font-black text-[10px] px-2.5 py-1 rounded-full shadow-md">
+            <span className="bg-gradient-to-r from-red-600 to-rose-600 text-white font-black text-xs px-2.5 py-1 rounded-full shadow-md border border-amber-300/60">
               {product.discountPercentage}% OFF
             </span>
 
@@ -322,18 +322,18 @@ export const ProductDetailModal: React.FC<{
           </div>
         </div>
 
-        {/* Sticky Bottom Actions */}
+        {/* Sticky Bottom Actions — Ultra-Premium Edition */}
         <div className="p-4 border-t border-slate-200/80 bg-white grid grid-cols-2 gap-3 shadow-lg">
           <button
             onClick={handleAddToCart}
-            className="py-3.5 px-4 rounded-xl border border-red-600/90 text-red-600 hover:bg-red-50 active:bg-red-100 font-extrabold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-2xs"
+            className="py-3.5 px-4 rounded-xl border-2 border-slate-300 hover:border-amber-400 hover:bg-amber-50/40 text-slate-900 font-black text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-2xs"
           >
-            <ShoppingBag className="w-4 h-4" />
+            <ShoppingBag className="w-4 h-4 text-amber-600 stroke-[2.5]" />
             <span>Add to Cart</span>
           </button>
           <button
             onClick={handleBuyNow}
-            className="py-3.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-extrabold text-xs shadow-xs flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer"
+            className="py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer border border-amber-300"
           >
             <span>Proceed to Buy</span>
           </button>

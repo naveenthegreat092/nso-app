@@ -107,13 +107,13 @@ export const ExploreScreen: React.FC<{
     <div className="space-y-4 pb-24 px-4 pt-3 animate-fade-in-up">
       {/* Search Input Bar */}
       <div className="relative">
-        <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+        <Search className="w-4 h-4 text-amber-600 absolute left-4 top-1/2 -translate-y-1/2 stroke-[2.5]" />
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search products, brands, or doorstep services..."
-          className="w-full pl-11 pr-10 py-3 bg-white border border-slate-200/80 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-red-500/80 shadow-2xs transition-all text-slate-900 placeholder:text-slate-400"
+          className="w-full pl-11 pr-10 py-3 bg-white border-2 border-amber-200/80 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/80 focus:border-amber-400 shadow-2xs transition-all text-slate-900 placeholder:text-slate-400"
         />
         {searchQuery && (
           <button
@@ -128,15 +128,15 @@ export const ExploreScreen: React.FC<{
 
       {/* Type Filter Pills + Map View Button */}
       <div className="flex items-center gap-2">
-        <div className="flex-1 flex bg-slate-100/90 p-1 rounded-2xl text-xs font-extrabold border border-slate-200/60 shadow-2xs">
+        <div className="flex-1 flex bg-slate-100/90 p-1 rounded-2xl text-xs font-black border-2 border-amber-200/60 shadow-2xs">
           {(['all', 'products', 'services'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setFilterType(t)}
               className={`flex-1 py-2 rounded-xl transition-all capitalize text-center cursor-pointer ${
                 filterType === t
-                  ? 'bg-white text-slate-900 shadow-sm font-black'
-                  : 'text-slate-500 hover:text-slate-900 font-bold'
+                  ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-md font-black border border-amber-300'
+                  : 'text-slate-600 hover:text-slate-900 font-bold'
               }`}
             >
               {t === 'all' ? 'All Catalog' : t}
@@ -147,10 +147,10 @@ export const ExploreScreen: React.FC<{
         {onOpenMapRadius && (
           <button
             onClick={onOpenMapRadius}
-            className="px-3.5 py-2 rounded-2xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/70 transition-all flex items-center gap-1.5 font-extrabold text-xs active:scale-95 shadow-2xs cursor-pointer"
+            className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-amber-50 to-yellow-50 hover:bg-amber-100 text-amber-950 border border-amber-300 transition-all flex items-center gap-1.5 font-black text-xs active:scale-95 shadow-2xs cursor-pointer"
             title="Open Specialist Radius Map"
           >
-            <Compass className="w-4 h-4 text-red-600" />
+            <Compass className="w-4 h-4 text-amber-700 stroke-[2.5]" />
             <span>Map</span>
           </button>
         )}
@@ -167,11 +167,11 @@ export const ExploreScreen: React.FC<{
               onClick={() => setSelectedCategory(cat)}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-xs min-[360px]:text-sm font-black whitespace-nowrap transition-all active:scale-95 cursor-pointer shadow-xs ${
                 isSelected
-                  ? 'bg-red-600 text-white shadow-md shadow-red-600/25 border-2 border-red-600 ring-2 ring-red-400/30'
-                  : 'bg-white border-2 border-slate-200 text-slate-800 hover:bg-slate-50'
+                  ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-md shadow-amber-500/25 border-2 border-amber-300 ring-2 ring-amber-400/30'
+                  : 'bg-white border-2 border-amber-200/60 text-slate-800 hover:bg-amber-50/50 hover:border-amber-300'
               }`}
             >
-              <Icon className={`w-4 h-4 stroke-[2.5] ${isSelected ? 'text-white' : 'text-slate-600'}`} />
+              <Icon className={`w-4 h-4 stroke-[2.5] ${isSelected ? 'text-slate-950 stroke-[2.8]' : 'text-slate-600'}`} />
               <span>{cat}</span>
             </button>
           );
@@ -260,28 +260,29 @@ export const ExploreScreen: React.FC<{
                         {qty === 0 ? (
                           <button
                             onClick={() => addToCart(p, 1)}
-                            className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-extrabold text-xs rounded-xl border border-red-200/90 transition-all cursor-pointer"
+                            className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs min-[360px]:text-sm rounded-xl transition-all active:scale-90 shadow-md shadow-emerald-700/25 flex items-center gap-1 cursor-pointer border border-emerald-400/40"
                           >
-                            ADD
+                            <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                            <span>ADD</span>
                           </button>
                         ) : (
-                          <div className="flex items-center bg-red-600 text-white rounded-xl shadow-2xs overflow-hidden">
+                          <div className="flex items-center bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-xl shadow-md overflow-hidden border border-emerald-400/40">
                             <button
                               onClick={() => updateCartQuantity(p.id, qty - 1)}
-                              className="p-1.5 hover:bg-red-700 cursor-pointer"
+                              className="p-1.5 hover:bg-emerald-800 cursor-pointer"
                               aria-label="Decrease quantity"
                             >
-                              <Minus className="w-3.5 h-3.5" />
+                              <Minus className="w-3.5 h-3.5 stroke-[2.5]" />
                             </button>
                             <span className="px-2 text-xs font-black min-w-[20px] text-center">
                               {qty}
                             </span>
                             <button
                               onClick={() => updateCartQuantity(p.id, qty + 1)}
-                              className="p-1.5 hover:bg-red-700 cursor-pointer"
+                              className="p-1.5 hover:bg-emerald-800 cursor-pointer"
                               aria-label="Increase quantity"
                             >
-                              <Plus className="w-3.5 h-3.5" />
+                              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                             </button>
                           </div>
                         )}
@@ -360,9 +361,9 @@ export const ExploreScreen: React.FC<{
                       e.stopPropagation();
                       onSelectService(s);
                     }}
-                    className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs min-[360px]:text-sm font-black shadow-md active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                    className="mt-2 px-4 py-2 bg-gradient-to-r from-slate-950 via-slate-900 to-black hover:from-black hover:to-slate-900 text-amber-300 rounded-xl text-xs min-[360px]:text-sm font-black shadow-md active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer border border-amber-400/40"
                   >
-                    <Calendar className="w-3.5 h-3.5 stroke-[2.5]" />
+                    <Calendar className="w-3.5 h-3.5 text-amber-300 stroke-[2.5]" />
                     <span>Book</span>
                   </button>
                 </div>

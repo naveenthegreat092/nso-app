@@ -14,7 +14,8 @@
   }
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-    background-color: #f1f5f9;
+    background: #f8fafc;
+    background-image: radial-gradient(at 0% 0%, rgba(245, 158, 11, 0.03) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(225, 29, 72, 0.03) 0px, transparent 50%);
     margin: 0;
     padding: 0;
     -webkit-tap-highlight-color: transparent;
@@ -64,6 +65,40 @@
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  /* Ultra-Premium Luxury Gold & Obsidian Styles */
+  .gold-gradient {
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #d97706 100%);
+  }
+  .gold-gradient-soft {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  }
+  .gold-gradient-dark {
+    background: linear-gradient(135deg, #78350f 0%, #451a03 100%);
+  }
+  .gold-text-metallic {
+    background: linear-gradient(135deg, #fef08a 0%, #f59e0b 50%, #d97706 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .gold-border-glow {
+    border-color: rgba(245, 158, 11, 0.45);
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.12);
+  }
+  .obsidian-card {
+    background: linear-gradient(145deg, #0b0f19 0%, #020617 100%);
+    border: 1.5px solid rgba(245, 158, 11, 0.3);
+    box-shadow: 0 14px 34px -4px rgba(0, 0, 0, 0.45), 0 0 20px -2px rgba(245, 158, 11, 0.1);
+  }
+  .luxury-card {
+    background: #ffffff;
+    border: 1.5px solid rgba(226, 232, 240, 0.9);
+    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.04), 0 1px 3px 0 rgba(15, 23, 42, 0.02);
+  }
+  .luxury-card:hover {
+    border-color: rgba(245, 158, 11, 0.4);
+    box-shadow: 0 12px 28px -4px rgba(245, 158, 11, 0.1), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
   }
 }
 

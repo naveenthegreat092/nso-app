@@ -88,7 +88,7 @@ export const BrandHeader: React.FC<{
   const hasMultipleRoles = user.authorizedRoles.length > 1 || user.activeRole !== 'customer' || isOwner;
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-slate-200/70 shadow-[0_2px_12px_rgba(15,23,42,0.03)] px-4 pt-3 pb-3 space-y-2.5">
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-amber-200/60 shadow-[0_4px_24px_rgba(245,158,11,0.06)] px-4 pt-3 pb-3 space-y-2.5">
       {/* Top Bar: Brand Logo + Location + Actions */}
       <div className="flex items-center justify-between gap-1.5">
         {/* Left: Brand & Location */}
@@ -101,27 +101,27 @@ export const BrandHeader: React.FC<{
             <img
               src="/nso-app-icon.svg"
               alt="NSO Orbit"
-              className="w-8 h-8 min-[380px]:w-9 min-[380px]:h-9 rounded-xl shadow-xs object-contain"
+              className="w-8 h-8 min-[380px]:w-9 min-[380px]:h-9 rounded-xl shadow-xs object-contain ring-1 ring-amber-300/60"
             />
             <div className="hidden min-[360px]:block leading-none">
               <span className="font-black text-xs text-red-600 tracking-tight block">NSO</span>
-              <span className="text-[8px] font-black text-slate-800 tracking-widest uppercase block">Orbit</span>
+              <span className="text-[7.5px] font-black text-amber-900 bg-amber-100/90 px-1 py-0.5 rounded tracking-widest uppercase block border border-amber-300/50">Orbit</span>
             </div>
           </div>
 
           {/* Delivery Location Selector */}
           <button
             onClick={openAddressModal}
-            className="flex items-center gap-1.5 cursor-pointer bg-slate-100 hover:bg-slate-200 active:bg-slate-300 px-3 py-1.5 rounded-full border-2 border-slate-300 transition-all min-w-0 max-w-[140px] min-[360px]:max-w-[170px] sm:max-w-[210px]"
+            className="flex items-center gap-1.5 cursor-pointer bg-gradient-to-r from-amber-50/80 via-white to-amber-50/50 hover:bg-amber-100/60 active:bg-amber-100 px-3 py-1.5 rounded-full border-2 border-amber-300/80 transition-all min-w-0 max-w-[140px] min-[360px]:max-w-[170px] sm:max-w-[210px] shadow-xs"
             aria-label="Change delivery address"
           >
-            <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-              <MapPin className="w-3.5 h-3.5 text-red-600 stroke-[2.5]" />
+            <div className="w-5 h-5 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center flex-shrink-0 shadow-xs">
+              <MapPin className="w-3.5 h-3.5 text-slate-950 stroke-[2.8]" />
             </div>
             <span className="font-black text-xs text-slate-900 truncate">
               {selectedAddress.title || 'Add Address'}
             </span>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />
+            <ChevronDown className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
           </button>
         </div>
 
@@ -131,7 +131,7 @@ export const BrandHeader: React.FC<{
           {hasMultipleRoles && (
             <button
               onClick={() => setShowRoleModal(true)}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-red-100 to-rose-100 border-2 border-red-300 text-red-800 px-2.5 py-1 rounded-full text-xs font-black active:scale-95 transition-all shadow-xs"
+              className="flex items-center gap-1.5 bg-gradient-to-r from-amber-100 via-yellow-100 to-amber-100 border-2 border-amber-300 text-amber-950 px-2.5 py-1 rounded-full text-xs font-black active:scale-95 transition-all shadow-xs"
               aria-label="Switch role"
             >
               {user.activeRole === 'admin' ? (
@@ -139,12 +139,12 @@ export const BrandHeader: React.FC<{
               ) : user.activeRole === 'seller' ? (
                 <Store className="w-4 h-4 flex-shrink-0 text-emerald-600 stroke-[2.5]" />
               ) : user.activeRole === 'provider' ? (
-                <Wrench className="w-4 h-4 flex-shrink-0 text-amber-600 stroke-[2.5]" />
+                <Wrench className="w-4 h-4 flex-shrink-0 text-amber-700 stroke-[2.5]" />
               ) : (
                 <User className="w-4 h-4 flex-shrink-0 text-slate-700 stroke-[2.5]" />
               )}
               <span className="hidden min-[340px]:inline">{roleName}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-red-600" />
+              <ChevronDown className="w-3.5 h-3.5 text-amber-700" />
             </button>
           )}
 
@@ -161,22 +161,22 @@ export const BrandHeader: React.FC<{
           <button
             onClick={handleRefreshClick}
             disabled={isRefreshing}
-            className="p-2 text-slate-800 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors active:scale-95 cursor-pointer"
+            className="p-2 text-slate-800 hover:text-slate-900 hover:bg-amber-50/50 rounded-xl transition-colors active:scale-95 cursor-pointer"
             aria-label="Refresh App Data"
             title="Refresh App Data"
           >
-            <RefreshCw className={`w-5 h-5 text-slate-800 stroke-[2.2] ${isRefreshing ? 'animate-spin text-red-600' : ''}`} />
+            <RefreshCw className={`w-5 h-5 text-slate-800 stroke-[2.2] ${isRefreshing ? 'animate-spin text-amber-600' : ''}`} />
           </button>
 
           {/* Notifications Bell */}
           <button
             onClick={onOpenNotifications}
-            className="relative p-2 text-slate-800 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors active:scale-95 cursor-pointer"
+            className="relative p-2 text-slate-800 hover:text-slate-900 hover:bg-amber-50/50 rounded-xl transition-colors active:scale-95 cursor-pointer"
             aria-label="Notifications"
           >
             <Bell className="w-5 h-5 text-slate-800 stroke-[2.2]" />
             {unreadNotifications > 0 && (
-              <span className="absolute top-0.5 right-0.5 bg-red-600 text-white font-black text-xs w-4 h-4 rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+              <span className="absolute top-0.5 right-0.5 bg-gradient-to-r from-red-600 to-rose-600 text-white font-black text-xs w-4 h-4 rounded-full flex items-center justify-center border-2 border-amber-300 shadow-xs">
                 {unreadNotifications}
               </span>
             )}
@@ -185,12 +185,12 @@ export const BrandHeader: React.FC<{
           {/* Cart */}
           <button
             onClick={onOpenCart}
-            className="relative p-2 text-slate-800 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors active:scale-95 cursor-pointer"
+            className="relative p-2 text-slate-800 hover:text-amber-700 hover:bg-amber-50/50 rounded-xl transition-colors active:scale-95 cursor-pointer"
             aria-label="Shopping Cart"
           >
             <ShoppingBag className="w-5 h-5 text-slate-900 stroke-[2.4]" />
             {cartCount > 0 && (
-              <span className="absolute top-0.5 right-0.5 bg-red-600 text-white font-black text-xs min-w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-bounce-in px-0.5">
+              <span className="absolute top-0.5 right-0.5 bg-gradient-to-r from-red-600 to-rose-600 text-white font-black text-xs min-w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-amber-300 shadow-xs animate-bounce-in px-0.5">
                 {cartCount > 9 ? '9+' : cartCount}
               </span>
             )}
@@ -198,20 +198,20 @@ export const BrandHeader: React.FC<{
         </div>
       </div>
 
-      {/* Animated Search Bar */}
+      {/* Animated Search Bar with Gold Accents */}
       <button
         onClick={onOpenSearch || (() => setActiveTab('explore'))}
-        className="w-full flex items-center justify-between bg-slate-100 hover:bg-slate-200/90 active:bg-slate-200 px-4 py-3 rounded-2xl cursor-pointer text-slate-700 border-2 border-slate-300 transition-all group text-left shadow-xs"
+        className="w-full flex items-center justify-between bg-white hover:bg-amber-50/20 active:bg-amber-50/30 px-4 py-3 rounded-2xl cursor-pointer text-slate-700 border-2 border-amber-300/80 hover:border-amber-400 transition-all group text-left shadow-xs"
         aria-label="Search products and services"
       >
         <div className="flex items-center gap-3 min-w-0">
-          <Search className="w-5 h-5 text-slate-600 group-hover:text-red-600 transition-colors flex-shrink-0 stroke-[2.2]" />
+          <Search className="w-5 h-5 text-amber-600 group-hover:text-amber-700 transition-colors flex-shrink-0 stroke-[2.4]" />
           <span className="text-sm font-bold text-slate-800 group-hover:text-slate-950 truncate transition-all duration-500">
             {placeholders[placeholderIndex]}
           </span>
         </div>
-        <div className="w-8 h-8 rounded-xl bg-red-600 hover:bg-red-700 flex items-center justify-center flex-shrink-0 shadow-md shadow-red-500/30 transition-colors">
-          <Search className="w-4 h-4 text-white stroke-[2.5]" />
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-600 hover:to-amber-500 flex items-center justify-center flex-shrink-0 shadow-md shadow-amber-500/25 transition-all">
+          <Search className="w-4 h-4 text-slate-950 stroke-[2.8]" />
         </div>
       </button>
 

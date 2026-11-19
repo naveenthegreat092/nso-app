@@ -187,9 +187,9 @@ export const ProviderMapDiscoveryModal: React.FC<{
                 onClose();
                 onSelectService(matchingService);
               }}
-              className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-1.5 active:scale-98"
+              className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/25 flex items-center justify-center gap-1.5 active:scale-98 border border-amber-300"
             >
-              <Zap className="w-3.5 h-3.5 fill-white" />
+              <Zap className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
               <span>Book Slot (₹{matchingService.price})</span>
             </button>
           </div>

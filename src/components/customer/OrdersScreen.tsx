@@ -201,11 +201,11 @@ export const OrdersScreen: React.FC = () => {
         <p className="text-xs text-slate-600 font-bold">Track fulfillment status and review service progress</p>
 
         {/* Sub Tabs */}
-        <div className="flex bg-slate-200 p-1.5 rounded-2xl mt-3 border-2 border-slate-300 shadow-xs">
+        <div className="flex bg-slate-200/80 p-1.5 rounded-2xl mt-3 border-2 border-amber-200/80 shadow-xs">
           <button
             onClick={() => setSubTab('products')}
             className={`flex-1 py-2.5 text-xs min-[360px]:text-sm font-black rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
-              subTab === 'products' ? 'bg-white text-red-600 shadow-sm border border-slate-200' : 'text-slate-700 hover:text-slate-950'
+              subTab === 'products' ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-md font-black border border-amber-300' : 'text-slate-700 hover:text-slate-950'
             }`}
           >
             <Package className="w-5 h-5 stroke-[2.5]" />
@@ -214,7 +214,7 @@ export const OrdersScreen: React.FC = () => {
           <button
             onClick={() => setSubTab('services')}
             className={`flex-1 py-2.5 text-xs min-[360px]:text-sm font-black rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
-              subTab === 'services' ? 'bg-white text-red-600 shadow-sm border border-slate-200' : 'text-slate-700 hover:text-slate-950'
+              subTab === 'services' ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-md font-black border border-amber-300' : 'text-slate-700 hover:text-slate-950'
             }`}
           >
             <Wrench className="w-5 h-5 stroke-[2.5]" />

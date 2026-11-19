@@ -262,17 +262,17 @@ export const SmartSearchModal: React.FC<{
                           {/* Blinkit Add / Stepper */}
                           <div className="flex-shrink-0">
                             {inCart ? (
-                              <div className="flex items-center bg-red-600 text-white rounded-xl shadow-md overflow-hidden text-xs font-black">
+                              <div className="flex items-center bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-xl shadow-md overflow-hidden text-xs font-black border border-emerald-400/40">
                                 <button
                                   onClick={() => updateCartQuantity(product.id, inCart.quantity - 1)}
-                                  className="p-1 hover:bg-red-700"
+                                  className="p-1 hover:bg-emerald-800"
                                 >
                                   <Minus className="w-3 h-3 stroke-[3]" />
                                 </button>
                                 <span className="px-2">{inCart.quantity}</span>
                                 <button
                                   onClick={() => updateCartQuantity(product.id, inCart.quantity + 1)}
-                                  className="p-1 hover:bg-red-700"
+                                  className="p-1 hover:bg-emerald-800"
                                 >
                                   <Plus className="w-3 h-3 stroke-[3]" />
                                 </button>
@@ -280,7 +280,7 @@ export const SmartSearchModal: React.FC<{
                             ) : (
                               <button
                                 onClick={() => addToCart(product, 1)}
-                                className="px-3 py-1.5 bg-white border border-red-600 text-red-600 hover:bg-red-50 text-xs font-black rounded-xl shadow-sm transition-all"
+                                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white text-xs font-black rounded-xl shadow-md transition-all border border-emerald-400/40"
                               >
                                 ADD
                               </button>
@@ -326,7 +326,7 @@ export const SmartSearchModal: React.FC<{
                             </div>
                           </div>
                           <div className="text-right">
-                            <span className="text-xs font-black text-red-600 block">
+                            <span className="text-xs font-black text-amber-600 block">
                               ₹{service.price}
                             </span>
                             <span className="text-[10px] text-slate-400">/{service.unit}</span>
@@ -348,7 +348,7 @@ export const SmartSearchModal: React.FC<{
                               onClose();
                               onSelectService(service);
                             }}
-                            className="flex-1 py-1.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-md transition-all"
+                            className="flex-1 py-1.5 bg-gradient-to-r from-slate-950 via-slate-900 to-black hover:from-black hover:to-slate-900 text-amber-300 font-black text-xs rounded-xl shadow-md transition-all border border-amber-400/40"
                           >
                             Book Slot
                           </button>

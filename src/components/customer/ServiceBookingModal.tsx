@@ -250,7 +250,7 @@ export const ServiceBookingModal: React.FC<{
                   <div className="flex items-baseline gap-1.5">
                     {service.pricingType === 'hourly' ? (
                       <>
-                        <span className="text-xl font-black text-red-600">₹{service.hourlyRate || service.price}</span>
+                        <span className="text-xl font-black text-amber-600">₹{service.hourlyRate || service.price}</span>
                         <span className="text-xs text-slate-500 font-bold">/ hour</span>
                       </>
                     ) : service.pricingType === 'quotation_required' ? (
@@ -259,12 +259,12 @@ export const ServiceBookingModal: React.FC<{
                       </span>
                     ) : service.pricingType === 'metered' ? (
                       <>
-                        <span className="text-xl font-black text-red-600">₹{service.meteredRate || service.price}</span>
+                        <span className="text-xl font-black text-amber-600">₹{service.meteredRate || service.price}</span>
                         <span className="text-xs text-slate-500 font-bold">/ {service.unit}</span>
                       </>
                     ) : (
                       <>
-                        <span className="text-xl font-black text-red-600">₹{service.price}</span>
+                        <span className="text-xl font-black text-amber-600">₹{service.price}</span>
                         <span className="text-xs text-slate-500">/ {service.unit}</span>
                       </>
                     )}
@@ -367,7 +367,7 @@ export const ServiceBookingModal: React.FC<{
             {/* Date Selection */}
             <div className="space-y-2">
               <span className="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
-                <Calendar className="w-4 h-4 text-red-600 stroke-[2.5]" />
+                <Calendar className="w-4 h-4 text-amber-600 stroke-[2.5]" />
                 <span>Select Appointment Date</span>
               </span>
               <div className="grid grid-cols-3 gap-2">
@@ -378,8 +378,8 @@ export const ServiceBookingModal: React.FC<{
                     onClick={() => setSelectedDate(iso)}
                     className={`py-3 px-2 rounded-2xl text-xs min-[360px]:text-sm font-black border-2 transition-all ${
                       selectedDate === iso
-                        ? 'border-red-600 bg-red-600 text-white shadow-md'
-                        : 'border-slate-300 text-slate-800 hover:bg-slate-50'
+                        ? 'border-amber-400 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-md'
+                        : 'border-amber-200/80 text-slate-800 hover:bg-amber-50/50'
                     }`}
                   >
                     {label}
@@ -391,7 +391,7 @@ export const ServiceBookingModal: React.FC<{
             {/* Time Slot Picker */}
             <div className="space-y-2">
               <span className="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-red-600 stroke-[2.5]" />
+                <Clock className="w-4 h-4 text-amber-600 stroke-[2.5]" />
                 <span>Select Available Time Slot</span>
               </span>
               <div className="grid grid-cols-2 gap-2.5">
@@ -413,8 +413,8 @@ export const ServiceBookingModal: React.FC<{
                         hasSlotConflict
                           ? 'border-red-200 bg-red-50 text-red-400 cursor-not-allowed line-through'
                           : selectedSlot === slot
-                          ? 'border-red-600 bg-red-50 text-red-600 shadow-md ring-2 ring-red-200'
-                          : 'border-slate-300 text-slate-800 hover:bg-slate-50'
+                          ? 'border-amber-500 bg-amber-100/80 text-amber-950 shadow-md ring-2 ring-amber-300 font-black'
+                          : 'border-amber-200/80 text-slate-800 hover:bg-amber-50/50'
                       }`}
                     >
                       {slot}
@@ -523,15 +523,15 @@ export const ServiceBookingModal: React.FC<{
           </div>
         )}
 
-        {/* Footer with Explicit Approval CTA */}
+        {/* Footer with Explicit Approval CTA — Ultra-Premium Edition */}
         {!isConfirmed && (
           <div className="p-4 border-t border-slate-100 bg-white">
             <button
               disabled={isConflict || isSubmitting}
               onClick={handleBook}
-              className="w-full py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-black text-sm rounded-2xl shadow-xl shadow-red-500/25 transition-transform active:scale-[0.98] flex items-center justify-center gap-2"
+              className="w-full py-4 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-600 hover:to-amber-500 disabled:bg-slate-300 disabled:cursor-not-allowed text-slate-950 font-black text-sm rounded-2xl shadow-xl shadow-amber-500/25 transition-transform active:scale-[0.98] flex items-center justify-center gap-2 border border-amber-300 cursor-pointer"
             >
-              <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
+              <ShieldCheck className="w-5 h-5 stroke-[2.8]" />
               <span>
                 {isSubmitting
                   ? 'Reserving Slot…'

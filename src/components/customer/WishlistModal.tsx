@@ -99,10 +99,10 @@ export const WishlistModal: React.FC<{
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button
                     onClick={() => handleMoveToCart(product)}
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-black text-xs rounded-xl shadow-sm flex items-center gap-1 active:scale-95 transition-transform"
+                    className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-md shadow-amber-500/25 flex items-center gap-1 active:scale-95 transition-transform border border-amber-300"
                     title="Move to Cart"
                   >
-                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <ShoppingBag className="w-3.5 h-3.5 stroke-[2.5]" />
                     <span>Move</span>
                   </button>
                   <button

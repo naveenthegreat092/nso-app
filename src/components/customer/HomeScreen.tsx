@@ -60,81 +60,81 @@ export const HomeScreen: React.FC<{
       id: 'all',
       name: 'All Orbit',
       icon: Layers,
-      color: 'text-red-600',
-      bg: 'bg-red-50 text-red-600',
-      activeStyle: 'bg-red-600 text-white shadow-md shadow-red-500/25 border-red-600 ring-2 ring-red-500/20',
+      color: 'text-amber-800',
+      bg: 'bg-amber-50 text-amber-800',
+      activeStyle: 'bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-lg shadow-amber-500/30 border-amber-300 ring-2 ring-amber-400/40',
       matcher: () => true
     },
     {
       id: 'groceries',
       name: 'Groceries',
       icon: ShoppingBasket,
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-50 text-emerald-600',
-      activeStyle: 'bg-emerald-600 text-white shadow-md shadow-emerald-500/25 border-emerald-600 ring-2 ring-emerald-500/20',
+      color: 'text-emerald-700',
+      bg: 'bg-emerald-50 text-emerald-700',
+      activeStyle: 'bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-lg shadow-amber-500/30 border-amber-300 ring-2 ring-amber-400/40',
       matcher: (c: string) => /grocer/i.test(c)
     },
     {
       id: 'electronics',
       name: 'Electronics',
       icon: Headphones,
-      color: 'text-blue-600',
-      bg: 'bg-blue-50 text-blue-600',
-      activeStyle: 'bg-blue-600 text-white shadow-md shadow-blue-500/25 border-blue-600 ring-2 ring-blue-500/20',
+      color: 'text-blue-700',
+      bg: 'bg-blue-50 text-blue-700',
+      activeStyle: 'bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-lg shadow-amber-500/30 border-amber-300 ring-2 ring-amber-400/40',
       matcher: (c: string) => /electr/i.test(c)
     },
     {
       id: 'fashion',
       name: 'Fashion',
       icon: Shirt,
-      color: 'text-rose-600',
-      bg: 'bg-rose-50 text-rose-600',
-      activeStyle: 'bg-rose-600 text-white shadow-md shadow-rose-500/25 border-rose-600 ring-2 ring-rose-500/20',
+      color: 'text-rose-700',
+      bg: 'bg-rose-50 text-rose-700',
+      activeStyle: 'bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-lg shadow-amber-500/30 border-amber-300 ring-2 ring-amber-400/40',
       matcher: (c: string) => /fashion|cloth|wear/i.test(c)
     },
     {
       id: 'repairs',
       name: 'Repairs & AC',
       icon: Wrench,
-      color: 'text-cyan-600',
-      bg: 'bg-cyan-50 text-cyan-600',
-      activeStyle: 'bg-cyan-600 text-white shadow-md shadow-cyan-500/25 border-cyan-600 ring-2 ring-cyan-500/20',
+      color: 'text-teal-700',
+      bg: 'bg-teal-50 text-teal-700',
+      activeStyle: 'bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-lg shadow-amber-500/30 border-amber-300 ring-2 ring-amber-400/40',
       matcher: (c: string) => /repair|plumb|ac|paint/i.test(c)
     },
     {
       id: 'cleaning',
       name: 'Cleaning',
       icon: Sparkles,
-      color: 'text-purple-600',
-      bg: 'bg-purple-50 text-purple-600',
-      activeStyle: 'bg-purple-600 text-white shadow-md shadow-purple-500/25 border-purple-600 ring-2 ring-purple-500/20',
+      color: 'text-purple-700',
+      bg: 'bg-purple-50 text-purple-700',
+      activeStyle: 'bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-lg shadow-amber-500/30 border-amber-300 ring-2 ring-amber-400/40',
       matcher: (c: string) => /clean|care|maid/i.test(c)
     },
     {
       id: 'home',
       name: 'Kitchen',
       icon: Coffee,
-      color: 'text-amber-600',
-      bg: 'bg-amber-50 text-amber-600',
-      activeStyle: 'bg-amber-600 text-white shadow-md shadow-amber-500/25 border-amber-600 ring-2 ring-amber-500/20',
+      color: 'text-amber-700',
+      bg: 'bg-amber-50 text-amber-700',
+      activeStyle: 'bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-lg shadow-amber-500/30 border-amber-300 ring-2 ring-amber-400/40',
       matcher: (c: string) => /kitchen|home|living/i.test(c)
     },
     {
       id: 'salon',
       name: 'Salon & Spa',
       icon: Scissors,
-      color: 'text-pink-600',
-      bg: 'bg-pink-50 text-pink-600',
-      activeStyle: 'bg-pink-600 text-white shadow-md shadow-pink-500/25 border-pink-600 ring-2 ring-pink-500/20',
+      color: 'text-pink-700',
+      bg: 'bg-pink-50 text-pink-700',
+      activeStyle: 'bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-lg shadow-amber-500/30 border-amber-300 ring-2 ring-amber-400/40',
       matcher: (c: string) => /salon|wellness|groom|spa/i.test(c)
     },
     {
       id: 'movers',
       name: 'Delivery',
       icon: Package,
-      color: 'text-indigo-600',
-      bg: 'bg-indigo-50 text-indigo-600',
-      activeStyle: 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25 border-indigo-600 ring-2 ring-indigo-500/20',
+      color: 'text-indigo-700',
+      bg: 'bg-indigo-50 text-indigo-700',
+      activeStyle: 'bg-gradient-to-br from-amber-500 via-amber-400 to-yellow-500 text-slate-950 shadow-lg shadow-amber-500/30 border-amber-300 ring-2 ring-amber-400/40',
       matcher: (c: string) => /mov|courier|deliver/i.test(c)
     }
   ];
@@ -153,46 +153,46 @@ export const HomeScreen: React.FC<{
 
   return (
     <div className="space-y-6 pb-24 px-4 pt-3 animate-fade-in-up">
-      {/* 1. Hero Showcase Banner */}
-      <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-red-600 via-rose-600 to-red-700 text-white p-6 shadow-xl shadow-red-500/20 border border-white/10">
+      {/* 1. Hero Showcase Banner — Ultra-Premium Edition */}
+      <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/80 text-white p-6 shadow-2xl shadow-slate-950/25 border-2 border-amber-400/40">
         <div className="relative z-10 space-y-3.5 max-w-[85%]">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-[11px] font-black uppercase tracking-wider text-amber-200 border border-white/15">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-400/15 backdrop-blur-md rounded-full text-xs font-black uppercase tracking-wider text-amber-300 border border-amber-400/30">
             <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
             <span>Fast Regional Delivery</span>
           </span>
 
           <h2 className="text-[22px] font-black tracking-tight leading-snug">
             Everything You Need,{' '}
-            <span className="text-amber-200">Delivered to Your Door.</span>
+            <span className="gold-text-metallic">Delivered with Prestige.</span>
           </h2>
 
-          <p className="text-xs text-white/90 font-medium leading-relaxed">
-            Authentic retail shopping & verified doorstep technicians in one unified app.
+          <p className="text-xs text-amber-100/90 font-medium leading-relaxed">
+            Authentic retail shopping &amp; verified doorstep technicians in one unified luxury app.
           </p>
 
           <div className="pt-1 flex items-center gap-2.5">
             <button
               onClick={() => setActiveTab('explore')}
-              className="px-4 py-2.5 bg-white text-red-600 font-extrabold text-xs rounded-xl shadow-md hover:bg-slate-50 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/25 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer border border-amber-300"
             >
-              <ShoppingBag className="w-3.5 h-3.5" />
+              <ShoppingBag className="w-3.5 h-3.5 stroke-[2.5]" />
               <span>Shop Products</span>
             </button>
             <button
               onClick={() => setActiveTab('explore')}
-              className="px-4 py-2.5 bg-black/25 hover:bg-black/35 backdrop-blur-md text-white font-bold text-xs rounded-xl border border-white/25 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md text-amber-200 font-black text-xs rounded-xl border border-amber-400/40 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
             >
-              <Wrench className="w-3.5 h-3.5" />
+              <Wrench className="w-3.5 h-3.5 text-amber-300 stroke-[2.5]" />
               <span>Book Services</span>
             </button>
           </div>
         </div>
 
         {/* Ambient background decoration */}
-        <div className="absolute -right-4 -bottom-6 text-9xl opacity-15 pointer-events-none select-none">
+        <div className="absolute -right-4 -bottom-6 text-9xl opacity-10 pointer-events-none select-none">
           🛍️
         </div>
-        <div className="absolute top-0 right-0 w-36 h-36 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-36 h-36 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
       </div>
 
       {/* 2. Category Navigation Rail */}
@@ -203,7 +203,7 @@ export const HomeScreen: React.FC<{
             {selectedCategory !== 'all' && (
               <button
                 onClick={() => setSelectedCategory('all')}
-                className="text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2.5 py-0.5 rounded-full flex items-center gap-1 transition-colors active:scale-95 cursor-pointer border border-red-100"
+                className="text-[11px] font-black text-amber-900 bg-amber-100 hover:bg-amber-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 transition-colors active:scale-95 cursor-pointer border border-amber-300"
               >
                 <span>Reset</span>
                 <X className="w-3 h-3" />
@@ -212,7 +212,7 @@ export const HomeScreen: React.FC<{
           </div>
           <button
             onClick={() => setActiveTab('explore')}
-            className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-0.5 active:scale-95 transition-all cursor-pointer"
+            className="text-xs font-black text-amber-800 hover:text-amber-900 flex items-center gap-0.5 active:scale-95 transition-all cursor-pointer"
           >
             <span>All Categories</span>
             <ChevronRight className="w-4 h-4" />
@@ -235,14 +235,14 @@ export const HomeScreen: React.FC<{
                   className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all border-2 ${
                     isSelected
                       ? cat.activeStyle
-                      : `${cat.bg} border-slate-300 shadow-xs group-hover:scale-105 group-hover:shadow-md`
+                      : `${cat.bg} border-amber-200/70 shadow-xs group-hover:scale-105 group-hover:border-amber-400 group-hover:shadow-md`
                   }`}
                 >
-                  <Icon className={`w-8 h-8 ${isSelected ? 'text-white stroke-[2.5]' : cat.color}`} />
+                  <Icon className={`w-8 h-8 ${isSelected ? 'text-slate-950 stroke-[2.8]' : cat.color}`} />
                 </div>
                 <span
                   className={`text-xs text-center leading-tight transition-colors ${
-                    isSelected ? 'font-black text-slate-950 scale-105' : 'font-extrabold text-slate-800 group-hover:text-slate-950'
+                    isSelected ? 'font-black text-amber-950 scale-105' : 'font-extrabold text-slate-800 group-hover:text-amber-900'
                   }`}
                 >
                   {cat.name}
@@ -258,20 +258,20 @@ export const HomeScreen: React.FC<{
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-black text-base min-[360px]:text-lg text-slate-950 tracking-tight flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-red-600 stroke-[2.5]" />
+              <TrendingUp className="w-5 h-5 text-amber-600 stroke-[2.5]" />
               <span>Marketplace Products</span>
               {selectedCategory !== 'all' && (
-                <span className="text-xs font-black bg-slate-200 text-slate-800 px-2.5 py-0.5 rounded-full font-mono">
+                <span className="text-xs font-black bg-amber-100 text-amber-950 border border-amber-300 px-2.5 py-0.5 rounded-full font-mono">
                   {displayedProducts.length}
                 </span>
               )}
             </h3>
-            <p className="text-xs text-slate-600 font-bold mt-0.5">Verified local merchants & authentic brands</p>
+            <p className="text-xs text-slate-600 font-bold mt-0.5">Verified local merchants &amp; authentic luxury brands</p>
           </div>
           {approvedProducts.length > 0 && (
             <button
               onClick={() => setActiveTab('explore')}
-              className="text-xs font-black text-red-600 hover:text-red-700 active:scale-95 transition-all cursor-pointer bg-red-50 px-2.5 py-1 rounded-lg border border-red-200"
+              className="text-xs font-black text-amber-900 hover:text-amber-950 active:scale-95 transition-all cursor-pointer bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-300"
             >
               See All
             </button>
@@ -281,7 +281,7 @@ export const HomeScreen: React.FC<{
         {displayedProducts.length === 0 ? (
           /* Clean Empty Store Welcome State */
           <div className="bg-white rounded-3xl border border-slate-200/70 p-7 text-center shadow-card space-y-3">
-            <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center mx-auto border border-slate-100">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
               <Store className="w-7 h-7" />
             </div>
             <div className="space-y-1">
@@ -297,22 +297,22 @@ export const HomeScreen: React.FC<{
             {selectedCategory !== 'all' ? (
               <button
                 onClick={() => setSelectedCategory('all')}
-                className="px-5 py-2.5 bg-red-600 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
+                className="px-5 py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 font-black text-xs rounded-xl shadow-md border border-amber-300 transition-all active:scale-95 cursor-pointer"
               >
                 Show All Categories
               </button>
             ) : user.activeRole === 'admin' || user.adminVerified ? (
               <button
                 onClick={() => switchRole('admin')}
-                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95 inline-flex items-center gap-2 cursor-pointer"
+                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95 inline-flex items-center gap-2 cursor-pointer border border-amber-400/30"
               >
-                <ShieldCheck className="w-4 h-4 text-purple-400" />
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
                 <span>Add First Product in Admin</span>
               </button>
             ) : (
               <button
                 onClick={() => setActiveTab('explore')}
-                className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-95 inline-flex items-center gap-2 cursor-pointer"
+                className="px-5 py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 font-black text-xs rounded-xl shadow-md border border-amber-300 transition-all active:scale-95 inline-flex items-center gap-2 cursor-pointer"
               >
                 <Compass className="w-4 h-4" />
                 <span>Explore Services Instead</span>
@@ -328,7 +328,7 @@ export const HomeScreen: React.FC<{
                 <div
                   key={product.id}
                   onClick={() => onSelectProduct(product)}
-                  className="bg-white rounded-3xl border border-slate-200/75 overflow-hidden shadow-card hover:shadow-card-hover transition-all flex flex-col cursor-pointer active:scale-[0.98] group"
+                  className="bg-white rounded-3xl border-2 border-slate-200/90 hover:border-amber-400/80 overflow-hidden shadow-card hover:shadow-card-hover transition-all flex flex-col cursor-pointer active:scale-[0.98] group"
                 >
                   {/* Product Image Container */}
                   <div className="relative aspect-square bg-slate-50/90 p-3.5 flex items-center justify-center overflow-hidden">
@@ -340,7 +340,7 @@ export const HomeScreen: React.FC<{
 
                     {/* Discount badge */}
                     {product.discountPercentage > 0 && (
-                      <span className="absolute top-2.5 left-2.5 bg-red-600 text-white font-black text-[10px] px-2 py-0.5 rounded-full shadow-xs tracking-wider">
+                      <span className="absolute top-2.5 left-2.5 bg-gradient-to-r from-red-600 to-rose-600 text-white font-black text-xs px-2.5 py-0.5 rounded-full shadow-xs tracking-wider border border-amber-300/60">
                         {product.discountPercentage}% OFF
                       </span>
                     )}
@@ -351,7 +351,7 @@ export const HomeScreen: React.FC<{
                         e.stopPropagation();
                         toggleWishlist(product);
                       }}
-                      className="absolute top-2.5 right-2.5 w-8 h-8 bg-white/90 hover:bg-white backdrop-blur-md rounded-full flex items-center justify-center shadow-xs active:scale-90 transition-transform border border-slate-200/60 cursor-pointer"
+                      className="absolute top-2.5 right-2.5 w-8 h-8 bg-white/90 hover:bg-white backdrop-blur-md rounded-full flex items-center justify-center shadow-xs active:scale-90 transition-transform border border-amber-200/70 hover:border-amber-400 cursor-pointer"
                       aria-label="Wishlist toggle"
                     >
                       <Heart
@@ -367,8 +367,8 @@ export const HomeScreen: React.FC<{
                   {/* Product Details */}
                   <div className="p-3.5 flex-1 flex flex-col justify-between space-y-2.5">
                     <div>
-                      <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-700">
-                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-800">
+                        <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
                         <span>{product.rating}</span>
                         <span className="text-slate-400 font-semibold text-[11px]">({product.reviewsCount})</span>
                       </div>
@@ -395,16 +395,16 @@ export const HomeScreen: React.FC<{
                         {qty === 0 ? (
                           <button
                             onClick={() => addToCart(product, 1)}
-                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs min-[360px]:text-sm rounded-xl transition-all active:scale-90 shadow-md flex items-center gap-1 cursor-pointer"
+                            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-black text-xs min-[360px]:text-sm rounded-xl transition-all active:scale-90 shadow-md shadow-emerald-700/25 flex items-center gap-1 cursor-pointer border border-emerald-400/40"
                           >
                             <Plus className="w-3.5 h-3.5 stroke-[3]" />
                             <span>ADD</span>
                           </button>
                         ) : (
-                          <div className="flex items-center bg-emerald-600 text-white rounded-xl shadow-md overflow-hidden">
+                          <div className="flex items-center bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-xl shadow-md overflow-hidden border border-emerald-400/40">
                             <button
                               onClick={() => updateCartQuantity(product.id, qty - 1)}
-                              className="p-2 hover:bg-emerald-700 active:bg-emerald-800 transition-colors cursor-pointer"
+                              className="p-2 hover:bg-emerald-800 active:bg-emerald-900 transition-colors cursor-pointer"
                               aria-label="Decrease quantity"
                             >
                               <Minus className="w-4 h-4 stroke-[2.5]" />
@@ -414,7 +414,7 @@ export const HomeScreen: React.FC<{
                             </span>
                             <button
                               onClick={() => updateCartQuantity(product.id, qty + 1)}
-                              className="p-2 hover:bg-emerald-700 active:bg-emerald-800 transition-colors cursor-pointer"
+                              className="p-2 hover:bg-emerald-800 active:bg-emerald-900 transition-colors cursor-pointer"
                               aria-label="Increase quantity"
                             >
                               <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -435,18 +435,18 @@ export const HomeScreen: React.FC<{
       <div className="space-y-3.5">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-extrabold text-[15px] text-slate-900 tracking-tight flex items-center gap-2">
-              <Wrench className="w-4 h-4 text-amber-600" />
+            <h3 className="font-black text-base min-[360px]:text-lg text-slate-950 tracking-tight flex items-center gap-2">
+              <Wrench className="w-5 h-5 text-amber-600 stroke-[2.5]" />
               <span>Doorstep Services</span>
             </h3>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">Verified local specialists & certified technicians</p>
+            <p className="text-xs text-slate-600 font-bold mt-0.5">Verified local specialists &amp; certified technicians</p>
           </div>
           {onOpenMapRadius && (
             <button
               onClick={onOpenMapRadius}
-              className="px-3 py-1 bg-red-50 text-red-700 hover:bg-red-100 rounded-full text-xs font-extrabold flex items-center gap-1.5 transition-colors active:scale-95 border border-red-200/70 cursor-pointer"
+              className="px-3.5 py-1.5 bg-gradient-to-r from-amber-50 to-yellow-50 text-amber-950 hover:bg-amber-100 rounded-full text-xs font-black flex items-center gap-1.5 transition-colors active:scale-95 border border-amber-300 cursor-pointer shadow-xs"
             >
-              <Compass className="w-3.5 h-3.5 text-red-600" />
+              <Compass className="w-4 h-4 text-amber-700 stroke-[2.5]" />
               <span>Nearby Map</span>
             </button>
           )}
@@ -470,7 +470,7 @@ export const HomeScreen: React.FC<{
               <div
                 key={service.id}
                 onClick={() => onSelectService(service)}
-                className="bg-white rounded-3xl border-2 border-slate-200 p-4 shadow-card hover:shadow-card-hover transition-all cursor-pointer flex items-center justify-between gap-3 active:scale-[0.98]"
+                className="bg-white rounded-3xl border-2 border-slate-200/90 hover:border-amber-400/80 p-4 shadow-card hover:shadow-card-hover transition-all cursor-pointer flex items-center justify-between gap-3 active:scale-[0.98]"
               >
                 <div className="flex-1 space-y-2 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -506,9 +506,9 @@ export const HomeScreen: React.FC<{
                       e.stopPropagation();
                       onSelectService(service);
                     }}
-                    className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-black shadow-md active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-2.5 bg-gradient-to-r from-slate-950 via-slate-900 to-black hover:from-black hover:to-slate-900 text-amber-300 rounded-xl text-sm font-black shadow-md shadow-slate-950/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer border border-amber-400/40"
                   >
-                    <Calendar className="w-4 h-4 stroke-[2.5]" />
+                    <Calendar className="w-4 h-4 text-amber-300 stroke-[2.5]" />
                     <span>Book Now</span>
                   </button>
                 </div>
@@ -518,7 +518,7 @@ export const HomeScreen: React.FC<{
         )}
       </div>
 
-      {/* 5. Verified Service Specialists Directory */}
+      {/* 5. Verified Service Specialists Directory — VIP Gold Edition */}
       <div className="space-y-3.5 pt-1">
         <div className="flex items-center justify-between">
           <div>
@@ -526,11 +526,11 @@ export const HomeScreen: React.FC<{
               <ShieldCheck className="w-5 h-5 text-emerald-600 stroke-[2.5]" />
               <span>Verified Service Specialists</span>
             </h3>
-            <p className="text-xs text-slate-600 font-bold mt-0.5">Approved &amp; active trade professionals</p>
+            <p className="text-xs text-slate-600 font-bold mt-0.5">Master technicians &amp; verified specialists</p>
           </div>
           <button
             onClick={() => setActiveTab('explore')}
-            className="text-xs font-black text-red-600 hover:text-red-700 flex items-center gap-0.5 cursor-pointer bg-red-50 px-2.5 py-1 rounded-lg border border-red-200"
+            className="text-xs font-black text-amber-900 hover:text-amber-950 flex items-center gap-0.5 cursor-pointer bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-300 transition-colors"
           >
             <span>All Providers</span>
             <ChevronRight className="w-4 h-4" />
@@ -597,14 +597,14 @@ export const HomeScreen: React.FC<{
               return (
                 <div
                   key={prov.id}
-                  className="bg-white rounded-3xl border-2 border-slate-200/90 p-4 shadow-card hover:shadow-card-hover transition-all space-y-3.5"
+                  className="bg-gradient-to-b from-white via-white to-amber-50/25 rounded-3xl border-2 border-amber-300/80 hover:border-amber-400 p-4 shadow-card hover:shadow-card-hover transition-all space-y-3.5"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3.5 min-w-0">
                       <img
                         src={prov.avatar}
                         alt={prov.name}
-                        className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-200 shadow-xs flex-shrink-0"
+                        className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-300 shadow-xs flex-shrink-0"
                       />
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -613,11 +613,11 @@ export const HomeScreen: React.FC<{
                             ID: {prov.issuedProviderId || prov.id}
                           </span>
                         </div>
-                        <p className="text-xs font-black text-blue-900 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md truncate mt-1 inline-block">
+                        <p className="text-xs font-black text-amber-950 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md truncate mt-1 inline-block">
                           {prov.tradeTitle || prov.tradeCategory || 'Trade Specialist'}
                         </p>
                         <div className="flex items-center gap-2 mt-1.5 text-xs">
-                          <span className="inline-flex items-center gap-1.5 text-emerald-900 font-black bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300">
+                          <span className="inline-flex items-center gap-1.5 text-emerald-950 font-black bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                             Available Today
                           </span>
@@ -633,11 +633,11 @@ export const HomeScreen: React.FC<{
                   </div>
 
                   {/* Actions: View Profile & Book Directly */}
-                  <div className="grid grid-cols-2 gap-2.5 pt-2 border-t-2 border-slate-100">
+                  <div className="grid grid-cols-2 gap-2.5 pt-2 border-t-2 border-amber-100">
                     <button
                       type="button"
                       onClick={() => openProviderProfile(prov.issuedProviderId || prov.id)}
-                      className="py-3 px-3 rounded-2xl border-2 border-slate-300 hover:bg-slate-100 active:bg-slate-200 text-slate-900 font-black text-xs min-[360px]:text-sm transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+                      className="py-3 px-3 rounded-2xl border-2 border-slate-300 hover:border-amber-300 hover:bg-amber-50/50 active:bg-amber-100 text-slate-900 font-black text-xs min-[360px]:text-sm transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                     >
                       <User className="w-4 h-4 text-slate-700 stroke-[2.5]" />
                       <span>View Profile</span>
@@ -645,9 +645,9 @@ export const HomeScreen: React.FC<{
                     <button
                       type="button"
                       onClick={() => onSelectService(directService)}
-                      className="py-3 px-3 rounded-2xl bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black text-xs min-[360px]:text-sm shadow-md shadow-red-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      className="py-3 px-3 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-600 hover:to-amber-500 active:scale-95 text-slate-950 font-black text-xs min-[360px]:text-sm shadow-md shadow-amber-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer border border-amber-300"
                     >
-                      <Calendar className="w-4 h-4 stroke-[2.5]" />
+                      <Calendar className="w-4 h-4 text-slate-950 stroke-[2.8]" />
                       <span>Book Direct</span>
                     </button>
                   </div>
@@ -658,20 +658,20 @@ export const HomeScreen: React.FC<{
         )}
       </div>
 
-      {/* 6. Special Custom Work Banner */}
-      <div className="rounded-[28px] bg-gradient-to-br from-amber-50 via-orange-50/50 to-amber-50 border border-amber-200/70 p-5 space-y-2.5 shadow-2xs">
-        <span className="text-[11px] uppercase font-black tracking-wider text-amber-900 bg-amber-200/60 px-2.5 py-0.5 rounded-full inline-block border border-amber-300/40">
-          Custom Task Requests
+      {/* 6. Special Custom Work Banner — Royal Concierge */}
+      <div className="rounded-[28px] bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950 text-white border-2 border-amber-400/40 p-5 space-y-2.5 shadow-xl shadow-slate-950/25">
+        <span className="text-[11px] uppercase font-black tracking-wider text-slate-950 bg-gradient-to-r from-amber-400 to-yellow-400 px-2.5 py-0.5 rounded-full inline-block shadow-xs">
+          Custom Task Concierge
         </span>
-        <h4 className="text-sm font-extrabold text-slate-900">
-          Need custom work or a non-standard project?
+        <h4 className="text-sm font-black text-white">
+          Need custom work or an exclusive project?
         </h4>
-        <p className="text-xs text-slate-600 leading-relaxed font-medium">
-          Submit your specs directly for verified contractor quotations from our admin team.
+        <p className="text-xs text-amber-100/90 leading-relaxed font-medium">
+          Submit your requirements directly for verified master contractor quotations from our leadership team.
         </p>
         <button
           onClick={onOpenSpecialRequest}
-          className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all active:scale-[0.98] cursor-pointer"
+          className="w-full py-3 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black text-xs min-[360px]:text-sm rounded-xl shadow-lg shadow-amber-500/30 transition-all active:scale-[0.98] cursor-pointer border border-amber-300"
         >
           Submit Custom Work Request
         </button>

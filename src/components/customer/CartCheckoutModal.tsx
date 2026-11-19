@@ -381,17 +381,17 @@ export const CartCheckoutModal: React.FC<{
                       </div>
 
                       {/* Stepper */}
-                      <div className="flex items-center bg-red-600 text-white rounded-xl shadow-md overflow-hidden text-xs font-black">
+                      <div className="flex items-center bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-xl shadow-md overflow-hidden text-xs font-black border border-emerald-400/40">
                         <button
                           onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
-                          className="p-1.5 hover:bg-red-700 active:scale-90"
+                          className="p-1.5 hover:bg-emerald-800 active:scale-90"
                         >
                           <Minus className="w-3 h-3 stroke-[3]" />
                         </button>
                         <span className="px-2">{item.quantity}</span>
                         <button
                           onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
-                          className="p-1.5 hover:bg-red-700 active:scale-90"
+                          className="p-1.5 hover:bg-emerald-800 active:scale-90"
                         >
                           <Plus className="w-3 h-3 stroke-[3]" />
                         </button>
@@ -695,23 +695,23 @@ export const CartCheckoutModal: React.FC<{
               </div>
               <div className="pt-2 border-t border-slate-200 flex justify-between text-sm font-black text-slate-950">
                 <span>Grand Total To Pay:</span>
-                <span className="text-red-600 font-black text-base">₹{fullTotal.toLocaleString('en-IN')}</span>
+                <span className="text-amber-600 font-black text-lg">₹{fullTotal.toLocaleString('en-IN')}</span>
               </div>
             </div>
 
-            {/* Customer Approval CTA */}
+            {/* Customer Approval CTA — Ultra-Premium Edition */}
             <div className="pt-1">
               <button
                 disabled={isProcessing}
                 onClick={handleConfirmOrder}
-                className="w-full py-3.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white font-black text-sm rounded-2xl shadow-xl shadow-red-500/25 transition-transform active:scale-98 flex items-center justify-center gap-2"
+                className="w-full py-4 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-600 hover:to-amber-500 disabled:bg-slate-300 text-slate-950 font-black text-sm rounded-2xl shadow-xl shadow-amber-500/25 transition-transform active:scale-98 flex items-center justify-center gap-2 border border-amber-300 cursor-pointer"
               >
                 {isProcessing ? (
                   <span>Processing Payment Confirmation...</span>
                 ) : (
                   <>
-                    <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
-                    <span>Authorize & Pay ₹{fullTotal.toLocaleString('en-IN')}</span>
+                    <ShieldCheck className="w-5 h-5 stroke-[2.8]" />
+                    <span>Authorize &amp; Pay ₹{fullTotal.toLocaleString('en-IN')}</span>
                   </>
                 )}
               </button>

@@ -279,9 +279,9 @@ export const SpecialRequestModal: React.FC<{
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full py-3 bg-amber-600 hover:bg-amber-700 active:scale-98 disabled:opacity-60 text-white font-extrabold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-600 hover:to-amber-500 active:scale-98 disabled:opacity-60 text-slate-950 font-black text-xs rounded-xl shadow-lg shadow-amber-500/25 transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-amber-300"
               >
-                <Send className="w-3.5 h-3.5" />
+                <Send className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
                 <span>{isSubmitting ? 'Submitting to Admin...' : 'Submit to Admin for Review'}</span>
               </button>
             </form>

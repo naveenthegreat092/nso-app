@@ -141,16 +141,16 @@ export const AccountScreen: React.FC<{
 
   return (
     <div className="space-y-4 pb-28 px-4 pt-3 animate-fade-in-up">
-      {/* 1. Clean User Profile Card with Account ID */}
-      <div className="bg-white rounded-3xl p-5 border border-slate-200/75 shadow-card flex items-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-red-600 to-rose-600 text-white font-black text-xl flex items-center justify-center shadow-md shadow-red-500/25 flex-shrink-0">
+      {/* 1. Ultra-Premium User Profile Card with Account ID */}
+      <div className="bg-gradient-to-b from-white to-amber-50/20 rounded-3xl p-5 border-2 border-amber-200/80 shadow-card flex items-center gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 via-amber-400 to-yellow-500 text-slate-950 font-black text-xl flex items-center justify-center shadow-lg shadow-amber-500/25 flex-shrink-0 border-2 border-amber-300">
           {user.name.charAt(0)}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-extrabold text-base text-slate-900 truncate">{user.name}</h3>
             {user.accountId && (
-              <span className="text-[10px] bg-slate-100 text-slate-700 font-mono font-bold px-2 py-0.5 rounded-md border border-slate-200">
+              <span className="text-[10px] bg-amber-100/90 text-amber-950 font-mono font-bold px-2 py-0.5 rounded-md border border-amber-300">
                 {user.accountId}
               </span>
             )}
