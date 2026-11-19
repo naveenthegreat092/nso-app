@@ -22,6 +22,8 @@ interface AdminMfaModalProps {
 
 export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { user, showToast, unlockAdmin } = useApp();
+  const cleanUserPhone = (user.phone || '').replace(/\D/g, '').slice(-10);
+  const isAuthorizedOwner = cleanUserPhone === '8310421121';
 
   // Steps: 'password' -> 'biometric' -> 'success'
   const [currentStep, setCurrentStep] = useState<'password' | 'biometric' | 'success'>('password');
@@ -40,6 +42,11 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
   const [step2Error, setStep2Error] = useState<string | null>(null);
 
   useEffect(() => {
+    if (isOpen && !isAuthorizedOwner) {
+      showToast('Admin Console is reserved exclusively for the authorized owner number.');
+      onClose();
+      return;
+    }
     if (isOpen) {
       setCurrentStep('password');
       setAdminPassword('');

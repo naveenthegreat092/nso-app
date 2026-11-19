@@ -587,6 +587,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const unlockAdmin = (adminUser?: Partial<UserProfile>) => {
+    const cleanUserPhone = (user.phone || '').replace(/\D/g, '').slice(-10);
+    if (cleanUserPhone !== '8310421121') {
+      showToast('Admin access denied: Unauthorized phone number.');
+      return;
+    }
     localStorage.setItem('nso_active_role', 'admin');
     localStorage.setItem('nso_admin_phone', '8310421121');
     setUser((prev) => ({
@@ -606,12 +611,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const switchRole = (newRole: Role): boolean => {
     const cleanUserPhone = (user.phone || '').replace(/\D/g, '').slice(-10);
-    const isOwner =
-      Boolean(user.adminVerified) ||
-      Boolean(user.isAdmin) ||
-      user.authorizedRoles.includes('admin') ||
-      cleanUserPhone === '8310421121' ||
-      localStorage.getItem('nso_admin_phone') === '8310421121';
+    const isOwner = cleanUserPhone === '8310421121';
 
     if (newRole === 'admin') {
       if (isOwner) {
@@ -674,13 +674,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (serverUser.phone) {
           localStorage.setItem('nso_user_phone', serverUser.phone.replace(/\D/g, '').slice(-10));
         }
-        // Preserve admin verification if session is active or verified
-        const isAdminVerified = Boolean(serverUser.adminVerified) || (localStorage.getItem('nso_active_role') === 'admin' && Boolean(serverUser.isAdmin));
+        const cleanUserPhone = (serverUser.phone || clean || '').replace(/\D/g, '').slice(-10);
+        const isOwner = cleanUserPhone === '8310421121';
+
+        // Purge admin storage if a non-owner number logs in
+        if (!isOwner) {
+          localStorage.removeItem('nso_admin_phone');
+          if (localStorage.getItem('nso_active_role') === 'admin') {
+            localStorage.setItem('nso_active_role', 'customer');
+          }
+        }
+
+        const isAdminVerified = isOwner && Boolean(serverUser.adminVerified);
         const savedActiveRole = (localStorage.getItem('nso_active_role') as Role) || undefined;
+        const activeRole = (isOwner && isAdminVerified)
+          ? 'admin'
+          : (savedActiveRole && serverUser.authorizedRoles?.includes(savedActiveRole) && savedActiveRole !== 'admin'
+            ? savedActiveRole
+            : 'customer');
+
+        const safeAuthorizedRoles = isOwner
+          ? (serverUser.authorizedRoles || ['customer', 'admin', 'seller', 'provider'])
+          : (serverUser.authorizedRoles || ['customer']).filter((r) => r !== 'admin');
+
         const authUser: UserProfile = {
           ...serverUser,
+          isAdmin: isOwner,
           adminVerified: isAdminVerified,
-          activeRole: isAdminVerified ? 'admin' : (savedActiveRole && serverUser.authorizedRoles?.includes(savedActiveRole) && savedActiveRole !== 'admin' ? savedActiveRole : 'customer'),
+          activeRole,
+          authorizedRoles: safeAuthorizedRoles,
           isLoggedIn: true
         };
         setUser(authUser);

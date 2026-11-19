@@ -47,6 +47,9 @@ export const AccountScreen: React.FC<{
     showToast
   } = useApp();
 
+  const cleanUserPhone = (user.phone || '').replace(/\D/g, '').slice(-10);
+  const isAuthorizedAdminPhone = cleanUserPhone === '8310421121';
+
   const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
   const [appModalType, setAppModalType] = useState<'provider' | 'seller' | null>(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -342,7 +345,7 @@ export const AccountScreen: React.FC<{
             <ChevronRight className="w-4 h-4 text-slate-400" />
           </div>
 
-          {(user.activeRole === 'admin' || user.isAdmin || user.adminVerified) && (
+          {Boolean(isAuthorizedAdminPhone && (user.activeRole === 'admin' || user.isAdmin || user.adminVerified)) && (
             <div
               onClick={handleEnrollBiometrics}
               className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
@@ -381,7 +384,7 @@ export const AccountScreen: React.FC<{
       </div>
 
       {/* 5. Store Owner & Superadmin Portal (Discrete, Protected Gateway - Only accessible to authorized admin phone) */}
-      {Boolean(user.isLoggedIn) && (
+      {Boolean(user.isLoggedIn && isAuthorizedAdminPhone) && (
         <div className="space-y-2.5 pt-2">
           <div className="flex items-center justify-between px-1">
             <h4 className="font-black text-xs text-slate-900 uppercase tracking-wider">
@@ -487,14 +490,16 @@ export const AccountScreen: React.FC<{
           onClose={() => setAppModalType(null)}
         />
       )}
-      <AdminMfaModal
-        isOpen={showAdminMfa}
-        onClose={() => setShowAdminMfa(false)}
-        onSuccess={() => {
-          setShowAdminMfa(false);
-          unlockAdmin();
-        }}
-      />
+      {isAuthorizedAdminPhone && (
+        <AdminMfaModal
+          isOpen={showAdminMfa}
+          onClose={() => setShowAdminMfa(false)}
+          onSuccess={() => {
+            setShowAdminMfa(false);
+            unlockAdmin();
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -84,7 +84,8 @@ export const BrandHeader: React.FC<{
       : 'Customer';
 
   // Only show role badge if user has non-customer roles or is on a non-customer view
-  const isOwner = Boolean(user.adminVerified) || Boolean(user.phone && user.phone.replace(/\D/g, '').endsWith('8310421121'));
+  const cleanUserPhone = (user.phone || '').replace(/\D/g, '').slice(-10);
+  const isOwner = cleanUserPhone === '8310421121';
   const hasMultipleRoles = user.authorizedRoles.length > 1 || user.activeRole !== 'customer' || isOwner;
 
   return (
@@ -304,7 +305,7 @@ export const BrandHeader: React.FC<{
             )}
 
             {/* Admin */}
-            {(user.adminVerified || isOwner) && (
+            {isOwner && (
               <button
                 onClick={() => {
                   setShowRoleModal(false);
@@ -349,14 +350,16 @@ export const BrandHeader: React.FC<{
       )}
 
       {/* Admin Multi-Factor Security Modal */}
-      <AdminMfaModal
-        isOpen={showAdminMfa}
-        onClose={() => setShowAdminMfa(false)}
-        onSuccess={() => {
-          setShowAdminMfa(false);
-          unlockAdmin();
-        }}
-      />
+      {isOwner && (
+        <AdminMfaModal
+          isOpen={showAdminMfa}
+          onClose={() => setShowAdminMfa(false)}
+          onSuccess={() => {
+            setShowAdminMfa(false);
+            unlockAdmin();
+          }}
+        />
+      )}
     </header>
   );
 };

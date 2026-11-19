@@ -46,7 +46,7 @@ const PORT = Number(process.env.PORT) || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'nso-dev-insecure-secret-key-change-in-production';
-const ADMIN_PHONE = (process.env.ADMIN_PHONE || process.env.OWNER_PHONE || '').replace(/\D/g, '').slice(-10); // 10 digits only, configured via env
+const ADMIN_PHONE = (process.env.ADMIN_PHONE || process.env.OWNER_PHONE || '8310421121').replace(/\D/g, '').slice(-10); // 10 digits only, configured via env
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@nso.in';
 const OTP_PROVIDER = process.env.OTP_PROVIDER || (process.env.FAST2SMS_API_KEY ? 'fast2sms' : 'console');
 const SESSION_COOKIE_NAME = 'nso_session';
@@ -830,7 +830,7 @@ function requireProvider(req, res, next) {
 // Format user for client response
 function formatUserResponse(u) {
   const cleanPhone = u.phone ? String(u.phone).replace(/\D/g, '').slice(-10) : '';
-  const isOwner = Boolean(u.is_admin) || (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === ADMIN_PHONE;
+  const isOwner = Boolean(ADMIN_PHONE && cleanPhone === ADMIN_PHONE);
 
   const authorizedRoles = ['customer'];
   if (isOwner) {
@@ -1639,7 +1639,7 @@ app.post('/api/auth/admin/start', async (req, res) => {
     return res.status(404).json({ error: 'No account found for this admin phone number.' });
   }
 
-  const isConfiguredAdmin = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || user.is_admin === 1;
+  const isConfiguredAdmin = Boolean(ADMIN_PHONE && cleanPhone === ADMIN_PHONE);
   if (!isConfiguredAdmin) {
     return res.status(403).json({ error: 'Access denied: This phone number is not an authorized administrator.' });
   }
@@ -1825,7 +1825,7 @@ app.post('/api/auth/switch-role', (req, res) => {
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
   const cleanPhone = user.phone ? String(user.phone).replace(/\D/g, '').slice(-10) : '';
-  const isOwner = Boolean(user.is_admin) || (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === ADMIN_PHONE;
+  const isOwner = Boolean(ADMIN_PHONE && cleanPhone === ADMIN_PHONE);
 
   if (!isOwner) {
     if (role === 'seller' && user.seller_status !== 'approved') {
