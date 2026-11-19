@@ -43,6 +43,10 @@ export const promptBiometricAuth = async (userName = 'NSO Superadmin'): Promise<
 
     const hasStoredCred = localStorage.getItem('nso_biometric_cred_id');
 
+    const timeoutPromise = new Promise<null>((_, reject) =>
+      setTimeout(() => reject(new Error('Biometric sensor prompt timed out or unavailable in this WebView')), 6000)
+    );
+
     if (!hasStoredCred) {
       // First-time enrollment: Triggers native Android BiometricPrompt (Fingerprint / Face ID)
       const userId = new Uint8Array(16);
@@ -57,7 +61,7 @@ export const promptBiometricAuth = async (userName = 'NSO Superadmin'): Promise<
         rpConfig.id = window.location.hostname;
       }
 
-      const credential = (await navigator.credentials.create({
+      const createPromise = navigator.credentials.create({
         publicKey: {
           challenge,
           rp: rpConfig,
@@ -74,9 +78,11 @@ export const promptBiometricAuth = async (userName = 'NSO Superadmin'): Promise<
             authenticatorAttachment: 'platform', // Built-in device fingerprint / Face ID sensor
             userVerification: 'required'
           },
-          timeout: 60000
+          timeout: 6000
         }
-      })) as any;
+      });
+
+      const credential = (await Promise.race([createPromise, timeoutPromise])) as any;
 
       if (credential && credential.id) {
         localStorage.setItem('nso_biometric_cred_id', credential.id);
@@ -85,7 +91,7 @@ export const promptBiometricAuth = async (userName = 'NSO Superadmin'): Promise<
       return false;
     } else {
       // Already enrolled: Prompt device fingerprint / face sensor for instant unlock
-      const credential = await navigator.credentials.get({
+      const getPromise = navigator.credentials.get({
         publicKey: {
           challenge,
           allowCredentials: [
@@ -97,7 +103,7 @@ export const promptBiometricAuth = async (userName = 'NSO Superadmin'): Promise<
             }
           ],
           userVerification: 'required',
-          timeout: 60000,
+          timeout: 6000,
           ...(window.location.hostname &&
           window.location.hostname !== 'localhost' &&
           !window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/)
@@ -106,6 +112,7 @@ export const promptBiometricAuth = async (userName = 'NSO Superadmin'): Promise<
         }
       });
 
+      const credential = await Promise.race([getPromise, timeoutPromise]);
       return !!credential;
     }
   } catch (err: any) {
