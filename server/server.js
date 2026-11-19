@@ -5104,9 +5104,9 @@ app.post('/api/payments/phonepe/initiate', requireAuth, async (req, res) => {
   }
 
   const txnId = `NSO_${Date.now()}_${crypto.randomInt(1000, 9999)}`;
-  const merchantUpi = getSetting('merchant_upi_id', PHONEPE_MERCHANT_UPI_ID || process.env.MERCHANT_UPI_ID || 'merchant@axl');
+  const merchantUpi = getSetting('merchant_upi_id', PHONEPE_MERCHANT_UPI_ID || process.env.MERCHANT_UPI_ID || '8310421121@axl');
   const note = encodeURIComponent(`NSO Order ${orderId || bookingId || txnId}`);
-  const upiIntent = `upi://pay?pa=${merchantUpi}&pn=Naveen%20%20U&am=${numAmount.toFixed(2)}&cu=INR&tn=${note}&mc=0000&mode=02&purpose=00`;
+  const upiIntent = `upi://pay?pa=${encodeURIComponent(merchantUpi)}&pn=Naveen%20U&am=${numAmount.toFixed(2)}&cu=INR&tn=${note}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiIntent)}`;
 
   const nowIso = new Date().toISOString();

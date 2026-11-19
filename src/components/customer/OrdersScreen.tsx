@@ -641,20 +641,36 @@ export const OrdersScreen: React.FC = () => {
                             </span>
                           </div>
 
-                          {/* Dynamic PhonePe QR Code */}
-                          <div className="bg-white p-3 rounded-xl border border-emerald-200/80 text-center space-y-2 shadow-xs">
-                            <img
-                              src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-                                `upi://pay?pa=8310421121@axl&pn=Naveen%20%20U&am=${booking.totalPrice}&cu=INR&tn=Booking%20${booking.bookingNumber}&mc=0000&mode=02&purpose=00`
-                              )}`}
-                              alt="Scan to Pay Final Bill"
-                              className="w-28 h-28 mx-auto rounded-lg object-contain"
-                            />
-                            <div className="text-[11px] text-slate-600">
-                              <span className="block font-bold text-slate-900">Scan &amp; Pay ₹{booking.totalPrice} with PhonePe / GPay</span>
-                              <span className="font-mono text-[10px] text-slate-500">Payee: NSO Verified Merchant</span>
-                            </div>
-                          </div>
+                          {/* Dynamic PhonePe QR Code & Direct Pay */}
+                          {(() => {
+                            const bookingUpiIntent = `upi://pay?pa=8310421121@axl&pn=Naveen%20U&am=${Number(booking.totalPrice).toFixed(2)}&cu=INR&tn=${encodeURIComponent(`NSO Booking ${booking.bookingNumber}`)}`;
+                            return (
+                              <div className="bg-white p-3 rounded-xl border border-emerald-200/80 text-center space-y-2 shadow-xs">
+                                <img
+                                  src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(bookingUpiIntent)}`}
+                                  alt="Scan to Pay Final Bill"
+                                  className="w-28 h-28 mx-auto rounded-lg object-contain"
+                                />
+                                <div className="text-[11px] text-slate-600">
+                                  <span className="block font-bold text-slate-900">Scan &amp; Pay ₹{booking.totalPrice} with PhonePe / GPay</span>
+                                  <span className="font-mono text-[10px] text-slate-500">Payee: Naveen U (8310421121@axl)</span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    try {
+                                      window.location.href = bookingUpiIntent;
+                                    } catch {
+                                      window.open(bookingUpiIntent, '_system');
+                                    }
+                                  }}
+                                  className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-lg transition-all flex items-center justify-center gap-1.5"
+                                >
+                                  <span>Open PhonePe / GPay Directly</span>
+                                </button>
+                              </div>
+                            );
+                          })()}
 
                           <button
                             onClick={() => confirmServiceCompletion(booking.id)}

@@ -558,8 +558,21 @@ export const CartCheckoutModal: React.FC<{
               {/* Direct UPI Intent & QR Box (Zero Razorpay required) */}
               {paymentMethod === 'upi' && (() => {
                 const adminUpi = serverMerchantUpi || localStorage.getItem('nso_merchant_upi') || '8310421121@axl';
-                const upiIntent = `upi://pay?pa=${adminUpi}&pn=Naveen%20%20U&am=${fullTotal}&cu=INR&tn=Order%20Payment&mc=0000&mode=02&purpose=00`;
-                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(upiIntent)}`;
+                const amtStr = Number(fullTotal).toFixed(2);
+                const note = encodeURIComponent('NSO Order Payment');
+                const upiIntent = `upi://pay?pa=${adminUpi}&pn=Naveen%20U&am=${amtStr}&cu=INR&tn=${note}`;
+                const phonepeIntent = `phonepe://pay?pa=${adminUpi}&pn=Naveen%20U&am=${amtStr}&cu=INR&tn=${note}`;
+                const gpayIntent = `tez://upi/pay?pa=${adminUpi}&pn=Naveen%20U&am=${amtStr}&cu=INR&tn=${note}`;
+                const paytmIntent = `paytmmp://pay?pa=${adminUpi}&pn=Naveen%20U&am=${amtStr}&cu=INR&tn=${note}`;
+                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(upiIntent)}`;
+
+                const launchIntent = (intentUrl: string) => {
+                  try {
+                    window.location.href = intentUrl;
+                  } catch {
+                    window.open(intentUrl, '_system');
+                  }
+                };
 
                 return (
                   <div className="bg-gradient-to-b from-emerald-50/80 to-slate-50 border border-emerald-200/80 rounded-2xl p-4 text-center space-y-3 animate-in fade-in zoom-in-95 duration-150">
@@ -602,20 +615,44 @@ export const CartCheckoutModal: React.FC<{
                       </div>
                     </div>
 
+                    {/* Primary Launch Button */}
                     <button
                       type="button"
-                      onClick={() => {
-                        try {
-                          window.location.href = upiIntent;
-                        } catch {
-                          window.open(upiIntent, '_system');
-                        }
-                      }}
+                      onClick={() => launchIntent(upiIntent)}
                       className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 active:scale-98 cursor-pointer"
                     >
                       <Zap className="w-3.5 h-3.5" />
-                      <span>Open GPay / PhonePe / Paytm</span>
+                      <span>Open Any UPI App</span>
                     </button>
+
+                    {/* App-specific shortcuts */}
+                    <div className="grid grid-cols-3 gap-1.5 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => launchIntent(phonepeIntent)}
+                        className="py-1.5 px-2 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 font-bold text-[11px] rounded-lg transition-all"
+                      >
+                        PhonePe
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => launchIntent(gpayIntent)}
+                        className="py-1.5 px-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold text-[11px] rounded-lg transition-all"
+                      >
+                        Google Pay
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => launchIntent(paytmIntent)}
+                        className="py-1.5 px-2 bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 font-bold text-[11px] rounded-lg transition-all"
+                      >
+                        Paytm
+                      </button>
+                    </div>
+
+                    <p className="text-[10px] text-slate-500 bg-amber-50/80 border border-amber-200/60 rounded-lg p-1.5 leading-snug text-left">
+                      <strong>Note:</strong> UPI security rules prohibit sending money to your own phone number/bank. When testing, make sure your UPI app is registered with a different phone or account than <span className="font-mono text-slate-800 font-semibold">{adminUpi}</span>.
+                    </p>
                   </div>
                 );
               })()}
