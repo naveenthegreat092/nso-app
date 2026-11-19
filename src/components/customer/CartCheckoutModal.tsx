@@ -517,29 +517,35 @@ export const CartCheckoutModal: React.FC<{
             </div>
 
             {/* Payment Method Selector */}
-            <div className="space-y-1.5">
-              <span className="text-xs font-extrabold text-slate-800">Select Payment Method</span>
-              <div className="grid grid-cols-4 gap-2">
+            <div className="space-y-2">
+              <span className="text-xs font-black text-slate-900 uppercase tracking-wide">Select Payment Method</span>
+              <div className="grid grid-cols-2 gap-2.5">
                 {[
-                  { id: 'upi', label: 'Direct UPI', icon: QrCode },
-                  { id: 'cod', label: 'Cash on Del.', icon: Banknote },
-                  { id: 'card', label: 'Cards', icon: CreditCard },
-                  { id: 'netbanking', label: 'NetBank', icon: Building }
+                  { id: 'upi', label: 'Direct Instant UPI', desc: 'PhonePe, GPay, Paytm', icon: QrCode, color: 'text-emerald-600', activeBg: 'border-emerald-600 bg-emerald-50 text-emerald-900' },
+                  { id: 'cod', label: 'Cash on Delivery', desc: 'Pay cash at doorstep', icon: Banknote, color: 'text-amber-600', activeBg: 'border-amber-600 bg-amber-50 text-amber-900' },
+                  { id: 'card', label: 'Debit / Credit Card', desc: 'Visa, Master, RuPay', icon: CreditCard, color: 'text-blue-600', activeBg: 'border-blue-600 bg-blue-50 text-blue-900' },
+                  { id: 'netbanking', label: 'Net Banking', desc: 'All Indian banks', icon: Building, color: 'text-purple-600', activeBg: 'border-purple-600 bg-purple-50 text-purple-900' }
                 ].map((m) => {
                   const Icon = m.icon;
+                  const isSelected = paymentMethod === m.id;
                   return (
                     <button
                       key={m.id}
                       type="button"
                       onClick={() => setPaymentMethod(m.id as any)}
-                      className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${
-                        paymentMethod === m.id
-                          ? 'border-emerald-600 bg-emerald-50 text-emerald-700 font-black shadow-sm ring-2 ring-emerald-100'
-                          : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      className={`p-3 rounded-2xl border-2 flex items-center gap-3 transition-all cursor-pointer text-left ${
+                        isSelected
+                          ? `${m.activeBg} font-black shadow-md ring-2 ring-emerald-200`
+                          : 'border-slate-300 text-slate-800 hover:bg-slate-50'
                       }`}
                     >
-                      <Icon className="w-4 h-4" />
-                      <span className="text-[9px] font-bold text-center leading-tight">{m.label}</span>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-white shadow-xs' : 'bg-slate-100'}`}>
+                        <Icon className={`w-6 h-6 stroke-[2.4] ${m.color}`} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-black block leading-tight">{m.label}</span>
+                        <span className="text-[10px] text-slate-500 font-bold block truncate mt-0.5">{m.desc}</span>
+                      </div>
                     </button>
                   );
                 })}

@@ -143,17 +143,17 @@ export const OrdersScreen: React.FC = () => {
       case 'out_for_delivery':
         return <span className="text-[11px] bg-indigo-50 text-indigo-700 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-200/80">Out for Delivery</span>;
       case 'delivered':
-        return <span className="text-[11px] bg-emerald-50 text-emerald-700 font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-200/80">Delivered</span>;
+        return <span className="text-xs bg-emerald-100 text-emerald-950 font-black px-3 py-1 rounded-full border border-emerald-300">Delivered</span>;
       case 'payment_pending':
-        return <span className="text-[11px] bg-amber-50 text-amber-700 font-extrabold px-2.5 py-0.5 rounded-full border border-amber-200 animate-pulse">⏳ Awaiting Payment</span>;
+        return <span className="text-xs bg-amber-100 text-amber-950 font-black px-3 py-1 rounded-full border border-amber-300 animate-pulse">⏳ Payment Pending</span>;
       case 'delivered_pending_payment':
-        return <span className="text-[11px] bg-indigo-50 text-indigo-700 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-200/80">Delivered (Pending Release)</span>;
+        return <span className="text-xs bg-indigo-100 text-indigo-950 font-black px-3 py-1 rounded-full border border-indigo-300">Delivered (Pending Release)</span>;
       case 'completed':
-        return <span className="text-[11px] bg-emerald-50 text-emerald-700 font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-200/80">Completed & Cleared</span>;
+        return <span className="text-xs bg-emerald-100 text-emerald-950 font-black px-3 py-1 rounded-full border border-emerald-300">Completed & Cleared</span>;
       case 'cancelled':
-        return <span className="text-[11px] bg-rose-50 text-rose-700 font-extrabold px-2.5 py-0.5 rounded-full border border-rose-200/80">Cancelled (Refunded)</span>;
+        return <span className="text-xs bg-rose-100 text-rose-950 font-black px-3 py-1 rounded-full border border-rose-300">Cancelled (Refunded)</span>;
       default:
-        return <span className="text-[11px] bg-slate-100 text-slate-700 font-extrabold px-2.5 py-0.5 rounded-full border border-slate-200/80">{status}</span>;
+        return <span className="text-xs bg-slate-200 text-slate-900 font-black px-3 py-1 rounded-full border border-slate-300">{status}</span>;
     }
   };
 
@@ -197,28 +197,28 @@ export const OrdersScreen: React.FC = () => {
       )}
       {/* Header */}
       <div className="px-4 pt-3 space-y-1">
-        <h2 className="text-lg font-black text-slate-900 tracking-tight">Orders & Bookings</h2>
-        <p className="text-xs text-slate-500 font-medium">Track fulfillment status and review service progress</p>
+        <h2 className="text-xl font-black text-slate-950 tracking-tight">Orders & Bookings</h2>
+        <p className="text-xs text-slate-600 font-bold">Track fulfillment status and review service progress</p>
 
         {/* Sub Tabs */}
-        <div className="flex bg-slate-100/90 p-1.5 rounded-2xl mt-3 border border-slate-200/70 shadow-2xs">
+        <div className="flex bg-slate-200 p-1.5 rounded-2xl mt-3 border-2 border-slate-300 shadow-xs">
           <button
             onClick={() => setSubTab('products')}
-            className={`flex-1 py-2 text-xs font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              subTab === 'products' ? 'bg-white text-red-600 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+            className={`flex-1 py-2.5 text-xs min-[360px]:text-sm font-black rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              subTab === 'products' ? 'bg-white text-red-600 shadow-sm border border-slate-200' : 'text-slate-700 hover:text-slate-950'
             }`}
           >
-            <Package className="w-4 h-4" />
+            <Package className="w-5 h-5 stroke-[2.5]" />
             <span>Product Orders ({orders.length})</span>
           </button>
           <button
             onClick={() => setSubTab('services')}
-            className={`flex-1 py-2 text-xs font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              subTab === 'services' ? 'bg-white text-red-600 shadow-xs' : 'text-slate-500 hover:text-slate-900'
+            className={`flex-1 py-2.5 text-xs min-[360px]:text-sm font-black rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              subTab === 'services' ? 'bg-white text-red-600 shadow-sm border border-slate-200' : 'text-slate-700 hover:text-slate-950'
             }`}
           >
-            <Wrench className="w-4 h-4" />
-            <span>Service Bookings ({customerBookings.length})</span>
+            <Wrench className="w-5 h-5 stroke-[2.5]" />
+            <span>Services ({customerBookings.length})</span>
           </button>
         </div>
       </div>

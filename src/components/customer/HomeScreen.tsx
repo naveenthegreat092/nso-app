@@ -28,6 +28,7 @@ import {
   Scissors,
   Package,
   Layers,
+  User,
   X
 } from 'lucide-react';
 
@@ -228,20 +229,20 @@ export const HomeScreen: React.FC<{
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id === selectedCategory ? 'all' : cat.id)}
-                className="flex flex-col items-center gap-1.5 min-w-[74px] flex-shrink-0 group cursor-pointer active:scale-95 transition-all"
+                className="flex flex-col items-center gap-2 min-w-[80px] flex-shrink-0 group cursor-pointer active:scale-95 transition-all"
               >
                 <div
-                  className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all border ${
+                  className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all border-2 ${
                     isSelected
                       ? cat.activeStyle
-                      : `${cat.bg} border-slate-200/70 shadow-xs group-hover:scale-105 group-hover:shadow-sm`
+                      : `${cat.bg} border-slate-300 shadow-xs group-hover:scale-105 group-hover:shadow-md`
                   }`}
                 >
-                  <Icon className={`w-6 h-6 ${isSelected ? 'text-white stroke-[2.4]' : cat.color}`} />
+                  <Icon className={`w-8 h-8 ${isSelected ? 'text-white stroke-[2.5]' : cat.color}`} />
                 </div>
                 <span
-                  className={`text-[11px] text-center leading-tight transition-colors ${
-                    isSelected ? 'font-extrabold text-slate-900' : 'font-semibold text-slate-600 group-hover:text-slate-900'
+                  className={`text-xs text-center leading-tight transition-colors ${
+                    isSelected ? 'font-black text-slate-950 scale-105' : 'font-extrabold text-slate-800 group-hover:text-slate-950'
                   }`}
                 >
                   {cat.name}
@@ -256,21 +257,21 @@ export const HomeScreen: React.FC<{
       <div className="space-y-3.5">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-extrabold text-[15px] text-slate-900 tracking-tight flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-red-600" />
+            <h3 className="font-black text-base min-[360px]:text-lg text-slate-950 tracking-tight flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-red-600 stroke-[2.5]" />
               <span>Marketplace Products</span>
               {selectedCategory !== 'all' && (
-                <span className="text-[11px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-mono">
+                <span className="text-xs font-black bg-slate-200 text-slate-800 px-2.5 py-0.5 rounded-full font-mono">
                   {displayedProducts.length}
                 </span>
               )}
             </h3>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">Verified local merchants & authentic brands</p>
+            <p className="text-xs text-slate-600 font-bold mt-0.5">Verified local merchants & authentic brands</p>
           </div>
           {approvedProducts.length > 0 && (
             <button
               onClick={() => setActiveTab('explore')}
-              className="text-xs font-bold text-red-600 hover:text-red-700 active:scale-95 transition-all cursor-pointer"
+              className="text-xs font-black text-red-600 hover:text-red-700 active:scale-95 transition-all cursor-pointer bg-red-50 px-2.5 py-1 rounded-lg border border-red-200"
             >
               See All
             </button>
@@ -372,19 +373,19 @@ export const HomeScreen: React.FC<{
                         <span className="text-slate-400 font-semibold text-[11px]">({product.reviewsCount})</span>
                       </div>
 
-                      <h4 className="font-bold text-xs text-slate-900 line-clamp-2 mt-1.5 leading-snug">
+                      <h4 className="font-black text-sm text-slate-950 line-clamp-2 mt-1.5 leading-snug">
                         {product.title}
                       </h4>
                     </div>
 
                     {/* Price & Add Button */}
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5">
                       <div>
-                        <div className="text-sm font-black text-slate-900 tracking-tight">
+                        <div className="text-base font-black text-slate-950 tracking-tight">
                           ₹{product.price.toLocaleString('en-IN')}
                         </div>
                         {product.originalPrice > product.price && (
-                          <div className="text-[11px] text-slate-400 line-through">
+                          <div className="text-xs text-slate-500 font-bold line-through">
                             ₹{product.originalPrice.toLocaleString('en-IN')}
                           </div>
                         )}
@@ -394,28 +395,29 @@ export const HomeScreen: React.FC<{
                         {qty === 0 ? (
                           <button
                             onClick={() => addToCart(product, 1)}
-                            className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-600 font-extrabold text-xs rounded-xl border border-red-200/90 transition-all active:scale-90 shadow-2xs cursor-pointer"
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-xs min-[360px]:text-sm rounded-xl transition-all active:scale-90 shadow-md flex items-center gap-1 cursor-pointer"
                           >
-                            ADD
+                            <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                            <span>ADD</span>
                           </button>
                         ) : (
-                          <div className="flex items-center bg-red-600 text-white rounded-xl shadow-xs overflow-hidden">
+                          <div className="flex items-center bg-emerald-600 text-white rounded-xl shadow-md overflow-hidden">
                             <button
                               onClick={() => updateCartQuantity(product.id, qty - 1)}
-                              className="p-1.5 hover:bg-red-700 transition-colors cursor-pointer"
+                              className="p-2 hover:bg-emerald-700 active:bg-emerald-800 transition-colors cursor-pointer"
                               aria-label="Decrease quantity"
                             >
-                              <Minus className="w-3.5 h-3.5" />
+                              <Minus className="w-4 h-4 stroke-[2.5]" />
                             </button>
-                            <span className="px-2 text-xs font-black min-w-[20px] text-center">
+                            <span className="px-2 text-sm font-black min-w-[22px] text-center">
                               {qty}
                             </span>
                             <button
                               onClick={() => updateCartQuantity(product.id, qty + 1)}
-                              className="p-1.5 hover:bg-red-700 transition-colors cursor-pointer"
+                              className="p-2 hover:bg-emerald-700 active:bg-emerald-800 transition-colors cursor-pointer"
                               aria-label="Increase quantity"
                             >
-                              <Plus className="w-3.5 h-3.5" />
+                              <Plus className="w-4 h-4 stroke-[2.5]" />
                             </button>
                           </div>
                         )}
@@ -468,45 +470,46 @@ export const HomeScreen: React.FC<{
               <div
                 key={service.id}
                 onClick={() => onSelectService(service)}
-                className="bg-white rounded-3xl border border-slate-200/75 p-4 shadow-card hover:shadow-card-hover transition-all cursor-pointer flex items-center justify-between gap-3 active:scale-[0.98]"
+                className="bg-white rounded-3xl border-2 border-slate-200 p-4 shadow-card hover:shadow-card-hover transition-all cursor-pointer flex items-center justify-between gap-3 active:scale-[0.98]"
               >
-                <div className="flex-1 space-y-1.5 min-w-0">
+                <div className="flex-1 space-y-2 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] font-extrabold text-amber-900 bg-amber-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-200/70">
+                    <span className="text-xs font-black text-amber-950 bg-amber-100 px-3 py-1 rounded-full uppercase tracking-wider border border-amber-300">
                       {service.category}
                     </span>
-                    <div className="flex items-center gap-1 text-xs text-amber-700 font-extrabold">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <div className="flex items-center gap-1 text-sm text-amber-900 font-black bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                      <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
                       <span>{service.providerRating}</span>
                     </div>
                   </div>
 
-                  <h4 className="font-extrabold text-sm text-slate-900 line-clamp-1">
+                  <h4 className="font-black text-base text-slate-950 line-clamp-1">
                     {service.title}
                   </h4>
 
                   <div className="flex items-center gap-2 flex-wrap pt-0.5">
-                    <span className="text-xs text-slate-700 font-bold">By {service.providerName}</span>
-                    <span className="text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-mono font-extrabold px-1.5 py-0.5 rounded">
+                    <span className="text-sm text-slate-900 font-extrabold">By {service.providerName}</span>
+                    <span className="text-xs bg-emerald-100 text-emerald-950 border border-emerald-300 font-mono font-black px-2 py-0.5 rounded-md">
                       ID: {service.issuedProviderId || service.providerId}
                     </span>
-                    <span className="text-[11px] text-slate-500 font-mono">
+                    <span className="text-xs text-slate-600 font-mono font-bold">
                       {service.providerPhoneMasked || '+91 98XXX X3210'}
                     </span>
                   </div>
                 </div>
 
                 <div className="text-right flex flex-col items-end flex-shrink-0">
-                  <span className="text-base font-black text-slate-900">₹{service.price}</span>
-                  <span className="text-[11px] text-slate-400 mb-2">{service.unit}</span>
+                  <span className="text-xl font-black text-slate-950">₹{service.price}</span>
+                  <span className="text-xs text-slate-500 font-bold mb-2">{service.unit}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectService(service);
                     }}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-extrabold shadow-xs active:scale-95 transition-all cursor-pointer"
+                    className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-black shadow-md active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
-                    Book Now
+                    <Calendar className="w-4 h-4 stroke-[2.5]" />
+                    <span>Book Now</span>
                   </button>
                 </div>
               </div>
@@ -519,15 +522,15 @@ export const HomeScreen: React.FC<{
       <div className="space-y-3.5 pt-1">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-extrabold text-[15px] text-slate-900 tracking-tight flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <h3 className="font-black text-base min-[360px]:text-lg text-slate-950 tracking-tight flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-600 stroke-[2.5]" />
               <span>Verified Service Specialists</span>
             </h3>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">Approved &amp; active trade professionals</p>
+            <p className="text-xs text-slate-600 font-bold mt-0.5">Approved &amp; active trade professionals</p>
           </div>
           <button
             onClick={() => setActiveTab('explore')}
-            className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-0.5 cursor-pointer"
+            className="text-xs font-black text-red-600 hover:text-red-700 flex items-center gap-0.5 cursor-pointer bg-red-50 px-2.5 py-1 rounded-lg border border-red-200"
           >
             <span>All Providers</span>
             <ChevronRight className="w-4 h-4" />
@@ -535,7 +538,7 @@ export const HomeScreen: React.FC<{
         </div>
 
         {eligibleProviders.length === 0 ? (
-          <div className="bg-white rounded-3xl border border-slate-200/70 p-6 text-center text-slate-400 text-xs font-medium shadow-card">
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 text-center text-slate-500 text-sm font-bold shadow-card">
             Approved specialists will appear here after verification.
           </div>
         ) : (
@@ -594,56 +597,57 @@ export const HomeScreen: React.FC<{
               return (
                 <div
                   key={prov.id}
-                  className="bg-white rounded-3xl border border-slate-200/80 p-4 shadow-card hover:shadow-card-hover transition-all space-y-3"
+                  className="bg-white rounded-3xl border-2 border-slate-200/90 p-4 shadow-card hover:shadow-card-hover transition-all space-y-3.5"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-3.5 min-w-0">
                       <img
                         src={prov.avatar}
                         alt={prov.name}
-                        className="w-12 h-12 rounded-2xl object-cover border border-slate-200/80 shadow-2xs flex-shrink-0"
+                        className="w-16 h-16 rounded-2xl object-cover border-2 border-slate-200 shadow-xs flex-shrink-0"
                       />
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <h4 className="font-black text-xs text-slate-900 truncate">{prov.applicantName || prov.name}</h4>
-                          <span className="bg-emerald-50 text-emerald-800 text-[10px] font-mono font-extrabold px-1.5 py-0.5 rounded border border-emerald-200">
+                          <h4 className="font-black text-sm text-slate-950 truncate">{prov.applicantName || prov.name}</h4>
+                          <span className="bg-emerald-100 text-emerald-950 text-xs font-mono font-black px-2 py-0.5 rounded-md border border-emerald-300">
                             ID: {prov.issuedProviderId || prov.id}
                           </span>
                         </div>
-                        <p className="text-xs font-semibold text-slate-600 truncate mt-0.5">
+                        <p className="text-xs font-black text-blue-900 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md truncate mt-1 inline-block">
                           {prov.tradeTitle || prov.tradeCategory || 'Trade Specialist'}
                         </p>
-                        <div className="flex items-center gap-2 mt-1 text-[11px]">
-                          <span className="inline-flex items-center gap-1 text-emerald-700 font-extrabold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <div className="flex items-center gap-2 mt-1.5 text-xs">
+                          <span className="inline-flex items-center gap-1.5 text-emerald-900 font-black bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                             Available Today
                           </span>
-                          <span className="text-slate-500 font-mono">{prov.phoneMasked || '+91 98XXX X3210'}</span>
+                          <span className="text-slate-600 font-mono font-bold">{prov.phoneMasked || '+91 98XXX X3210'}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 bg-amber-50 px-2 py-1 rounded-xl text-amber-700 font-extrabold text-xs flex-shrink-0 border border-amber-100">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <div className="flex items-center gap-1 bg-amber-100 px-2.5 py-1 rounded-xl text-amber-950 font-black text-xs flex-shrink-0 border border-amber-300">
+                      <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
                       <span>{prov.rating}</span>
                     </div>
                   </div>
 
                   {/* Actions: View Profile & Book Directly */}
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                  <div className="grid grid-cols-2 gap-2.5 pt-2 border-t-2 border-slate-100">
                     <button
                       type="button"
                       onClick={() => openProviderProfile(prov.issuedProviderId || prov.id)}
-                      className="py-2 px-2.5 rounded-xl border border-slate-200/90 hover:bg-slate-50 active:bg-slate-100 text-slate-700 font-extrabold text-xs transition-colors text-center cursor-pointer"
+                      className="py-3 px-3 rounded-2xl border-2 border-slate-300 hover:bg-slate-100 active:bg-slate-200 text-slate-900 font-black text-xs min-[360px]:text-sm transition-all text-center cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
                     >
-                      View Profile
+                      <User className="w-4 h-4 text-slate-700 stroke-[2.5]" />
+                      <span>View Profile</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => onSelectService(directService)}
-                      className="py-2 px-2.5 rounded-xl bg-red-600 hover:bg-red-700 active:scale-95 text-white font-extrabold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="py-3 px-3 rounded-2xl bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black text-xs min-[360px]:text-sm shadow-md shadow-red-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <Calendar className="w-3.5 h-3.5" />
+                      <Calendar className="w-4 h-4 stroke-[2.5]" />
                       <span>Book Direct</span>
                     </button>
                   </div>

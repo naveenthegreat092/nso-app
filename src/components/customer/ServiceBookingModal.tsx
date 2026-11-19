@@ -306,58 +306,69 @@ export const ServiceBookingModal: React.FC<{
             </div>
 
                 {/* Action Buttons */}
-                <div className="flex items-center gap-2 mt-2">
+                <div className="flex items-center gap-2 mt-2.5">
                   <button
+                    type="button"
                     onClick={() => openProviderProfile(service.providerId)}
-                    className="flex items-center gap-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded-lg"
+                    className="flex-1 flex items-center justify-center gap-1.5 text-xs font-black text-amber-950 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-3 py-2 rounded-xl transition-all shadow-2xs"
                   >
-                    <Star className="w-3 h-3 text-amber-500" />
-                    Provider Profile
+                    <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
+                    <span>Profile</span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => openChat(service.providerName)}
-                    className="flex items-center gap-1 text-[11px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 px-2.5 py-1.5 rounded-lg"
+                    className="flex-1 flex items-center justify-center gap-1.5 text-xs font-black text-blue-950 bg-blue-50 hover:bg-blue-100 border border-blue-300 px-3 py-2 rounded-xl transition-all shadow-2xs"
                   >
-                    <MessageSquare className="w-3 h-3 text-blue-500" />
-                    Message
+                    <MessageSquare className="w-4 h-4 text-blue-600" />
+                    <span>Message</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openMaskedCall(service.providerName, service.providerPhoneMasked, service.providerId)}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-xs font-black text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-3 py-2 rounded-xl transition-all shadow-2xs"
+                  >
+                    <PhoneCall className="w-4 h-4 text-emerald-600" />
+                    <span>Call</span>
                   </button>
                 </div>
-                {/* Mode selection (Home visit vs Provider location) */}
-            <div className="space-y-1.5">
-              <span className="text-xs font-black text-slate-800">Select Service Mode</span>
-              <div className="grid grid-cols-2 gap-2">
+
+            {/* Mode selection (Home visit vs Provider location) */}
+            <div className="space-y-2 pt-1">
+              <span className="text-xs font-black text-slate-900 uppercase tracking-wide">Select Service Location Mode</span>
+              <div className="grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
                   onClick={() => setServiceMode('home_visit')}
-                  className={`p-3 rounded-2xl border flex items-center gap-2.5 text-xs font-extrabold transition-all ${
+                  className={`p-3.5 rounded-2xl border-2 flex items-center gap-2.5 text-sm font-black transition-all ${
                     serviceMode === 'home_visit'
-                      ? 'border-red-600 bg-red-50 text-red-600 shadow-sm ring-2 ring-red-100'
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      ? 'border-red-600 bg-red-50 text-red-600 shadow-md ring-2 ring-red-200'
+                      : 'border-slate-200 text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  <Home className="w-4 h-4" />
+                  <Home className="w-5 h-5 stroke-[2.5]" />
                   <span>Doorstep Visit</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setServiceMode('provider_location')}
-                  className={`p-3 rounded-2xl border flex items-center gap-2.5 text-xs font-extrabold transition-all ${
+                  className={`p-3.5 rounded-2xl border-2 flex items-center gap-2.5 text-sm font-black transition-all ${
                     serviceMode === 'provider_location'
-                      ? 'border-red-600 bg-red-50 text-red-600 shadow-sm ring-2 ring-red-100'
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      ? 'border-red-600 bg-red-50 text-red-600 shadow-md ring-2 ring-red-200'
+                      : 'border-slate-200 text-slate-700 hover:bg-slate-50'
                   }`}
                 >
-                  <MapPin className="w-4 h-4" />
+                  <MapPin className="w-5 h-5 stroke-[2.5]" />
                   <span>Provider Hub</span>
                 </button>
               </div>
             </div>
 
             {/* Date Selection */}
-            <div className="space-y-1.5">
-              <span className="text-xs font-black text-slate-800 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-red-600" />
-                <span>Select Date</span>
+            <div className="space-y-2">
+              <span className="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-red-600 stroke-[2.5]" />
+                <span>Select Appointment Date</span>
               </span>
               <div className="grid grid-cols-3 gap-2">
                 {dynamicDates.map(({ iso, label }) => (
@@ -365,10 +376,10 @@ export const ServiceBookingModal: React.FC<{
                     key={iso}
                     type="button"
                     onClick={() => setSelectedDate(iso)}
-                    className={`py-2 px-1 rounded-xl text-xs font-black border transition-all ${
+                    className={`py-3 px-2 rounded-2xl text-xs min-[360px]:text-sm font-black border-2 transition-all ${
                       selectedDate === iso
                         ? 'border-red-600 bg-red-600 text-white shadow-md'
-                        : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                        : 'border-slate-300 text-slate-800 hover:bg-slate-50'
                     }`}
                   >
                     {label}
@@ -378,12 +389,12 @@ export const ServiceBookingModal: React.FC<{
             </div>
 
             {/* Time Slot Picker */}
-            <div className="space-y-1.5">
-              <span className="text-xs font-black text-slate-800 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-red-600" />
-                <span>Available Time Slots</span>
+            <div className="space-y-2">
+              <span className="text-xs font-black text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-red-600 stroke-[2.5]" />
+                <span>Select Available Time Slot</span>
               </span>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2.5">
                 {service.availableSlots.map((slot) => {
                   const hasSlotConflict = bookings.some(
                     (b) =>
@@ -398,17 +409,17 @@ export const ServiceBookingModal: React.FC<{
                       type="button"
                       disabled={hasSlotConflict}
                       onClick={() => setSelectedSlot(slot)}
-                      className={`p-2.5 rounded-xl text-xs font-bold border text-left transition-all ${
+                      className={`p-3 rounded-2xl text-xs min-[360px]:text-sm font-black border-2 text-left transition-all ${
                         hasSlotConflict
-                          ? 'border-red-200 bg-red-50/50 text-red-400 cursor-not-allowed line-through'
+                          ? 'border-red-200 bg-red-50 text-red-400 cursor-not-allowed line-through'
                           : selectedSlot === slot
-                          ? 'border-red-600 bg-red-50 text-red-600 font-black shadow-sm ring-2 ring-red-100'
-                          : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                          ? 'border-red-600 bg-red-50 text-red-600 shadow-md ring-2 ring-red-200'
+                          : 'border-slate-300 text-slate-800 hover:bg-slate-50'
                       }`}
                     >
                       {slot}
                       {hasSlotConflict && (
-                        <span className="block text-[9px] text-red-500 font-semibold no-underline">
+                        <span className="block text-[10px] text-red-600 font-bold no-underline">
                           Slot Booked
                         </span>
                       )}

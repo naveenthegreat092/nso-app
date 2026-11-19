@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Plane,
   MapPin,
+  Calendar,
   X
 } from 'lucide-react';
 
@@ -156,7 +157,7 @@ export const ExploreScreen: React.FC<{
       </div>
 
       {/* Horizontal Category Strip with Vector Icons */}
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+      <div className="flex items-center gap-2.5 overflow-x-auto no-scrollbar py-1">
         {allCategories.map((cat) => {
           const Icon = getCategoryIcon(cat);
           const isSelected = selectedCategory === cat;
@@ -164,13 +165,13 @@ export const ExploreScreen: React.FC<{
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap transition-all active:scale-95 cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-xs min-[360px]:text-sm font-black whitespace-nowrap transition-all active:scale-95 cursor-pointer shadow-xs ${
                 isSelected
-                  ? 'bg-red-600 text-white shadow-xs'
-                  : 'bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-50'
+                  ? 'bg-red-600 text-white shadow-md shadow-red-600/25 border-2 border-red-600 ring-2 ring-red-400/30'
+                  : 'bg-white border-2 border-slate-200 text-slate-800 hover:bg-slate-50'
               }`}
             >
-              <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+              <Icon className={`w-4 h-4 stroke-[2.5] ${isSelected ? 'text-white' : 'text-slate-600'}`} />
               <span>{cat}</span>
             </button>
           );
@@ -308,20 +309,20 @@ export const ExploreScreen: React.FC<{
               <div
                 key={s.id}
                 onClick={() => onSelectService(s)}
-                className="bg-white rounded-3xl border border-slate-200/75 p-4 shadow-card hover:shadow-card-hover transition-all cursor-pointer flex items-center justify-between gap-3 active:scale-98"
+                className="bg-white rounded-3xl border-2 border-slate-200/90 p-4 shadow-card hover:shadow-card-hover transition-all cursor-pointer flex items-center justify-between gap-3 active:scale-98"
               >
-                <div className="flex-1 space-y-1.5 min-w-0">
+                <div className="flex-1 space-y-2 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] font-extrabold text-amber-900 bg-amber-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-200/70">
+                    <span className="text-xs font-black text-amber-950 bg-amber-100 px-3 py-1 rounded-full uppercase tracking-wider border border-amber-300">
                       {s.category}
                     </span>
-                    <div className="flex items-center gap-1 text-xs text-amber-700 font-extrabold">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <div className="flex items-center gap-1 text-sm text-amber-900 font-black bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                      <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
                       <span>{s.providerRating}</span>
                     </div>
                   </div>
 
-                  <h4 className="font-extrabold text-sm text-slate-900 line-clamp-1">{s.title}</h4>
+                  <h4 className="font-black text-base text-slate-950 line-clamp-1">{s.title}</h4>
 
                   <div
                     onClick={(e) => {
@@ -330,28 +331,28 @@ export const ExploreScreen: React.FC<{
                     }}
                     className="flex items-center gap-2 pt-0.5 flex-wrap cursor-pointer"
                   >
-                    <p className="text-xs text-slate-700 font-bold hover:text-red-600">{s.providerName}</p>
-                    <span className="text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-mono font-extrabold px-1.5 py-0.5 rounded">
+                    <p className="text-sm text-slate-900 font-extrabold hover:text-red-600">{s.providerName}</p>
+                    <span className="text-xs bg-emerald-100 text-emerald-950 border border-emerald-300 font-mono font-black px-2 py-0.5 rounded-md">
                       ID: {s.issuedProviderId || s.providerId}
                     </span>
-                    <span className="text-xs text-blue-600 font-extrabold hover:underline">Profile ↗</span>
+                    <span className="text-xs text-blue-700 font-black bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md hover:underline">Profile ↗</span>
                   </div>
                 </div>
 
                 <div className="text-right flex flex-col items-end flex-shrink-0">
                   {s.pricingType === 'hourly' ? (
                     <>
-                      <span className="text-base font-black text-slate-900">₹{s.hourlyRate || s.price}</span>
-                      <p className="text-[11px] text-indigo-700 font-extrabold">/ hour</p>
+                      <span className="text-xl font-black text-slate-950">₹{s.hourlyRate || s.price}</span>
+                      <p className="text-xs text-indigo-800 font-black">/ hour</p>
                     </>
                   ) : s.pricingType === 'quotation_required' ? (
-                    <span className="text-[11px] font-extrabold text-purple-900 bg-purple-100 px-2.5 py-1 rounded-lg">
+                    <span className="text-xs font-black text-purple-950 bg-purple-100 border border-purple-300 px-2.5 py-1 rounded-lg">
                       Free Quote
                     </span>
                   ) : (
                     <>
-                      <span className="text-base font-black text-slate-900">₹{s.price}</span>
-                      <p className="text-[11px] text-slate-500 font-medium">{s.unit}</p>
+                      <span className="text-xl font-black text-slate-950">₹{s.price}</span>
+                      <p className="text-xs text-slate-600 font-bold">{s.unit}</p>
                     </>
                   )}
                   <button
@@ -359,9 +360,10 @@ export const ExploreScreen: React.FC<{
                       e.stopPropagation();
                       onSelectService(s);
                     }}
-                    className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-extrabold shadow-xs active:scale-95 transition-all cursor-pointer"
+                    className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs min-[360px]:text-sm font-black shadow-md active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
                   >
-                    Book
+                    <Calendar className="w-3.5 h-3.5 stroke-[2.5]" />
+                    <span>Book</span>
                   </button>
                 </div>
               </div>
