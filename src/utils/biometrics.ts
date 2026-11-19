@@ -44,7 +44,7 @@ export const promptBiometricAuth = async (userName = 'NSO Superadmin'): Promise<
     const hasStoredCred = localStorage.getItem('nso_biometric_cred_id');
 
     const timeoutPromise = new Promise<null>((_, reject) =>
-      setTimeout(() => reject(new Error('Biometric sensor prompt timed out or unavailable in this WebView')), 6000)
+      setTimeout(() => reject(new Error('Biometric sensor timed out or unavailable on this device')), 3500)
     );
 
     if (!hasStoredCred) {

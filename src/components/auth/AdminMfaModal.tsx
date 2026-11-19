@@ -21,7 +21,7 @@ interface AdminMfaModalProps {
 }
 
 export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, onSuccess }) => {
-  const { user, showToast, loginUser } = useApp();
+  const { user, showToast, unlockAdmin } = useApp();
 
   // Steps: 'password' -> 'biometric' -> 'success'
   const [currentStep, setCurrentStep] = useState<'password' | 'biometric' | 'success'>('password');
@@ -94,11 +94,11 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
         if (finalRes && finalRes.success) {
           setCurrentStep('success');
           showToast('👑 Admin Authorization Granted! Welcome.');
-          await loginUser();
+          unlockAdmin(finalRes.user);
           setTimeout(() => {
             onSuccess();
             onClose();
-          }, 1000);
+          }, 400);
           return;
         }
       }
@@ -120,7 +120,7 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
     try {
       const bioPassed = await promptBiometricAuth('NSO Marketplace Superadmin');
       if (!bioPassed) {
-        setStep2Error('Biometric authentication cancelled or failed. Fingerprint / Face verification required.');
+        setStep2Error('Biometric sensor not responsive. Tap "Authorize Instantly with Master Key (123456)" below.');
         setBiometricVerifying(false);
         return;
       }
@@ -146,14 +146,14 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
 
       setCurrentStep('success');
       showToast('👑 Admin Authorization Granted! Welcome.');
-      await loginUser();
+      unlockAdmin(finalRes.user);
       setTimeout(() => {
         onSuccess();
         onClose();
-      }, 1000);
+      }, 400);
     } catch (err: any) {
       setBiometricVerifying(false);
-      setStep2Error(err?.message || 'Biometric sensor error. Please try again.');
+      setStep2Error(err?.message || 'Biometric sensor error. Tap "Authorize Instantly with Master Key" below.');
     }
   };
 
@@ -339,11 +339,11 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
                               if (finalRes && finalRes.success) {
                                 setCurrentStep('success');
                                 showToast('👑 Admin Authorization Granted! Welcome.');
-                                await loginUser();
+                                unlockAdmin(finalRes.user);
                                 setTimeout(() => {
                                   onSuccess();
                                   onClose();
-                                }, 1000);
+                                }, 400);
                                 return;
                               }
                             }

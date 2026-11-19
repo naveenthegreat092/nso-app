@@ -35,6 +35,7 @@ export const AccountScreen: React.FC<{
   const {
     user,
     switchRole,
+    unlockAdmin,
     logoutUser,
     setActiveTab,
     openAddressModal,
@@ -491,7 +492,7 @@ export const AccountScreen: React.FC<{
         onClose={() => setShowAdminMfa(false)}
         onSuccess={() => {
           setShowAdminMfa(false);
-          switchRole('admin');
+          unlockAdmin();
         }}
       />
     </div>

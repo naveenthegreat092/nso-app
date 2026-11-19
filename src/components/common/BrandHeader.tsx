@@ -27,6 +27,7 @@ export const BrandHeader: React.FC<{
   const {
     user,
     switchRole,
+    unlockAdmin,
     cart,
     setActiveTab,
     selectedAddress,
@@ -353,7 +354,7 @@ export const BrandHeader: React.FC<{
         onClose={() => setShowAdminMfa(false)}
         onSuccess={() => {
           setShowAdminMfa(false);
-          switchRole('admin');
+          unlockAdmin();
         }}
       />
     </header>
