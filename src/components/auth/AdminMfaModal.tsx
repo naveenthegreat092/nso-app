@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   ShieldAlert,
-  Lock,
   KeyRound,
   Fingerprint,
-  Mail,
   CheckCircle2,
   AlertCircle,
   X,
@@ -25,8 +23,8 @@ interface AdminMfaModalProps {
 export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { user, showToast, loginUser } = useApp();
 
-  // MFA Steps: 1: 'password' -> 2: 'biometric' -> 3: 'email_otp' -> 4: 'success'
-  const [currentStep, setCurrentStep] = useState<'password' | 'biometric' | 'email_otp' | 'success'>('password');
+  // Steps: 'password' -> 'biometric' -> 'success'
+  const [currentStep, setCurrentStep] = useState<'password' | 'biometric' | 'success'>('password');
   
   // Step 1: Admin Password & Phone
   const [adminPhone, setAdminPhone] = useState(() => (user.phone ? user.phone.replace(/\D/g, '').slice(-10) : (localStorage.getItem('nso_admin_phone') || '')));
@@ -34,7 +32,6 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
   const [step1Loading, setStep1Loading] = useState(false);
   const [step1Error, setStep1Error] = useState<string | null>(null);
   const [adminSessionId, setAdminSessionId] = useState<string | null>(null);
-  const [emailMasked, setEmailMasked] = useState<string>('a***@nso.in');
 
   // Step 2: Biometrics (Fingerprint / Face)
   const [biometricSupported, setBiometricSupported] = useState<boolean | null>(null);
@@ -42,29 +39,24 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
   const [biometricPassed, setBiometricPassed] = useState(false);
   const [step2Error, setStep2Error] = useState<string | null>(null);
 
-  // Step 3: Email OTP
-  const [emailOtp, setEmailOtp] = useState('');
-  const [step3Loading, setStep3Loading] = useState(false);
-  const [step3Error, setStep3Error] = useState<string | null>(null);
-
   useEffect(() => {
     if (isOpen) {
       setCurrentStep('password');
       setAdminPassword('');
       setStep1Error(null);
       setStep2Error(null);
-      setStep3Error(null);
       setBiometricPassed(false);
-      setEmailOtp('');
+      const phoneToUse = user.phone ? user.phone.replace(/\D/g, '').slice(-10) : (localStorage.getItem('nso_admin_phone') || '');
+      setAdminPhone(phoneToUse);
       checkBiometricSupport().then((res) => {
         setBiometricSupported(res.isAvailable);
       });
     }
-  }, [isOpen]);
+  }, [isOpen, user.phone]);
 
   if (!isOpen) return null;
 
-  // Step 1: Verify Admin Password & Trigger Email OTP
+  // Step 1: Verify Admin Password
   const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminPassword.trim()) {
@@ -85,12 +77,11 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
     }
 
     setAdminSessionId(res.adminSessionId);
-    if (res.emailMasked) setEmailMasked(res.emailMasked);
     showToast('✅ Step 1 Verified: Password matched.');
     setCurrentStep('biometric');
   };
 
-  // Step 2: Execute WebAuthn Hardware Biometric Verification
+  // Step 2: Execute WebAuthn Hardware Biometric Verification & Finalize
   const handleBiometricVerify = async () => {
     if (!adminSessionId) return;
 
@@ -100,66 +91,41 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
     try {
       const bioPassed = await promptBiometricAuth('NSO Marketplace Superadmin');
       if (!bioPassed) {
-        setStep2Error('Biometric authentication failed or was cancelled by user. Hardware verification required.');
+        setStep2Error('Biometric authentication cancelled or failed. Fingerprint / Face verification required.');
         setBiometricVerifying(false);
         return;
       }
 
       const res = await api.adminVerifyBiometric(adminSessionId, true);
-      setBiometricVerifying(false);
-
       if (!res || !res.success) {
+        setBiometricVerifying(false);
         setStep2Error(res?.error || 'Biometric validation rejected by server.');
         return;
       }
 
       setBiometricPassed(true);
       showToast('✅ Step 2 Verified: Biometric hardware passed.');
-      setCurrentStep('email_otp');
+
+      // Finalize session on server
+      const finalRes = await api.adminFinalizeMfa(adminSessionId);
+      setBiometricVerifying(false);
+
+      if (!finalRes || !finalRes.success) {
+        setStep2Error(finalRes?.error || 'Admin Finalization failed.');
+        return;
+      }
+
+      setCurrentStep('success');
+      showToast('👑 Admin Authorization Granted! Welcome.');
+      await loginUser();
+      setTimeout(() => {
+        onSuccess();
+        onClose();
+      }, 1000);
     } catch (err: any) {
       setBiometricVerifying(false);
       setStep2Error(err?.message || 'Biometric sensor error. Please try again.');
     }
-  };
-
-  // Step 3: Verify Email OTP & Finalize Admin Session
-  const handleEmailOtpSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanCode = emailOtp.trim().replace(/\D/g, '');
-    if (cleanCode.length !== 6) {
-      setStep3Error('Please enter the 6-digit verification code');
-      return;
-    }
-
-    if (!adminSessionId) return;
-
-    setStep3Loading(true);
-    setStep3Error(null);
-
-    // Verify Email OTP
-    const verifyRes = await api.adminVerifyEmailOtp(adminSessionId, cleanCode);
-    if (!verifyRes || !verifyRes.success) {
-      setStep3Loading(false);
-      setStep3Error(verifyRes?.error || 'Invalid or expired email OTP');
-      return;
-    }
-
-    // Step 4: Finalize session (Checks ALL steps)
-    const finalRes = await api.adminFinalizeMfa(adminSessionId);
-    setStep3Loading(false);
-
-    if (!finalRes || !finalRes.success) {
-      setStep3Error(finalRes?.error || 'MFA Finalization failed. All steps must pass.');
-      return;
-    }
-
-    setCurrentStep('success');
-    showToast('👑 Multi-Factor Admin Verification Complete! Welcome.');
-    await loginUser();
-    setTimeout(() => {
-      onSuccess();
-      onClose();
-    }, 1200);
   };
 
   return (
@@ -173,7 +139,7 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
             </div>
             <div>
               <h3 className="text-sm font-black tracking-tight">Admin Multi-Factor Security</h3>
-              <p className="text-[10px] text-purple-200">Strict 3-Tier Zero-Trust Authorization</p>
+              <p className="text-[10px] text-purple-200">Password & Hardware Biometric Authorization</p>
             </div>
           </div>
           <button
@@ -186,7 +152,7 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
 
         {/* Security Step Indicator Pills */}
         <div className="px-6 pt-4 pb-2 border-b border-slate-150 bg-slate-50">
-          <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-black uppercase tracking-wider">
+          <div className="grid grid-cols-2 gap-2 text-center text-[10px] font-black uppercase tracking-wider">
             <div
               className={`p-2 rounded-xl border flex flex-col items-center gap-1 ${
                 currentStep === 'password'
@@ -211,16 +177,6 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
               <Fingerprint className="w-4 h-4" />
               <span>2. Biometric</span>
             </div>
-            <div
-              className={`p-2 rounded-xl border flex flex-col items-center gap-1 ${
-                currentStep === 'email_otp' || currentStep === 'success'
-                  ? 'bg-purple-100 border-purple-300 text-purple-900 shadow-xs'
-                  : 'bg-white border-slate-200 text-slate-400'
-              }`}
-            >
-              <Mail className="w-4 h-4" />
-              <span>3. Email OTP</span>
-            </div>
           </div>
         </div>
 
@@ -231,7 +187,7 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
               <div className="space-y-1">
                 <h4 className="text-base font-black text-slate-900">Step 1: Admin Master Password</h4>
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Enter your marketplace superadmin master password to initialize the privileged security session.
+                  Enter your admin password to initialize the privileged security session.
                 </p>
               </div>
 
@@ -251,8 +207,8 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
                     type="tel"
                     value={adminPhone}
                     onChange={(e) => setAdminPhone(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-purple-600"
-                    placeholder="Authorized Admin Mobile Number"
+                    placeholder="Enter 10-digit Phone"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-purple-600 focus:bg-white"
                   />
                 </div>
 
@@ -303,7 +259,7 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
               <div className="space-y-1">
                 <h4 className="text-base font-black text-slate-900">Step 2: Biometric Hardware Authentication</h4>
                 <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-                  Verify your registered fingerprint or facial recognition on this device using WebAuthn.
+                  Verify your fingerprint or facial recognition on this device using WebAuthn.
                 </p>
               </div>
 
@@ -316,7 +272,7 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
 
               {biometricSupported === false && (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs font-semibold text-left">
-                  ⚠️ Hardware Biometrics is not detected on this browser/environment. In accordance with zero-trust security requirements, this step cannot be silently skipped. Ensure fingerprint or face unlock is enrolled in your OS.
+                  ⚠️ Hardware Biometrics is not detected on this browser/environment. In accordance with security requirements, ensure fingerprint or face unlock is enrolled in your OS.
                 </div>
               )}
 
@@ -333,65 +289,11 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
                 ) : (
                   <>
                     <Fingerprint className="w-4 h-4" />
-                    <span>Prompt Fingerprint / Face Unlock</span>
+                    <span>Scan Fingerprint / Face Unlock</span>
                   </>
                 )}
               </button>
             </div>
-          )}
-
-          {currentStep === 'email_otp' && (
-            <form onSubmit={handleEmailOtpSubmit} className="space-y-4">
-              <div className="space-y-1 text-center">
-                <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
-                  <Mail className="w-7 h-7" />
-                </div>
-                <h4 className="text-base font-black text-slate-900">Step 3: Admin Email Verification</h4>
-                <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                  A 6-digit security code was dispatched to your registered admin email ({emailMasked}).
-                </p>
-                <p className="text-[10px] text-purple-700 font-bold bg-purple-50 p-2 rounded-xl mt-1">
-                  💡 Note: If email SMTP is unconfigured, check the backend server console log for the dispatched OTP.
-                </p>
-              </div>
-
-              {step3Error && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2 text-rose-700 text-xs font-semibold">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <span>{step3Error}</span>
-                </div>
-              )}
-
-              <div>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={emailOtp}
-                  onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ''))}
-                  placeholder="• • • • • •"
-                  className="w-full text-center tracking-[0.5em] font-mono font-black text-2xl py-3 rounded-xl border border-slate-200 outline-none focus:border-purple-600"
-                  autoFocus
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={step3Loading || emailOtp.length !== 6}
-                className="w-full py-3.5 bg-purple-900 hover:bg-purple-950 text-white font-black text-xs rounded-xl shadow-lg shadow-purple-900/20 flex items-center justify-center gap-2 active:scale-98 transition-all disabled:opacity-50"
-              >
-                {step3Loading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Finalizing Admin Access...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Authorize Admin Session</span>
-                  </>
-                )}
-              </button>
-            </form>
           )}
 
           {currentStep === 'success' && (
@@ -401,7 +303,7 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
               </div>
               <h4 className="text-lg font-black text-slate-900">Admin Authorization Granted!</h4>
               <p className="text-xs text-slate-500">
-                All 3 security tiers verified successfully. Launching Admin Control Center...
+                Password & Biometric verified successfully. Launching Admin Control Center...
               </p>
             </div>
           )}

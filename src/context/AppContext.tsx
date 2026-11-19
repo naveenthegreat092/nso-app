@@ -292,25 +292,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const isAdminVerified = Boolean(serverUser.adminVerified);
           const savedActiveRole = (localStorage.getItem('nso_active_role') as Role) || undefined;
 
-          if (isAdminVerified) {
-            const targetRole = savedActiveRole || 'admin';
-            setUser({
-              ...serverUser,
-              adminVerified: true,
-              sellerStatus: 'approved',
-              providerStatus: 'approved',
-              authorizedRoles: Array.from(new Set([...serverUser.authorizedRoles, 'admin' as Role, 'seller' as Role, 'provider' as Role])),
-              activeRole: targetRole,
-              isLoggedIn: true
-            });
-          } else {
-            setUser({
-              ...serverUser,
-              adminVerified: false,
-              activeRole: savedActiveRole && serverUser.authorizedRoles.includes(savedActiveRole) ? savedActiveRole : serverUser.activeRole,
-              isLoggedIn: true
-            });
-          }
+          const targetRole = savedActiveRole && savedActiveRole !== 'admin' && serverUser.authorizedRoles?.includes(savedActiveRole) ? savedActiveRole : 'customer';
+          setUser({
+            ...serverUser,
+            adminVerified: false,
+            activeRole: targetRole,
+            isLoggedIn: true
+          });
         }
       } catch {
         // Unauthenticated fallback
@@ -598,23 +586,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const switchRole = (newRole: Role): boolean => {
-    const isOwner =
-      Boolean(user.adminVerified) ||
-      Boolean(user.isAdmin) ||
-      user.activeRole === 'admin' ||
-      Boolean(localStorage.getItem('nso_admin_phone'));
+    if (newRole === 'admin' && !user.adminVerified) {
+      showToast('Admin password and biometric verification required.');
+      return false;
+    }
 
-    // If owner, grant unhindered switching to any role:
+    const isOwner = Boolean(user.adminVerified) || Boolean(user.isAdmin) || user.authorizedRoles.includes('admin');
+
     if (isOwner) {
       setUser((prev) => ({
         ...prev,
         activeRole: newRole,
-        adminVerified: true,
+        adminVerified: newRole === 'admin' ? true : false,
         sellerStatus: 'approved',
         providerStatus: 'approved',
         authorizedRoles: ['customer', 'admin', 'seller', 'provider']
       }));
-      localStorage.setItem('nso_active_role', newRole);
+      localStorage.setItem('nso_active_role', newRole === 'admin' ? 'customer' : newRole);
       api.switchRole(newRole).catch(() => {});
       addAuditLog('ROLE_SWITCH', `Owner switched active role to ${newRole}`, newRole);
       showToast(`Switched view to ${newRole.toUpperCase()}`);

@@ -380,7 +380,7 @@ export const AccountScreen: React.FC<{
       </div>
 
       {/* 5. Store Owner & Superadmin Portal (Discrete, Protected Gateway - Only accessible to authorized admin phone) */}
-      {(user.adminVerified || (user.phone && user.phone.replace(/\D/g, '').endsWith('8310421121'))) && (
+      {Boolean(user.isLoggedIn) && (
         <div className="space-y-2.5 pt-2">
           <div className="flex items-center justify-between px-1">
             <h4 className="font-black text-xs text-slate-900 uppercase tracking-wider">
@@ -388,17 +388,17 @@ export const AccountScreen: React.FC<{
             </h4>
             <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-full flex items-center gap-1 border border-purple-200/50">
               <Lock className="w-2.5 h-2.5 text-purple-600" />
-              <span>{user.adminVerified ? 'Unlocked' : 'MFA Protected'}</span>
+              <span>Password & Biometrics Protected</span>
             </span>
           </div>
 
           <div
             onClick={() => {
-              if (user.adminVerified) {
-                switchRole('admin');
-              } else {
                 setShowAdminMfa(true);
-              }
+                // Required password and biometric challenge
+                /* switchRole requires MFA */
+                //
+                //
             }}
             className="bg-gradient-to-r from-slate-900 to-indigo-950 rounded-3xl p-4 text-white shadow-md cursor-pointer hover:brightness-110 active:scale-98 transition-all flex items-center justify-between border border-slate-800"
           >

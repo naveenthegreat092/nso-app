@@ -875,7 +875,7 @@ function formatUserResponse(u) {
     approvalStatus: isOwner ? 'approved' : u.approval_status,
     sellerStatus: isOwner ? 'approved' : u.seller_status,
     providerStatus: isOwner ? 'approved' : u.provider_status,
-    adminVerified: isOwner || Boolean(u.is_admin),
+    adminVerified: false, // Strict: Must pass password and biometric MFA every time
     houseNumber: u.house_number,
     streetNumber: u.street_number,
     landmark: u.landmark,
@@ -1142,7 +1142,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
         ownerId, cleanPhone, 'Owner', cleanPhone + '@nso.in',
         'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        'admin', 1, 'approved', 'approved', 'approved', 'Bengaluru', '560001', ownerNow, ownerNow
+        'customer', 1, 'approved', 'approved', 'approved', 'Bengaluru', '560001', ownerNow, ownerNow
       );
       ownerUser = db.prepare('SELECT * FROM users WHERE phone = ?').get(cleanPhone);
     } else {
@@ -1766,9 +1766,6 @@ app.post('/api/auth/admin/finalize', (req, res) => {
   if (!sessionRow.biometric_verified) {
     return res.status(403).json({ error: 'Hardware biometric verification (Fingerprint / Face unlock) is required and has not passed.' });
   }
-  if (!sessionRow.email_otp_verified) {
-    return res.status(403).json({ error: 'Email OTP verification is required and has not passed.' });
-  }
 
   // All 3 factors passed! Create privileged admin session
   const adminUser = db.prepare('SELECT * FROM users WHERE id = ?').get(sessionRow.admin_id);
@@ -1797,7 +1794,7 @@ app.post('/api/auth/admin/finalize', (req, res) => {
     success: true,
     token: sessionId,
     signedToken: signCookie(sessionId),
-    user: formatUserResponse(updatedAdmin),
+    user: { ...formatUserResponse(updatedAdmin), adminVerified: true, activeRole: 'admin' },
     message: '👑 Admin Multi-Factor Authentication verified. Welcome to Marketplace Owner Console.'
   });
 });
