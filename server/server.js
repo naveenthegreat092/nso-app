@@ -5514,11 +5514,6 @@ app.post('/api/calls/start', (req, res) => {
     startedAt: nowIso
   });
 });
-    receiverName,
-    status: 'active',
-    startedAt: nowIso
-  });
-});
 
 app.post('/api/calls/:id/end', requireAuth, (req, res) => {
   const { id } = req.params;
