@@ -323,17 +323,17 @@ export const ProductDetailModal: React.FC<{
         </div>
 
         {/* Sticky Bottom Actions */}
-        <div className="p-4 border-t border-slate-150 bg-white grid grid-cols-2 gap-2.5 shadow-lg">
+        <div className="p-4 border-t border-slate-200/80 bg-white grid grid-cols-2 gap-3 shadow-lg">
           <button
             onClick={handleAddToCart}
-            className="py-3 px-4 rounded-2xl border-2 border-red-600 text-red-600 hover:bg-red-50 font-black text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
+            className="py-3.5 px-4 rounded-xl border border-red-600/90 text-red-600 hover:bg-red-50 active:bg-red-100 font-extrabold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer shadow-2xs"
           >
             <ShoppingBag className="w-4 h-4" />
             <span>Add to Cart</span>
           </button>
           <button
             onClick={handleBuyNow}
-            className="py-3 px-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-black text-xs shadow-lg shadow-red-500/25 flex items-center justify-center gap-1.5 transition-transform active:scale-95"
+            className="py-3.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-extrabold text-xs shadow-xs flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer"
           >
             <span>Proceed to Buy</span>
           </button>

@@ -34,10 +34,13 @@ export default {
         sans: ['"Plus Jakarta Sans"', 'system-ui', '-apple-system', 'sans-serif'],
       },
       boxShadow: {
-        'card': '0 2px 14px 0 rgba(0, 0, 0, 0.05)',
-        'card-hover': '0 8px 24px -4px rgba(0, 0, 0, 0.1)',
-        'glow-red': '0 4px 20px -2px rgba(229, 57, 53, 0.35)',
-        'bottom-nav': '0 -4px 20px 0 rgba(0, 0, 0, 0.06)',
+        'card': '0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 6px 18px -2px rgba(15, 23, 42, 0.04)',
+        'card-hover': '0 12px 28px -4px rgba(15, 23, 42, 0.08), 0 3px 8px -2px rgba(15, 23, 42, 0.04)',
+        'card-elevated': '0 20px 40px -8px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.05)',
+        'glow-red': '0 6px 24px -2px rgba(229, 57, 53, 0.3)',
+        'glow-subtle': '0 4px 16px -2px rgba(15, 23, 42, 0.06)',
+        'bottom-nav': '0 -4px 24px 0 rgba(15, 23, 42, 0.06)',
+        'float': '0 14px 34px -4px rgba(15, 23, 42, 0.14), 0 4px 12px -2px rgba(15, 23, 42, 0.06)',
       },
       screens: {
         'xs': '360px',

@@ -6,6 +6,11 @@
   * {
     box-sizing: border-box;
   }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     background-color: #f1f5f9;
@@ -14,6 +19,7 @@
     -webkit-tap-highlight-color: transparent;
     user-select: none;
     -webkit-user-select: none;
+    color: #0f172a;
   }
   input, textarea, select {
     user-select: text;
@@ -37,6 +43,25 @@
   }
   .hover\:scale-98:hover {
     transform: scale(0.98);
+  }
+
+  /* Studio Glassmorphism and Depth Utilities */
+  .glass-surface {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(226, 232, 240, 0.7);
+  }
+  .glass-dark {
+    background: rgba(15, 23, 42, 0.88);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 }
 

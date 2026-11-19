@@ -17,8 +17,8 @@ export const BottomNav: React.FC = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/98 backdrop-blur-xl border-t border-slate-200/80 max-w-lg mx-auto safe-bottom">
-      <div className="flex items-center justify-around px-2 pt-2 pb-3">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-2xl border-t border-slate-200/70 max-w-lg mx-auto safe-bottom shadow-[0_-4px_24px_rgba(15,23,42,0.06)]">
+      <div className="flex items-center justify-around px-3 pt-2 pb-3">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -27,30 +27,30 @@ export const BottomNav: React.FC = () => {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className="flex flex-col items-center justify-center py-0.5 px-4 rounded-2xl transition-all duration-200 active:scale-90 relative group"
+              className="flex flex-col items-center justify-center py-1 px-4 rounded-2xl transition-all duration-200 active:scale-95 relative group cursor-pointer"
               aria-label={item.label}
             >
-              {/* Active background pill */}
+              {/* Active subtle aura */}
               {isActive && (
-                <span className="absolute inset-x-0.5 top-0.5 h-8 rounded-xl bg-red-50 -z-10" />
+                <span className="absolute inset-x-2 top-0.5 bottom-1 rounded-2xl bg-red-50/80 border border-red-100/60 -z-10 shadow-xs" />
               )}
               <div className="relative">
                 <Icon
                   className={`w-5 h-5 transition-all duration-200 ${
                     isActive
-                      ? 'text-red-600 stroke-[2.5] scale-110'
-                      : 'text-slate-400 stroke-[1.8] group-hover:text-slate-600'
+                      ? 'text-red-600 stroke-[2.4] scale-105'
+                      : 'text-slate-400 stroke-[1.8] group-hover:text-slate-700'
                   }`}
                 />
                 {item.badge && item.badge > 0 ? (
-                  <span className="absolute -top-1.5 -right-2 bg-red-600 text-white font-black text-[9px] min-w-[16px] h-4 rounded-full flex items-center justify-center border-2 border-white shadow-sm px-0.5">
+                  <span className="absolute -top-1.5 -right-2.5 bg-red-600 text-white font-extrabold text-[10px] min-w-[17px] h-[17px] rounded-full flex items-center justify-center border-2 border-white shadow-sm px-0.5">
                     {item.badge > 9 ? '9+' : item.badge}
                   </span>
                 ) : null}
               </div>
               <span
-                className={`text-[10px] mt-1 tracking-tight font-bold transition-colors ${
-                  isActive ? 'text-red-600' : 'text-slate-400'
+                className={`text-[11px] mt-1 tracking-tight transition-colors ${
+                  isActive ? 'text-red-600 font-extrabold' : 'text-slate-500 font-semibold group-hover:text-slate-800'
                 }`}
               >
                 {item.label}

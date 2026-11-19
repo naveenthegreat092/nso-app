@@ -17,7 +17,8 @@ import {
   ShoppingBasket,
   Home,
   Sparkles,
-  Scissors
+  Scissors,
+  X
 } from 'lucide-react';
 
 export const ExploreScreen: React.FC<{
@@ -95,21 +96,30 @@ export const ExploreScreen: React.FC<{
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search products, brands, or doorstep services..."
-          className="w-full pl-11 pr-4 py-3 bg-slate-100 border border-slate-200/60 rounded-2xl text-xs font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500 transition-all shadow-xs"
+          className="w-full pl-11 pr-10 py-3 bg-white border border-slate-200/80 rounded-2xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-red-500/80 shadow-2xs transition-all text-slate-900 placeholder:text-slate-400"
         />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 rounded-full"
+            aria-label="Clear search"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Type Filter Pills + Map View Button */}
       <div className="flex items-center gap-2">
-        <div className="flex-1 flex bg-slate-100 p-1 rounded-2xl text-xs font-bold">
+        <div className="flex-1 flex bg-slate-100/90 p-1 rounded-2xl text-xs font-extrabold border border-slate-200/60 shadow-2xs">
           {(['all', 'products', 'services'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setFilterType(t)}
-              className={`flex-1 py-2 rounded-xl transition-all capitalize text-center ${
+              className={`flex-1 py-2 rounded-xl transition-all capitalize text-center cursor-pointer ${
                 filterType === t
                   ? 'bg-white text-slate-900 shadow-sm font-black'
-                  : 'text-slate-500 hover:text-slate-800'
+                  : 'text-slate-500 hover:text-slate-900 font-bold'
               }`}
             >
               {t === 'all' ? 'All Catalog' : t}
@@ -120,7 +130,7 @@ export const ExploreScreen: React.FC<{
         {onOpenMapRadius && (
           <button
             onClick={onOpenMapRadius}
-            className="px-3 py-2 rounded-2xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/60 transition-all flex items-center gap-1.5 font-bold text-xs active:scale-95"
+            className="px-3.5 py-2 rounded-2xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/70 transition-all flex items-center gap-1.5 font-extrabold text-xs active:scale-95 shadow-2xs cursor-pointer"
             title="Open Specialist Radius Map"
           >
             <Compass className="w-4 h-4 text-red-600" />
@@ -138,9 +148,9 @@ export const ExploreScreen: React.FC<{
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all active:scale-95 ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold whitespace-nowrap transition-all active:scale-95 cursor-pointer ${
                 isSelected
-                  ? 'bg-red-600 text-white shadow-sm'
+                  ? 'bg-red-600 text-white shadow-xs'
                   : 'bg-white border border-slate-200/80 text-slate-700 hover:bg-slate-50'
               }`}
             >
@@ -153,12 +163,12 @@ export const ExploreScreen: React.FC<{
 
       {/* Empty State */}
       {totalResults === 0 && (
-        <div className="bg-white rounded-3xl p-10 text-center border border-slate-200/60 space-y-3 mt-4">
-          <div className="w-14 h-14 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+        <div className="bg-white rounded-3xl p-10 text-center border border-slate-200/70 shadow-card space-y-3 mt-4">
+          <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center mx-auto border border-slate-100">
             <Package className="w-7 h-7" />
           </div>
-          <h4 className="text-sm font-black text-slate-800">No items found</h4>
-          <p className="text-xs text-slate-500 max-w-xs mx-auto">
+          <h4 className="text-sm font-extrabold text-slate-900">No items found</h4>
+          <p className="text-xs text-slate-500 max-w-xs mx-auto font-medium">
             Try adjusting your search query or switching categories.
           </p>
         </div>
@@ -180,17 +190,17 @@ export const ExploreScreen: React.FC<{
                 <div
                   key={p.id}
                   onClick={() => onSelectProduct(p)}
-                  className="bg-white rounded-3xl border border-slate-200/60 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col cursor-pointer active:scale-98 group"
+                  className="bg-white rounded-3xl border border-slate-200/75 overflow-hidden shadow-card hover:shadow-card-hover transition-all flex flex-col cursor-pointer active:scale-98 group"
                 >
-                  <div className="relative aspect-square bg-slate-50 p-3 flex items-center justify-center">
+                  <div className="relative aspect-square bg-slate-50/90 p-3.5 flex items-center justify-center overflow-hidden">
                     <img
                       src={p.image}
                       alt={p.title}
-                      className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform"
+                      className="w-full h-full object-contain mix-blend-multiply group-hover:scale-105 transition-transform duration-300"
                     />
 
                     {p.discountPercentage > 0 && (
-                      <span className="absolute top-2.5 left-2.5 bg-red-600 text-white font-black text-[10px] px-2 py-0.5 rounded-full">
+                      <span className="absolute top-2.5 left-2.5 bg-red-600 text-white font-black text-[10px] px-2 py-0.5 rounded-full shadow-2xs">
                         {p.discountPercentage}% OFF
                       </span>
                     )}
@@ -200,22 +210,23 @@ export const ExploreScreen: React.FC<{
                         e.stopPropagation();
                         toggleWishlist(p);
                       }}
-                      className="absolute top-2.5 right-2.5 w-8 h-8 bg-white/90 hover:bg-white rounded-full flex items-center justify-center shadow-xs"
+                      className="absolute top-2.5 right-2.5 w-8 h-8 bg-white/90 hover:bg-white backdrop-blur-md rounded-full flex items-center justify-center shadow-2xs border border-slate-200/60 cursor-pointer"
+                      aria-label="Wishlist toggle"
                     >
                       <Heart
                         className={`w-4 h-4 ${
                           wishlist.some((w) => w.id === p.id)
                             ? 'fill-rose-600 text-rose-600'
-                            : 'text-slate-500'
+                            : 'text-slate-400'
                         }`}
                       />
                     </button>
                   </div>
 
-                  <div className="p-3.5 flex-1 flex flex-col justify-between space-y-2">
+                  <div className="p-3.5 flex-1 flex flex-col justify-between space-y-2.5">
                     <div>
-                      <div className="flex items-center gap-1 text-[11px] font-bold text-amber-700">
-                        <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                      <div className="flex items-center gap-1.5 text-xs font-extrabold text-amber-700">
+                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                         <span>{p.rating}</span>
                       </div>
                       <h5 className="font-bold text-xs text-slate-900 line-clamp-2 mt-1 leading-snug">
@@ -223,8 +234,8 @@ export const ExploreScreen: React.FC<{
                       </h5>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                      <div className="text-sm font-black text-slate-900">
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1">
+                      <div className="text-sm font-black text-slate-900 tracking-tight">
                         ₹{p.price.toLocaleString('en-IN')}
                       </div>
 
@@ -232,26 +243,28 @@ export const ExploreScreen: React.FC<{
                         {qty === 0 ? (
                           <button
                             onClick={() => addToCart(p, 1)}
-                            className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-black text-xs rounded-xl border border-red-200 transition-all"
+                            className="px-3.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-extrabold text-xs rounded-xl border border-red-200/90 transition-all cursor-pointer"
                           >
                             ADD
                           </button>
                         ) : (
-                          <div className="flex items-center bg-red-600 text-white rounded-xl shadow-sm overflow-hidden">
+                          <div className="flex items-center bg-red-600 text-white rounded-xl shadow-2xs overflow-hidden">
                             <button
                               onClick={() => updateCartQuantity(p.id, qty - 1)}
-                              className="p-1.5 hover:bg-red-700"
+                              className="p-1.5 hover:bg-red-700 cursor-pointer"
+                              aria-label="Decrease quantity"
                             >
-                              <Minus className="w-3 h-3" />
+                              <Minus className="w-3.5 h-3.5" />
                             </button>
                             <span className="px-2 text-xs font-black min-w-[20px] text-center">
                               {qty}
                             </span>
                             <button
                               onClick={() => updateCartQuantity(p.id, qty + 1)}
-                              className="p-1.5 hover:bg-red-700"
+                              className="p-1.5 hover:bg-red-700 cursor-pointer"
+                              aria-label="Increase quantity"
                             >
-                              <Plus className="w-3 h-3" />
+                              <Plus className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         )}
@@ -279,33 +292,33 @@ export const ExploreScreen: React.FC<{
               <div
                 key={s.id}
                 onClick={() => onSelectService(s)}
-                className="bg-white rounded-3xl border border-slate-200/60 p-4 shadow-xs hover:shadow-md transition-all cursor-pointer flex items-center justify-between gap-3 active:scale-98"
+                className="bg-white rounded-3xl border border-slate-200/75 p-4 shadow-card hover:shadow-card-hover transition-all cursor-pointer flex items-center justify-between gap-3 active:scale-98"
               >
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                <div className="flex-1 space-y-1.5 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] font-extrabold text-amber-900 bg-amber-50 px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-200/70">
                       {s.category}
                     </span>
-                    <div className="flex items-center gap-0.5 text-xs text-amber-600 font-bold">
-                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                    <div className="flex items-center gap-1 text-xs text-amber-700 font-extrabold">
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                       <span>{s.providerRating}</span>
                     </div>
                   </div>
 
-                  <h4 className="font-bold text-sm text-slate-900 line-clamp-1">{s.title}</h4>
+                  <h4 className="font-extrabold text-sm text-slate-900 line-clamp-1">{s.title}</h4>
 
                   <div
                     onClick={(e) => {
                       e.stopPropagation();
                       openProviderProfile(s.providerId);
                     }}
-                    className="flex items-center gap-1.5 pt-0.5 flex-wrap cursor-pointer"
+                    className="flex items-center gap-2 pt-0.5 flex-wrap cursor-pointer"
                   >
-                    <p className="text-xs text-slate-600 font-bold hover:text-red-600">{s.providerName}</p>
-                    <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-black px-1.5 py-0.5 rounded">
+                    <p className="text-xs text-slate-700 font-bold hover:text-red-600">{s.providerName}</p>
+                    <span className="text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200/80 font-mono font-extrabold px-1.5 py-0.5 rounded">
                       ID: {s.issuedProviderId || s.providerId}
                     </span>
-                    <span className="text-[10px] text-blue-600 font-bold hover:underline">Profile ↗</span>
+                    <span className="text-xs text-blue-600 font-extrabold hover:underline">Profile ↗</span>
                   </div>
                 </div>
 
@@ -313,16 +326,16 @@ export const ExploreScreen: React.FC<{
                   {s.pricingType === 'hourly' ? (
                     <>
                       <span className="text-base font-black text-slate-900">₹{s.hourlyRate || s.price}</span>
-                      <p className="text-[10px] text-indigo-700 font-bold">/ hour</p>
+                      <p className="text-[11px] text-indigo-700 font-extrabold">/ hour</p>
                     </>
                   ) : s.pricingType === 'quotation_required' ? (
-                    <span className="text-[11px] font-black text-purple-900 bg-purple-100 px-2 py-0.5 rounded-md">
+                    <span className="text-[11px] font-extrabold text-purple-900 bg-purple-100 px-2.5 py-1 rounded-lg">
                       Free Quote
                     </span>
                   ) : (
                     <>
                       <span className="text-base font-black text-slate-900">₹{s.price}</span>
-                      <p className="text-[10px] text-slate-400">{s.unit}</p>
+                      <p className="text-[11px] text-slate-500 font-medium">{s.unit}</p>
                     </>
                   )}
                   <button
@@ -330,7 +343,7 @@ export const ExploreScreen: React.FC<{
                       e.stopPropagation();
                       onSelectService(s);
                     }}
-                    className="mt-2 px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black shadow-sm active:scale-95"
+                    className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-extrabold shadow-xs active:scale-95 transition-all cursor-pointer"
                   >
                     Book
                   </button>

@@ -8,26 +8,26 @@ export const MobileFrame: React.FC<{
   const { notification, isAppLoading } = useApp();
 
   return (
-    <div className="w-full min-h-screen bg-[#f8fafc] flex flex-col relative antialiased selection:bg-red-500 selection:text-white">
-      {/* App Content: 100% width edge-to-edge native Android/web experience */}
-      <div className="w-full max-w-lg mx-auto min-h-screen flex flex-col bg-[#f8fafc] shadow-none sm:shadow-2xl sm:border-x sm:border-slate-200/60 relative overflow-hidden">
+    <div className="w-full min-h-screen bg-slate-900/5 sm:bg-slate-100/90 sm:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] sm:from-slate-100 sm:via-slate-200/50 sm:to-slate-300/40 flex flex-col justify-center items-center relative antialiased selection:bg-red-500 selection:text-white">
+      {/* App Content: 100% width edge-to-edge on mobile, sleek studio frame on desktop */}
+      <div className="w-full max-w-lg min-h-screen sm:min-h-[92vh] sm:my-4 sm:rounded-[32px] flex flex-col bg-[#f8fafc] shadow-none sm:shadow-[0_20px_50px_-12px_rgba(15,23,42,0.18)] sm:border sm:border-slate-300/70 relative overflow-hidden">
 
         {/* Global App Loading Splash */}
         {isAppLoading && (
-          <div className="absolute inset-0 z-[999] flex flex-col items-center justify-center bg-white animate-fade-in">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center shadow-2xl shadow-red-500/40 text-white font-black text-3xl tracking-tighter animate-bounce-in">
+          <div className="absolute inset-0 z-[999] flex flex-col items-center justify-center bg-white/95 backdrop-blur-md animate-fade-in">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-red-600 via-rose-500 to-red-600 flex items-center justify-center shadow-xl shadow-red-500/30 text-white font-black text-3xl tracking-tighter animate-bounce-in">
               NSO
             </div>
-            <div className="mt-6 flex items-center gap-1.5">
+            <div className="mt-6 flex items-center gap-2">
               {[0, 1, 2].map((i) => (
                 <span
                   key={i}
-                  className="w-2 h-2 rounded-full bg-red-400"
+                  className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm"
                   style={{ animation: `pulse-subtle 1.2s ease-in-out ${i * 0.2}s infinite` }}
                 />
               ))}
             </div>
-            <p className="mt-3 text-xs text-slate-400 font-semibold tracking-wide">Loading your store…</p>
+            <p className="mt-3 text-xs text-slate-500 font-bold tracking-wide">Loading your store…</p>
           </div>
         )}
 
@@ -41,9 +41,9 @@ export const MobileFrame: React.FC<{
             className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] max-w-sm w-[90%] px-2 pointer-events-none animate-fade-in-up"
             style={{ maxWidth: '28rem' }}
           >
-            <div className="bg-white/98 backdrop-blur-xl text-slate-950 text-xs font-bold py-3.5 px-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-200/90 shadow-slate-900/15">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-600 flex-shrink-0 animate-pulse" />
-              <p className="font-extrabold flex-1 leading-snug text-slate-950">{notification}</p>
+            <div className="bg-slate-900/95 backdrop-blur-xl text-white text-xs font-semibold py-3.5 px-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-700/60 shadow-slate-950/25">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse shadow-sm shadow-red-500/50" />
+              <p className="font-bold flex-1 leading-snug text-white tracking-normal">{notification}</p>
             </div>
           </div>
         )}

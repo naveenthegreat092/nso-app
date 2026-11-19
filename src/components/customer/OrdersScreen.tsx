@@ -133,59 +133,59 @@ export const OrdersScreen: React.FC = () => {
   const getOrderStatusBadge = (status: string) => {
     switch (status) {
       case 'confirmed':
-        return <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full">Confirmed</span>;
+        return <span className="text-[11px] bg-blue-50 text-blue-700 font-extrabold px-2.5 py-0.5 rounded-full border border-blue-200/80">Confirmed</span>;
       case 'packed':
-        return <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">Packed</span>;
+        return <span className="text-[11px] bg-amber-50 text-amber-700 font-extrabold px-2.5 py-0.5 rounded-full border border-amber-200/80">Packed</span>;
       case 'shipped':
-        return <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full">Shipped</span>;
+        return <span className="text-[11px] bg-purple-50 text-purple-700 font-extrabold px-2.5 py-0.5 rounded-full border border-purple-200/80">Shipped</span>;
       case 'out_for_delivery':
-        return <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">Out for Delivery</span>;
+        return <span className="text-[11px] bg-indigo-50 text-indigo-700 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-200/80">Out for Delivery</span>;
       case 'delivered':
-        return <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">Delivered</span>;
+        return <span className="text-[11px] bg-emerald-50 text-emerald-700 font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-200/80">Delivered</span>;
       case 'payment_pending':
-        return <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full animate-pulse">⏳ Awaiting Payment</span>;
+        return <span className="text-[11px] bg-amber-50 text-amber-700 font-extrabold px-2.5 py-0.5 rounded-full border border-amber-200 animate-pulse">⏳ Awaiting Payment</span>;
       case 'delivered_pending_payment':
-        return <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">Delivered (Pending Release)</span>;
+        return <span className="text-[11px] bg-indigo-50 text-indigo-700 font-extrabold px-2.5 py-0.5 rounded-full border border-indigo-200/80">Delivered (Pending Release)</span>;
       case 'completed':
-        return <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">Completed & Cleared</span>;
+        return <span className="text-[11px] bg-emerald-50 text-emerald-700 font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-200/80">Completed & Cleared</span>;
       case 'cancelled':
-        return <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-full">Cancelled (Refunded)</span>;
+        return <span className="text-[11px] bg-rose-50 text-rose-700 font-extrabold px-2.5 py-0.5 rounded-full border border-rose-200/80">Cancelled (Refunded)</span>;
       default:
-        return <span className="text-[10px] bg-gray-100 text-gray-800 font-bold px-2 py-0.5 rounded-full">{status}</span>;
+        return <span className="text-[11px] bg-slate-100 text-slate-700 font-extrabold px-2.5 py-0.5 rounded-full border border-slate-200/80">{status}</span>;
     }
   };
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-4 pb-8 animate-fade-in-up">
       {/* Inline Cancel Confirmation Dialog */}
       {confirmCancelId && (
         <div
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in"
           onClick={() => setConfirmCancelId(null)}
         >
           <div
-            className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4 animate-bounce-in"
+            className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-4 animate-bounce-in border border-slate-100"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="w-14 h-14 rounded-2xl bg-rose-100 flex items-center justify-center mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100">
               <Ban className="w-7 h-7 text-rose-600" />
             </div>
             <div className="text-center">
-              <h3 className="font-black text-base text-slate-900">Cancel {confirmCancelType === 'order' ? 'Order' : 'Booking'}?</h3>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                A full refund will be instantly issued to your original payment source.
+              <h3 className="font-extrabold text-base text-slate-900">Cancel {confirmCancelType === 'order' ? 'Order' : 'Booking'}?</h3>
+              <p className="text-xs text-slate-500 mt-1.5 leading-relaxed font-medium">
+                A full refund will be automatically recorded and credited back.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 pt-1">
               <button
                 onClick={() => setConfirmCancelId(null)}
-                className="py-3 rounded-2xl border-2 border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 transition-all"
+                className="py-2.5 rounded-xl border border-slate-200 text-slate-700 font-extrabold text-xs hover:bg-slate-50 transition-all cursor-pointer"
               >
                 Keep It
               </button>
               <button
                 onClick={handleConfirmCancel}
-                className="py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-sm transition-all active:scale-98"
+                className="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs shadow-xs transition-all active:scale-98 cursor-pointer"
               >
                 Yes, Cancel
               </button>
@@ -194,28 +194,28 @@ export const OrdersScreen: React.FC = () => {
         </div>
       )}
       {/* Header */}
-      <div className="px-4 pt-3">
-        <h2 className="text-lg font-black text-gray-900 tracking-tight">Orders & Bookings</h2>
-        <p className="text-xs text-gray-500">Track fulfillment status and review service progress</p>
+      <div className="px-4 pt-3 space-y-1">
+        <h2 className="text-lg font-black text-slate-900 tracking-tight">Orders & Bookings</h2>
+        <p className="text-xs text-slate-500 font-medium">Track fulfillment status and review service progress</p>
 
         {/* Sub Tabs */}
-        <div className="flex bg-gray-100 p-1 rounded-xl mt-3">
+        <div className="flex bg-slate-100/90 p-1.5 rounded-2xl mt-3 border border-slate-200/70 shadow-2xs">
           <button
             onClick={() => setSubTab('products')}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-              subTab === 'products' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'
+            className={`flex-1 py-2 text-xs font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              subTab === 'products' ? 'bg-white text-red-600 shadow-xs' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            <Package className="w-3.5 h-3.5" />
+            <Package className="w-4 h-4" />
             <span>Product Orders ({orders.length})</span>
           </button>
           <button
             onClick={() => setSubTab('services')}
-            className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-              subTab === 'services' ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500'
+            className={`flex-1 py-2 text-xs font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              subTab === 'services' ? 'bg-white text-red-600 shadow-xs' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            <Wrench className="w-3.5 h-3.5" />
+            <Wrench className="w-4 h-4" />
             <span>Service Bookings ({customerBookings.length})</span>
           </button>
         </div>
@@ -226,19 +226,19 @@ export const OrdersScreen: React.FC = () => {
         {subTab === 'products' && (
           <>
             {orders.length === 0 ? (
-              <div className="text-center py-12 px-4 bg-white rounded-3xl border border-gray-150 shadow-sm space-y-3">
-                <div className="w-14 h-14 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto">
-                  <Package className="w-7 h-7 text-red-600 stroke-[1.5]" />
+              <div className="text-center py-12 px-5 bg-white rounded-3xl border border-slate-200/75 shadow-card space-y-3">
+                <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto border border-red-100">
+                  <Package className="w-7 h-7 text-red-600 stroke-[1.8]" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-gray-900">No Orders Yet</h3>
-                  <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">
+                  <h3 className="text-sm font-extrabold text-slate-900">No Orders Yet</h3>
+                  <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto font-medium">
                     Experience lightning-fast 10-25 min delivery on groceries, electronics & local products.
                   </p>
                 </div>
                 <button
                   onClick={() => setActiveTab('home')}
-                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-red-500/20 active:scale-95 transition-all inline-flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-xs active:scale-95 transition-all inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <ShoppingBag className="w-4 h-4" />
                   <span>Start Shopping</span>
@@ -250,14 +250,14 @@ export const OrdersScreen: React.FC = () => {
                 return (
                   <div
                     key={order.id}
-                    className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden"
+                    className="bg-white rounded-3xl border border-slate-200/75 shadow-card hover:shadow-card-hover overflow-hidden transition-all"
                   >
                     <div
                       onClick={() => toggleExpand(order.id)}
-                      className="p-4 cursor-pointer hover:bg-gray-50/50 transition-colors"
+                      className="p-4 cursor-pointer hover:bg-slate-50/70 transition-colors"
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-mono text-xs font-bold text-gray-900">
+                        <span className="font-mono text-xs font-extrabold text-slate-900">
                           {order.orderNumber}
                         </span>
                         {getOrderStatusBadge(order.orderStatus)}
@@ -268,19 +268,19 @@ export const OrdersScreen: React.FC = () => {
                           <img
                             src={order.items[0].image}
                             alt=""
-                            className="w-12 h-12 object-cover rounded-xl bg-gray-50"
+                            className="w-12 h-12 object-cover rounded-2xl bg-slate-50 border border-slate-100"
                           />
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold text-gray-800 truncate">
+                          <p className="text-xs font-bold text-slate-800 truncate">
                             {order.items[0]?.title}
                             {order.items.length > 1 ? ` +${order.items.length - 1} more` : ''}
                           </p>
-                          <p className="text-[11px] text-gray-500 mt-0.5">
-                            Total: <span className="font-extrabold text-gray-900">₹{order.total.toLocaleString('en-IN')}</span> • {order.createdAt}
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Total: <span className="font-extrabold text-slate-900">₹{order.total.toLocaleString('en-IN')}</span> • {order.createdAt}
                           </p>
                         </div>
-                        {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                        {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                       </div>
 
                       {order.orderStatus === 'payment_pending' && (
@@ -460,19 +460,19 @@ export const OrdersScreen: React.FC = () => {
         {subTab === 'services' && (
           <>
             {customerBookings.length === 0 ? (
-              <div className="text-center py-12 px-4 bg-white rounded-3xl border border-gray-150 shadow-sm space-y-3">
-                <div className="w-14 h-14 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto">
-                  <Wrench className="w-7 h-7 text-red-600 stroke-[1.5]" />
+              <div className="text-center py-12 px-5 bg-white rounded-3xl border border-slate-200/75 shadow-card space-y-3">
+                <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto border border-red-100">
+                  <Wrench className="w-7 h-7 text-red-600 stroke-[1.8]" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-gray-900">No Service Bookings Yet</h3>
-                  <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">
+                  <h3 className="text-sm font-extrabold text-slate-900">No Service Bookings Yet</h3>
+                  <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto font-medium">
                     Book certified electricians, plumbers, AC repair, and beauty experts delivered to your doorstep.
                   </p>
                 </div>
                 <button
                   onClick={() => setActiveTab('explore')}
-                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-red-500/20 active:scale-95 transition-all inline-flex items-center gap-1.5"
+                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-xs active:scale-95 transition-all inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <Wrench className="w-4 h-4" />
                   <span>Explore Services</span>
@@ -485,36 +485,36 @@ export const OrdersScreen: React.FC = () => {
                 return (
                   <div
                     key={booking.id}
-                    className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3"
+                    className="bg-white rounded-3xl border border-slate-200/75 shadow-card hover:shadow-card-hover p-4 space-y-3.5 transition-all"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs font-bold text-gray-900">
+                      <span className="font-mono text-xs font-extrabold text-slate-900">
                         {booking.bookingNumber}
                       </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize ${
+                      <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full capitalize border ${
                         booking.status === 'completed'
-                          ? 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                           : booking.status === 'completed_pending_review'
-                          ? 'bg-amber-100 text-amber-900 animate-pulse'
+                          ? 'bg-amber-50 text-amber-800 border-amber-200 animate-pulse'
                           : booking.status === 'quotation_customer_review'
-                          ? 'bg-purple-100 text-purple-900 font-black animate-pulse'
+                          ? 'bg-purple-50 text-purple-800 border-purple-200 font-black animate-pulse'
                           : booking.status === 'problem_reported'
-                          ? 'bg-rose-100 text-rose-900'
+                          ? 'bg-rose-50 text-rose-800 border-rose-200'
                           : booking.status === 'cancelled'
-                          ? 'bg-red-100 text-red-800'
+                          ? 'bg-red-50 text-red-700 border-red-200'
                           : booking.status === 'in_progress'
-                          ? 'bg-indigo-100 text-indigo-800'
-                          : 'bg-blue-100 text-blue-800'
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                          : 'bg-blue-50 text-blue-700 border-blue-200'
                       }`}>
                         {booking.status.replace(/_/g, ' ')}
                       </span>
                     </div>
 
                     <div>
-                      <h4 className="font-bold text-xs text-gray-900">{booking.serviceTitle}</h4>
-                      <p className="text-[11px] text-gray-600 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                        <span>Provider: <span className="font-bold text-gray-900">{booking.providerName}</span></span>
-                        <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-black px-1.5 py-0.2 rounded">
+                      <h4 className="font-extrabold text-sm text-slate-900">{booking.serviceTitle}</h4>
+                      <p className="text-xs text-slate-600 mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span>Provider: <span className="font-extrabold text-slate-900">{booking.providerName}</span></span>
+                        <span className="text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-extrabold px-1.5 py-0.5 rounded">
                           ID: {booking.issuedProviderId || booking.providerId}
                         </span>
                       </p>
