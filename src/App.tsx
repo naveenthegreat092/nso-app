@@ -221,10 +221,59 @@ export const AppContent: React.FC = () => {
           provider={selectedProviderDetail}
           onClose={closeProviderProfile}
           onBookService={() => {
-            // Find first service for this provider and open booking modal
-            const svc = services.find((s) => s.providerId === selectedProviderDetail.id);
+            const prov = selectedProviderDetail;
+            const targetId = prov.id?.toLowerCase();
+            const targetIssued = prov.issuedProviderId?.toLowerCase();
+            const targetUser = prov.userId?.toLowerCase();
+            const targetCategory = prov.tradeCategory?.toLowerCase();
+
+            const svc = services.find((s) => {
+              const pId = s.providerId?.toLowerCase();
+              const pIssued = s.issuedProviderId?.toLowerCase();
+              const pUser = (s as any).providerUserId?.toLowerCase();
+              return (
+                (targetId && (pId === targetId || pIssued === targetId || pUser === targetId)) ||
+                (targetIssued && (pId === targetIssued || pIssued === targetIssued || pUser === targetIssued)) ||
+                (targetUser && (pId === targetUser || pIssued === targetUser || pUser === targetUser)) ||
+                (targetCategory && s.category?.toLowerCase() === targetCategory)
+              );
+            });
+
+            const directService: Service = svc || {
+              id: `svc_direct_${prov.id || 'prov'}`,
+              title: `${prov.applicantName || prov.name} — Direct Service Visit`,
+              category: prov.tradeCategory || prov.tradeTitle || 'Home Services',
+              price: Number(prov.hourlyRate) || 299,
+              unit: 'visit & inspection',
+              pricingType: 'fixed',
+              rateApprovalStatus: 'approved',
+              hourlyRate: Number(prov.hourlyRate) || 299,
+              meteredRate: 0,
+              estimatedDurationHours: 1,
+              requiresQuotation: false,
+              approvedByAdmin: true,
+              providerId: prov.id,
+              providerUserId: prov.userId || prov.id,
+              issuedProviderId: prov.issuedProviderId || prov.id,
+              providerName: prov.applicantName || prov.name,
+              providerPhoneMasked: prov.phoneMasked || '+91 98XXX X3210',
+              providerRating: prov.rating || 4.9,
+              providerJobsCompleted: prov.jobsCompleted || 0,
+              workPhotos: prov.portfolio?.map((p) => p.image) || [],
+              modes: ['home_visit'],
+              description: prov.bio || `Direct booking with verified specialist ${prov.applicantName || prov.name}. Doorstep visit, inspection, diagnostics & repair.`,
+              cancellationPolicy: 'Free cancellation up to 2 hours before scheduled slot.',
+              availableSlots: [
+                '09:00 AM - 11:00 AM',
+                '11:30 AM - 01:30 PM',
+                '02:30 PM - 04:30 PM',
+                '05:00 PM - 07:00 PM'
+              ],
+              approvalStatus: 'approved'
+            };
+
             closeProviderProfile();
-            if (svc) setSelectedService(svc);
+            setSelectedService(directService);
           }}
           onOpenChat={(name) => {
             closeProviderProfile();

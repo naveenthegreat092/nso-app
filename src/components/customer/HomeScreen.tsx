@@ -541,9 +541,55 @@ export const HomeScreen: React.FC<{
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {eligibleProviders.slice(0, 4).map((prov) => {
-              const matchedService = services.find(
-                (s) => s.providerId === prov.id || s.issuedProviderId === prov.issuedProviderId || s.providerId === prov.userId
-              );
+              const targetId = prov.id?.toLowerCase();
+              const targetIssued = prov.issuedProviderId?.toLowerCase();
+              const targetUser = (prov as any).userId?.toLowerCase();
+              const targetCategory = (prov.tradeCategory || prov.tradeTitle)?.toLowerCase();
+
+              const matchedService = services.find((s) => {
+                const pId = s.providerId?.toLowerCase();
+                const pIssued = s.issuedProviderId?.toLowerCase();
+                const pUser = (s as any).providerUserId?.toLowerCase();
+                return (
+                  (targetId && (pId === targetId || pIssued === targetId || pUser === targetId)) ||
+                  (targetIssued && (pId === targetIssued || pIssued === targetIssued || pUser === targetIssued)) ||
+                  (targetUser && (pId === targetUser || pIssued === targetUser || pUser === targetUser)) ||
+                  (targetCategory && s.category?.toLowerCase() === targetCategory)
+                );
+              });
+
+              const directService: Service = matchedService || {
+                id: `svc_direct_${prov.id || 'prov'}`,
+                title: `${prov.applicantName || prov.name} — Direct Service Visit`,
+                category: prov.tradeCategory || prov.tradeTitle || 'Home Services',
+                price: Number(prov.hourlyRate) || 299,
+                unit: 'visit & inspection',
+                pricingType: 'fixed',
+                rateApprovalStatus: 'approved',
+                hourlyRate: Number(prov.hourlyRate) || 299,
+                meteredRate: 0,
+                estimatedDurationHours: 1,
+                requiresQuotation: false,
+                approvedByAdmin: true,
+                providerId: prov.id,
+                providerUserId: (prov as any).userId || prov.id,
+                issuedProviderId: prov.issuedProviderId || prov.id,
+                providerName: prov.applicantName || prov.name,
+                providerPhoneMasked: prov.phoneMasked || '+91 98XXX X3210',
+                providerRating: prov.rating || 4.9,
+                providerJobsCompleted: prov.jobsCompleted || 0,
+                workPhotos: prov.portfolio?.map((p) => p.image) || [],
+                modes: ['home_visit'],
+                description: prov.bio || `Direct booking with verified specialist ${prov.applicantName || prov.name}. Doorstep visit, inspection, diagnostics & repair.`,
+                cancellationPolicy: 'Free cancellation up to 2 hours before scheduled slot.',
+                availableSlots: [
+                  '09:00 AM - 11:00 AM',
+                  '11:30 AM - 01:30 PM',
+                  '02:30 PM - 04:30 PM',
+                  '05:00 PM - 07:00 PM'
+                ],
+                approvalStatus: 'approved'
+              };
 
               return (
                 <div
@@ -594,13 +640,7 @@ export const HomeScreen: React.FC<{
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (matchedService) {
-                          onSelectService(matchedService);
-                        } else {
-                          openProviderProfile(prov.issuedProviderId || prov.id);
-                        }
-                      }}
+                      onClick={() => onSelectService(directService)}
                       className="py-2 px-2.5 rounded-xl bg-red-600 hover:bg-red-700 active:scale-95 text-white font-extrabold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <Calendar className="w-3.5 h-3.5" />
