@@ -29,7 +29,7 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
   const [currentStep, setCurrentStep] = useState<'password' | 'biometric' | 'email_otp' | 'success'>('password');
   
   // Step 1: Admin Password & Phone
-  const [adminPhone, setAdminPhone] = useState('8310421121');
+  const [adminPhone, setAdminPhone] = useState(() => (user.phone ? user.phone.replace(/\D/g, '').slice(-10) : (localStorage.getItem('nso_admin_phone') || '')));
   const [adminPassword, setAdminPassword] = useState('');
   const [step1Loading, setStep1Loading] = useState(false);
   const [step1Error, setStep1Error] = useState<string | null>(null);
@@ -252,7 +252,7 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
                     value={adminPhone}
                     onChange={(e) => setAdminPhone(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-purple-600"
-                    placeholder="8310421121"
+                    placeholder="Authorized Admin Mobile Number"
                   />
                 </div>
 

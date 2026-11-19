@@ -629,7 +629,7 @@ export const OrdersScreen: React.FC = () => {
                             />
                             <div className="text-[11px] text-slate-600">
                               <span className="block font-bold text-slate-900">Scan &amp; Pay ₹{booking.totalPrice} with PhonePe / GPay</span>
-                              <span className="font-mono text-[10px] text-slate-500">Payee: Naveen U (8310421121@axl)</span>
+                              <span className="font-mono text-[10px] text-slate-500">Payee: NSO Verified Merchant</span>
                             </div>
                           </div>
 

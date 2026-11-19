@@ -4,6 +4,7 @@ import {
   X,
   Star,
   ShieldCheck,
+  ShieldAlert,
   CheckCircle2,
   Calendar,
   MessageSquare,
@@ -23,7 +24,7 @@ export const ProviderProfileModal: React.FC<{
   onBookService: () => void;
   onOpenChat: (providerName: string) => void;
 }> = ({ provider, onClose, onBookService, onOpenChat }) => {
-  const { showToast } = useApp();
+  const { showToast, user } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'portfolio' | 'reviews'>('overview');
   const [selectedPortfolioImg, setSelectedPortfolioImg] = useState<string | null>(null);
 
@@ -165,14 +166,27 @@ export const ProviderProfileModal: React.FC<{
                 </ul>
               </div>
 
-              {/* Privacy Protection Callout (Section 7 brief: Masked Calling & Chat) */}
+              {/* Admin-only full phone view */}
+              {(user.activeRole === 'admin' || user.isAdmin) && (
+                <div className="bg-purple-50 border border-purple-200 rounded-2xl p-3 text-purple-950 space-y-1">
+                  <span className="font-black text-[11px] flex items-center gap-1 text-purple-900">
+                    <ShieldAlert className="w-3.5 h-3.5 text-purple-600" />
+                    Admin Privileged Contact (Authorized Only)
+                  </span>
+                  <p className="text-xs text-purple-900 font-bold font-mono">
+                    Direct Phone: {provider.fullPhone || provider.phoneMasked}
+                  </p>
+                </div>
+              )}
+
+              {/* Privacy Protection Callout (Customer View - Always Masked) */}
               <div className="bg-blue-50 border border-blue-200/80 rounded-2xl p-3 text-blue-950 space-y-1">
                 <span className="font-black text-[11px] flex items-center gap-1 text-blue-900">
                   <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                  Privacy Protection Standard
+                  Customer Privacy Protection Standard
                 </span>
                 <p className="text-[10px] text-blue-800 leading-snug">
-                  Personal telephone numbers and exact addresses remain securely masked. All communication and revised extra-work quotes happen strictly inside the NSO platform.
+                  Specialist contact number is securely masked ({provider.phoneMasked}). Direct phone numbers are protected and only accessible to platform administrators.
                 </p>
               </div>
             </div>

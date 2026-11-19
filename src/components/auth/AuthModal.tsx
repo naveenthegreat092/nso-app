@@ -551,18 +551,7 @@ export const AuthModal: React.FC = () => {
                     <ArrowRight className="w-4 h-4" />
                   </button>
 
-                  {/* Biometric Instant Login Option */}
-                  <div className="pt-2 border-t border-slate-100">
-                    <button
-                      type="button"
-                      onClick={handleBiometricLogin}
-                      disabled={biometricLoading}
-                      className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all active:scale-98"
-                    >
-                      <Fingerprint className="w-4 h-4 text-purple-600" />
-                      <span>{biometricLoading ? 'Verifying Hardware...' : 'Sign In with Fingerprint / Face Unlock'}</span>
-                    </button>
-                  </div>
+
 
                   <div className="text-center pt-2">
                     <button

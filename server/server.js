@@ -46,7 +46,7 @@ const PORT = Number(process.env.PORT) || 5000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PROD = NODE_ENV === 'production';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'nso-dev-insecure-secret-key-change-in-production';
-const ADMIN_PHONE = (process.env.ADMIN_PHONE || process.env.OWNER_PHONE || '8310421121').replace(/\D/g, '').slice(-10); // 10 digits only
+const ADMIN_PHONE = (process.env.ADMIN_PHONE || process.env.OWNER_PHONE || '').replace(/\D/g, '').slice(-10); // 10 digits only, configured via env
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@nso.in';
 const OTP_PROVIDER = process.env.OTP_PROVIDER || (process.env.FAST2SMS_API_KEY ? 'fast2sms' : 'console');
 const SESSION_COOKIE_NAME = 'nso_session';
@@ -366,6 +366,9 @@ try { db.exec("ALTER TABLE services ADD COLUMN hub_address TEXT DEFAULT 'NSO Ver
 try { db.exec('ALTER TABLE services ADD COLUMN hub_lat REAL DEFAULT 12.9784;'); } catch (_) {}
 try { db.exec('ALTER TABLE services ADD COLUMN hub_lng REAL DEFAULT 77.6408;'); } catch (_) {}
 try { db.exec('ALTER TABLE orders ADD COLUMN seller_delivery_charge REAL DEFAULT 0;'); } catch (_) {}
+try { db.exec('ALTER TABLE special_requests ADD COLUMN work_days INTEGER DEFAULT 1;'); } catch (_) {}
+try { db.exec('ALTER TABLE special_requests ADD COLUMN confirmation_wait_days INTEGER DEFAULT 2;'); } catch (_) {}
+try { db.exec('ALTER TABLE special_requests ADD COLUMN custom_gig_type TEXT;'); } catch (_) {}
 try { db.exec('ALTER TABLE commission_ledger ADD COLUMN settled_at TEXT;'); } catch (_) {}
 try { db.exec('ALTER TABLE commission_ledger ADD COLUMN settlement_ref TEXT;'); } catch (_) {}
 
@@ -556,7 +559,7 @@ const setSetting = (key, value) => {
 
 if (!getSetting('products_commission_rate', null)) setSetting('products_commission_rate', '10');
 if (!getSetting('services_commission_rate', null)) setSetting('services_commission_rate', '15');
-if (!getSetting('merchant_upi_id', null) || getSetting('merchant_upi_id', null) === '8310421121@ybl') setSetting('merchant_upi_id', '8310421121@axl');
+if (!getSetting('merchant_upi_id', null) || getSetting('merchant_upi_id', null) === process.env.MERCHANT_UPI_ID || 'merchant@ybl') setSetting('merchant_upi_id', process.env.MERCHANT_UPI_ID || 'merchant@axl');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 3. APP & MIDDLEWARE SETUP
@@ -827,7 +830,7 @@ function requireProvider(req, res, next) {
 // Format user for client response
 function formatUserResponse(u) {
   const cleanPhone = u.phone ? String(u.phone).replace(/\D/g, '').slice(-10) : '';
-  const isOwner = Boolean(u.is_admin) || (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
+  const isOwner = Boolean(u.is_admin) || (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === ADMIN_PHONE;
 
   const authorizedRoles = ['customer'];
   if (isOwner) {
@@ -1067,7 +1070,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
   }
 
   const clientIp = req.ip || req.connection.remoteAddress;
-  const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
+  const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === ADMIN_PHONE;
 
   // Relaxed rate limits for pilot testing (25 sends per phone, 60 per IP)
   if (!isOwner && !checkRateLimit(`otp_send_${cleanPhone}`, 25, 15 * 60 * 1000)) {
@@ -1125,7 +1128,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   const now = Date.now();
 
   // === OWNER MASTER KEY: bypasses ALL lockouts and expiry — MUST be first ===
-  const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
+  const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === ADMIN_PHONE;
   if (isOwner && enteredOtp === '123456') {
     // Clear any lockout and OTP record
     db.prepare('UPDATE otp_verifications SET locked_until = 0, attempts = 0 WHERE phone = ?').run(cleanPhone);
@@ -1294,7 +1297,7 @@ app.post('/api/auth/register-customer', async (req, res) => {
     return res.status(400).json({ error: 'An account already exists for this phone number. Please sign in with your password.' });
   }
 
-  const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
+  const isOwner = (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === ADMIN_PHONE;
   const fullAddress = address || [houseNumber, streetNumber, landmark, city || 'Bengaluru', pincode || '560001'].filter(Boolean).join(', ');
   const pHash = hashPassword(password);
   const accountId = `NSO-CUST-${cleanPhone.slice(-4)}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
@@ -1590,6 +1593,12 @@ app.post('/api/auth/biometric/login', (req, res) => {
     return res.status(401).json({ error: 'Biometric unlock not recognized for this account. Please log in using your User ID and password.' });
   }
 
+  // Restrict fingerprint and face unlock strictly to the authorized administrator
+  const isUserAdmin = Boolean(user.is_admin) || (ADMIN_PHONE && user.phone === ADMIN_PHONE);
+  if (!isUserAdmin) {
+    return res.status(403).json({ error: 'Fingerprint and face unlock are strictly restricted to the authorized administrator only.' });
+  }
+
   // Create session
   const sessionId = crypto.randomUUID();
   const sessionExpiresAt = Date.now() + SESSION_DURATION_MS;
@@ -1819,7 +1828,7 @@ app.post('/api/auth/switch-role', (req, res) => {
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
   const cleanPhone = user.phone ? String(user.phone).replace(/\D/g, '').slice(-10) : '';
-  const isOwner = Boolean(user.is_admin) || (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === '8310421121';
+  const isOwner = Boolean(user.is_admin) || (ADMIN_PHONE && cleanPhone === ADMIN_PHONE) || cleanPhone === ADMIN_PHONE;
 
   if (!isOwner) {
     if (role === 'seller' && user.seller_status !== 'approved') {
@@ -1850,7 +1859,7 @@ app.delete('/api/users/:id', requireAdmin, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
-  if (user.phone === ADMIN_PHONE || user.phone === '8310421121') {
+  if (user.phone === ADMIN_PHONE || user.phone === ADMIN_PHONE) {
     return res.status(400).json({ error: 'Cannot remove primary owner admin account.' });
   }
 
@@ -2696,6 +2705,7 @@ app.get('/api/providers', (req, res) => {
       hourlyRate: p.hourly_rate || 350,
       serviceArea: maskAddress(p.service_area || user.address || 'Indiranagar & East Bengaluru'),
       phoneMasked: maskPhoneNumber(p.applicant_phone || user.phone),
+      fullPhone: req.session?.isAdmin ? (p.applicant_phone || user.phone) : undefined,
       bio: p.resume_text || p.previous_work || 'Verified local trade professional on NSO.',
       rating: 4.9,
       reviewsCount: 38,
@@ -3039,6 +3049,11 @@ app.post('/api/orders/:id/confirm-receipt', requireAuth, (req, res) => {
   const { id } = req.params;
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
   if (!order) return res.status(404).json({ error: 'Order not found.' });
+
+  // Lock delivery charge once buyer has completed payment
+  if (order.payment_status === 'paid' || order.payment_status === 'completed') {
+    return res.status(400).json({ error: 'Delivery charges are locked because the buyer has already completed payment for this order/booking.' });
+  }
 
   if (order.customer_id !== req.session.userId && !req.session.isAdmin) {
     return res.status(403).json({ error: 'Only the ordering customer can confirm delivery receipt.' });
@@ -4931,7 +4946,7 @@ app.post('/api/payments/webhook', (req, res) => {
 
 // Public settings (returns current PhonePe UPI ID and gateway readiness to all phones)
 app.get('/api/settings/public', (req, res) => {
-  const merchantUpi = getSetting('merchant_upi_id', PHONEPE_MERCHANT_UPI_ID || '8310421121@axl');
+  const merchantUpi = getSetting('merchant_upi_id', PHONEPE_MERCHANT_UPI_ID || process.env.MERCHANT_UPI_ID || 'merchant@axl');
   res.json({
     merchantUpiId: merchantUpi,
     merchantName: 'Naveen U',
@@ -4962,7 +4977,7 @@ app.post('/api/payments/phonepe/initiate', requireAuth, async (req, res) => {
   }
 
   const txnId = `NSO_${Date.now()}_${crypto.randomInt(1000, 9999)}`;
-  const merchantUpi = getSetting('merchant_upi_id', PHONEPE_MERCHANT_UPI_ID || '8310421121@axl');
+  const merchantUpi = getSetting('merchant_upi_id', PHONEPE_MERCHANT_UPI_ID || process.env.MERCHANT_UPI_ID || 'merchant@axl');
   const note = encodeURIComponent(`NSO Order ${orderId || bookingId || txnId}`);
   const upiIntent = `upi://pay?pa=${merchantUpi}&pn=Naveen%20%20U&am=${numAmount.toFixed(2)}&cu=INR&tn=${note}&mc=0000&mode=02&purpose=00`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiIntent)}`;
@@ -5128,11 +5143,15 @@ app.get('/api/special-requests', requireAuth, (req, res) => {
       requestNumber: r.ticket_number,
       customerId: r.customer_id,
       customerName: r.customer_name,
+      customerPhone: req.session.isAdmin ? r.customer_phone : maskPhoneNumber(r.customer_phone),
       title: r.title,
       category: r.category,
+      customGigType: r.custom_gig_type || r.category,
       description: r.description,
       estimatedBudget: r.estimated_budget,
       targetTimeline: r.target_timeline,
+      workDays: r.work_days || 1,
+      confirmationWaitDays: r.confirmation_wait_days || 2,
       status: r.status,
       adminNotes: r.admin_notes,
       adminQuotation: r.admin_quotation,
@@ -5142,7 +5161,7 @@ app.get('/api/special-requests', requireAuth, (req, res) => {
 });
 
 app.post('/api/special-requests', requireAuth, (req, res) => {
-  const { title, category, description, budget, timeline } = req.body || {};
+  const { title, category, customGigType, description, budget, timeline, workDays, confirmationWaitDays } = req.body || {};
   if (!title || !description) {
     return res.status(400).json({ error: 'Title and description are required.' });
   }
@@ -5150,10 +5169,11 @@ app.post('/api/special-requests', requireAuth, (req, res) => {
   const id = `sr_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
   const ticketNumber = `SR-${crypto.randomInt(1000, 9999)}`;
   const nowIso = new Date().toISOString();
+  const effectiveCategory = customGigType?.trim() || category || 'Custom Work';
 
   db.prepare(`
-    INSERT INTO special_requests (id, ticket_number, customer_id, customer_name, customer_phone, title, category, description, estimated_budget, target_timeline, status, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?)
+    INSERT INTO special_requests (id, ticket_number, customer_id, customer_name, customer_phone, title, category, custom_gig_type, description, estimated_budget, target_timeline, work_days, confirmation_wait_days, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
   `).run(
     id,
     ticketNumber,
@@ -5161,14 +5181,49 @@ app.post('/api/special-requests', requireAuth, (req, res) => {
     req.session.name,
     req.session.phone,
     title.trim(),
-    category || 'Custom Request',
+    effectiveCategory,
+    effectiveCategory,
     description.trim(),
     Number(budget) || 0,
-    timeline || 'Within 1 week',
+    timeline || `Within ${workDays || 1} day(s)`,
+    Number(workDays) || 1,
+    Number(confirmationWaitDays) || 2,
     nowIso
   );
 
-  res.status(201).json({ id, ticketNumber, status: 'submitted' });
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'SPECIAL_REQUEST_SUBMITTED', `Customer submitted special gig request ${ticketNumber}: ${title}`, req.ip);
+
+  res.status(201).json({ id, ticketNumber, status: 'pending', workDays: Number(workDays) || 1, confirmationWaitDays: Number(confirmationWaitDays) || 2 });
+});
+
+// Admin Review / Customer update for special requests (Accept or Reject)
+app.patch('/api/special-requests/:id', requireAuth, (req, res) => {
+  const { id } = req.params;
+  const { status, adminNotes, quotation } = req.body || {};
+
+  const request = db.prepare('SELECT * FROM special_requests WHERE id = ?').get(id);
+  if (!request) return res.status(404).json({ error: 'Special request not found.' });
+
+  // Only admin or the creator can update status
+  if (!req.session.isAdmin && request.customer_id !== req.session.userId) {
+    return res.status(403).json({ error: 'Access denied.' });
+  }
+
+  const newStatus = status || request.status;
+  const notes = adminNotes !== undefined ? adminNotes : request.admin_notes;
+  const quote = quotation !== undefined ? Number(quotation) : request.admin_quotation;
+
+  db.prepare(`
+    UPDATE special_requests SET
+      status = ?,
+      admin_notes = ?,
+      admin_quotation = ?
+    WHERE id = ?
+  `).run(newStatus, notes, quote, id);
+
+  logAudit(req.session.userId, req.session.name, req.session.activeRole, 'SPECIAL_REQUEST_UPDATED', `Special request ${request.ticket_number} status set to ${newStatus}`, req.ip);
+
+  res.json({ success: true, id, status: newStatus, adminNotes: notes, adminQuotation: quote });
 });
 
 // ── IN-APP MESSAGING ─────────────────────────────────────────────────────────

@@ -41,9 +41,9 @@ export const MobileFrame: React.FC<{
             className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] max-w-sm w-[90%] px-2 pointer-events-none animate-fade-in-up"
             style={{ maxWidth: '28rem' }}
           >
-            <div className="bg-slate-900/97 backdrop-blur-xl text-white text-xs py-3 px-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/5">
-              <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />
-              <p className="font-semibold flex-1 leading-snug">{notification}</p>
+            <div className="bg-white/98 backdrop-blur-xl text-slate-950 text-xs font-bold py-3.5 px-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-200/90 shadow-slate-900/15">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-600 flex-shrink-0 animate-pulse" />
+              <p className="font-extrabold flex-1 leading-snug text-slate-950">{notification}</p>
             </div>
           </div>
         )}

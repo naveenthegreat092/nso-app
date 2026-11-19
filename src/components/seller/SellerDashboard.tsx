@@ -16,6 +16,7 @@ import {
   Minus,
   ArrowRight,
   ShieldCheck,
+  Lock,
   DollarSign,
   Camera,
   Upload,
@@ -248,30 +249,37 @@ export const SellerDashboard: React.FC = () => {
                       <p className="text-[10px] text-emerald-700 leading-tight">
                         You decide the delivery charge for each order based on customer distance.
                       </p>
-                      {order.orderStatus !== 'delivered' && order.orderStatus !== 'cancelled' && (
-                        <div className="flex items-center gap-1.5 pt-1">
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder="Set Delivery Fee (₹)"
-                            id={`delivery_fee_${order.id}`}
-                            defaultValue={order.sellerDeliveryCharge}
-                            className="flex-1 bg-white border border-emerald-200 rounded-lg px-2.5 py-1 text-xs font-bold text-gray-800 outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const input = document.getElementById(`delivery_fee_${order.id}`) as HTMLInputElement;
-                              const fee = parseFloat(input?.value);
-                              if (!isNaN(fee) && fee >= 0) {
-                                updateOrderDeliveryFee(order.id, fee);
-                              }
-                            }}
-                            className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs active:scale-95 transition-all"
-                          >
-                            Set Fee
-                          </button>
+                      {order.paymentStatus === 'success' || order.paymentStatus === 'cleared' || order.paymentStatus === 'pending_admin_clearance' ? (
+                        <div className="flex items-center gap-2 p-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-700 text-[11px] font-bold">
+                          <Lock className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                          <span>Delivery Charge Locked (Buyer Paid)</span>
                         </div>
+                      ) : (
+                        order.orderStatus !== 'delivered' && order.orderStatus !== 'cancelled' && (
+                          <div className="flex items-center gap-1.5 pt-1">
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="Set Delivery Fee (₹)"
+                              id={`delivery_fee_${order.id}`}
+                              defaultValue={order.sellerDeliveryCharge}
+                              className="flex-1 bg-white border border-emerald-200 rounded-lg px-2.5 py-1 text-xs font-bold text-gray-800 outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const input = document.getElementById(`delivery_fee_${order.id}`) as HTMLInputElement;
+                                const fee = parseFloat(input?.value);
+                                if (!isNaN(fee) && fee >= 0) {
+                                  updateOrderDeliveryFee(order.id, fee);
+                                }
+                              }}
+                              className="px-3 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs active:scale-95 transition-all cursor-pointer"
+                            >
+                              Update Fee
+                            </button>
+                          </div>
+                        )
                       )}
                     </div>
                   </div>

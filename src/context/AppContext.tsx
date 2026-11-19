@@ -157,8 +157,18 @@ interface AppContextType {
   approveProviderRate: (serviceId: string, approved: boolean, adminNotes?: string) => Promise<void>;
   approveServiceListing: (serviceId: string, approved: boolean, adminNotes?: string) => Promise<void>;
   adminReviewProviderCancellation: (reviewId: string, adminNotes: string, status?: string) => Promise<void>;
-  submitSpecialRequest: (title: string, category: string, description: string, budget: number, timeline: string) => Promise<SpecialRequest>;
-  updateSpecialRequest: (requestId: string, status: SpecialRequest['status'], adminNotes?: string, adminQuotation?: number) => void;
+  refreshAppData: () => Promise<void>;
+  submitSpecialRequest: (
+    title: string,
+    category: string,
+    description: string,
+    budget: number,
+    timeline: string,
+    workDays?: number,
+    confirmationWaitDays?: number,
+    customGigType?: string
+  ) => Promise<SpecialRequest>;
+  updateSpecialRequest: (requestId: string, status: SpecialRequest['status'], adminNotes?: string, adminQuotation?: number) => Promise<void>;
   removeUser: (userId: string) => Promise<boolean>;
   adminClearBookingPayment: (bookingId: string) => Promise<boolean>;
   adminClearOrderPayment: (orderId: string) => Promise<boolean>;
@@ -310,6 +320,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     checkSession();
   }, []);
+
+  // ── Global App Data Refresh Handler ──────────────────────────────────────
+  const refreshAppData = async () => {
+    try {
+      const [p, o, b, cat, s, prov, sr, u] = await Promise.all([
+        api.getProducts(),
+        api.getOrders(),
+        api.getBookings(),
+        api.getServiceCategories(),
+        api.getServices(),
+        api.getProviders(),
+        api.getSpecialRequests(),
+        api.getUsers()
+      ]);
+      if (Array.isArray(p)) setProducts(p);
+      if (Array.isArray(o)) setOrders(o);
+      if (Array.isArray(b)) setBookings(b);
+      if (Array.isArray(cat)) setServiceCategories(cat);
+      if (Array.isArray(s)) setServices(s);
+      if (Array.isArray(prov)) setProviders(prov);
+      if (Array.isArray(sr)) setSpecialRequests(sr);
+      if (Array.isArray(u)) setRegisteredUsers(u);
+      showToast('✅ App data refreshed');
+    } catch {
+      showToast('⚠️ Could not refresh data. Check internet connection.');
+    }
+  };
 
   // ── Sync cloud data on mount ──────────────────────────────────────────────
   useEffect(() => {
@@ -563,8 +600,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const switchRole = (newRole: Role): boolean => {
     const isOwner =
       Boolean(user.adminVerified) ||
-      (user.phone && user.phone.replace(/\D/g, '').endsWith('8310421121')) ||
-      localStorage.getItem('nso_admin_phone') === '8310421121';
+      Boolean(user.isAdmin) ||
+      user.activeRole === 'admin' ||
+      Boolean(localStorage.getItem('nso_admin_phone'));
 
     // If owner, grant unhindered switching to any role:
     if (isOwner) {
@@ -691,7 +729,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cleanPhone = data.phone.startsWith('+91') ? data.phone : `+91 ${data.phone.replace(/\D/g, '')}`;
 
     const rawDigits = data.phone.replace(/\D/g, '');
-    const isOwner = rawDigits.endsWith('8310421121');
+    const isOwner = Boolean(user.isAdmin) || Boolean(user.adminVerified) || (Boolean(localStorage.getItem('nso_admin_phone')) && rawDigits.endsWith(localStorage.getItem('nso_admin_phone') || '___'));
 
     // Build authenticated user profile — preserve owner privileges if owner phone
     const newUser: UserProfile = {
@@ -1725,26 +1763,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     category: string,
     description: string,
     budget: number,
-    timeline: string
+    timeline: string,
+    workDays?: number,
+    confirmationWaitDays?: number,
+    customGigType?: string
   ): Promise<SpecialRequest> => {
+    const effectiveCategory = customGigType?.trim() || category || 'Custom Work';
     const newReq: SpecialRequest = {
       id: `req_${Date.now()}`,
       requestNumber: `NSO-SRQ-${Math.floor(1000 + Math.random() * 9000)}`,
       customerId: user.id,
       customerName: user.name,
       title,
-      category,
+      category: effectiveCategory,
+      customGigType: effectiveCategory,
       description,
       estimatedBudget: budget,
-      targetTimeline: timeline,
-      status: 'submitted',
+      targetTimeline: timeline || `Within ${workDays || 1} day(s)`,
+      workDays: workDays || 1,
+      confirmationWaitDays: confirmationWaitDays || 2,
+      status: 'pending',
       submittedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
     };
 
     setSpecialRequests((prev) => [newReq, ...prev]);
 
     try {
-      const res = await api.createSpecialRequest({ title, category, description, budget, timeline });
+      const res = await api.createSpecialRequest({
+        title,
+        category: effectiveCategory,
+        customGigType: effectiveCategory,
+        description,
+        budget,
+        timeline: newReq.targetTimeline,
+        workDays: newReq.workDays,
+        confirmationWaitDays: newReq.confirmationWaitDays
+      });
       if (res?.ticketNumber) {
         newReq.requestNumber = res.ticketNumber;
       }
@@ -1887,7 +1941,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateSpecialRequest = (
+  const updateSpecialRequest = async (
     requestId: string,
     status: SpecialRequest['status'],
     adminNotes?: string,
@@ -1905,8 +1959,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : req
       )
     );
+    try {
+      await api.updateSpecialRequest(requestId, status, adminNotes, adminQuotation);
+    } catch {}
     addAuditLog('SPECIAL_REQUEST_UPDATED', `Special request ${requestId} updated to ${status}`);
-    showToast(`Request ${requestId} status updated.`);
+    if (status === 'rejected' || status === 'declined') {
+      showToast(`Request rejected: ${adminNotes || 'Request not approved'}`);
+    } else {
+      showToast(`Special request marked as ${status.toUpperCase()}`);
+    }
   };
 
   const approveSeller = (sellerId: string, approved: boolean) => {
@@ -2111,6 +2172,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         approveProviderRate,
         approveServiceListing,
         adminReviewProviderCancellation,
+        refreshAppData,
         submitSpecialRequest,
         updateSpecialRequest,
         removeUser,

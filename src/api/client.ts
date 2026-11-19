@@ -110,7 +110,7 @@ export const api = {
       }
       const cleanPhone = phone.replace(/\D/g, '').slice(-10);
       localStorage.setItem('nso_user_phone', cleanPhone);
-      if (cleanPhone === '8310421121') {
+      if (data.user?.isAdmin || data.user?.activeRole === 'admin') {
         localStorage.setItem('nso_admin_phone', cleanPhone);
       }
       return data;
@@ -1100,7 +1100,7 @@ export const api = {
       if (resData.user?.phone) {
         const clean = resData.user.phone.replace(/\D/g, '').slice(-10);
         localStorage.setItem('nso_user_phone', clean);
-        if (clean === '8310421121') localStorage.setItem('nso_admin_phone', clean);
+        if (resData.user?.isAdmin || resData.user?.activeRole === 'admin') localStorage.setItem('nso_admin_phone', clean);
       }
       return resData;
     } catch {
@@ -1245,9 +1245,12 @@ export const api = {
   createSpecialRequest: async (data: {
     title: string;
     category?: string;
+    customGigType?: string;
     description: string;
     budget?: number;
     timeline?: string;
+    workDays?: number;
+    confirmationWaitDays?: number;
   }): Promise<{ success: boolean; ticketNumber?: string; error?: string } | null> => {
     try {
       const res = await fetch(`${API_BASE}/special-requests`, {
@@ -1255,6 +1258,25 @@ export const api = {
         method: 'POST',
         headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(data)
+      });
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  updateSpecialRequest: async (
+    id: string,
+    status: string,
+    adminNotes?: string,
+    quotation?: number
+  ): Promise<{ success: boolean; error?: string } | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/special-requests/${id}`, {
+        ...defaultOpts,
+        method: 'PATCH',
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ status, adminNotes, quotation })
       });
       return await res.json();
     } catch {

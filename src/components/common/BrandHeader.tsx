@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import {
   ShoppingBag,
+  RefreshCw,
   MapPin,
   ChevronDown,
   Search,
@@ -52,6 +53,18 @@ export const BrandHeader: React.FC<{
     }, 3200);
     return () => clearInterval(timer);
   }, [placeholders.length]);
+
+  const { refreshAppData } = useApp();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshClick = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshAppData();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -139,6 +152,17 @@ export const BrandHeader: React.FC<{
             aria-label="Wishlist"
           >
             <Heart className={`w-4 h-4 min-[380px]:w-5 min-[380px]:h-5 ${wishlist.length > 0 ? 'fill-rose-600 text-rose-600' : 'text-slate-700'}`} />
+          </button>
+
+          {/* Refresh App Data Button */}
+          <button
+            onClick={handleRefreshClick}
+            disabled={isRefreshing}
+            className="p-1.5 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors active:scale-95 cursor-pointer"
+            aria-label="Refresh App Data"
+            title="Refresh App Data"
+          >
+            <RefreshCw className={`w-4 h-4 min-[380px]:w-5 min-[380px]:h-5 text-slate-700 ${isRefreshing ? 'animate-spin text-red-600' : ''}`} />
           </button>
 
           {/* Notifications Bell */}

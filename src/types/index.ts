@@ -51,6 +51,7 @@ export interface UserProfile {
     submittedAt: string;
   };
   adminVerified: boolean;
+  isAdmin?: boolean;
   address?: string;
   isLoggedIn: boolean;
 }
@@ -121,6 +122,9 @@ export interface ProviderDetail {
   jobsCompleted: number;
   onTimeRate: string;
   phoneMasked: string;
+  fullPhone?: string;
+  availability?: string;
+  isAvailable?: boolean;
   bio: string;
   certifications: string[];
   verificationBadges: string[];
@@ -148,6 +152,8 @@ export interface ProviderDetail {
     punctuality: number;
     behavior: number;
   };
+  applicantName?: string;
+  tradeCategory?: string;
 }
 
 export interface Service {
@@ -181,6 +187,7 @@ export interface Service {
   hubLng?: number;
   workPhotos?: string[];
   workVideos?: string[];
+  providerPhoneMasked?: string;
 }
 
 export interface CartItem {
@@ -413,18 +420,22 @@ export interface Booking {
   directionsUrl?: string;
 }
 
-export type SpecialRequestStatus = 'submitted' | 'under_review' | 'quote_offered' | 'accepted' | 'declined';
+export type SpecialRequestStatus = 'pending' | 'submitted' | 'under_review' | 'quote_offered' | 'accepted' | 'rejected' | 'declined';
 
 export interface SpecialRequest {
   id: string;
   requestNumber: string;
   customerId: string;
   customerName: string;
+  customerPhone?: string;
   title: string;
   category: string;
+  customGigType?: string;
   description: string;
   estimatedBudget: number;
   targetTimeline: string;
+  workDays?: number;
+  confirmationWaitDays?: number;
   status: SpecialRequestStatus;
   adminNotes?: string;
   adminQuotation?: number;

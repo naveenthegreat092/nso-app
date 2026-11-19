@@ -306,8 +306,11 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const [adminQuoteInput, setAdminQuoteInput] = useState<{ [id: string]: string }>({});
+  const [specialReqFilter, setSpecialReqFilter] = useState<'pending' | 'accepted' | 'rejected'>('pending');
 
-  const pendingSpecialRequests = specialRequests.filter((r) => r.status === 'submitted' || r.status === 'under_review');
+  const pendingSpecialRequests = specialRequests.filter((r) => r.status === 'pending' || r.status === 'submitted' || r.status === 'under_review');
+  const acceptedSpecialRequests = specialRequests.filter((r) => r.status === 'accepted' || r.status === 'quote_offered');
+  const rejectedSpecialRequests = specialRequests.filter((r) => r.status === 'rejected' || r.status === 'declined');
   const pendingRevisedQuotes = bookings.filter((b) => b.revisedQuote?.status === 'pending_admin');
   const pendingJobQuotes = bookings.filter((b) => b.quotation?.status === 'pending_admin');
   const pendingRateApprovals = services.filter(
@@ -345,15 +348,17 @@ export const AdminDashboard: React.FC = () => {
     orders.filter((o) => o.paymentStatus === 'pending').length +
     bookings.filter((b) => b.paymentStatus === 'pending').length;
 
-  const handleAdminApproveSpecial = (id: string) => {
-    const quoteVal = parseFloat(adminQuoteInput[id]) || 6500;
-    updateSpecialRequest(id, 'quote_offered', 'Admin approved specifications & assigned contractor quote.', quoteVal);
-    showToast(`Quotation of ₹${quoteVal} sent to customer for approval.`);
+  const handleAdminApproveSpecial = async (id: string) => {
+    const quoteVal = parseFloat(adminQuoteInput[id]) || 5000;
+    await updateSpecialRequest(id, 'accepted', 'Admin accepted specifications and authorized contractor assignment.', quoteVal);
+    showToast(`✅ Special request approved! Customer notified with quote of ₹${quoteVal}.`);
   };
 
-  const handleAdminDeclineSpecial = (id: string) => {
-    updateSpecialRequest(id, 'declined', 'Admin declined: Outside operational logistics parameters.');
-    showToast('Special request declined.');
+  const handleAdminDeclineSpecial = async (id: string) => {
+    const reason = window.prompt('Enter reason for declining this request (will be shown to customer):', 'Outside current operational parameters or specialist capacity.');
+    if (reason === null) return;
+    await updateSpecialRequest(id, 'rejected', reason.trim() || 'Request declined by Admin.');
+    showToast('❌ Special request rejected and removed from pending queue. Customer notified.');
   };
 
   // Restricted Access Screen for non-admins
@@ -979,64 +984,132 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Special Requests Queue (Brief Page 7) */}
+        {/* Special Requests Queue */}
         {activeTab === 'special_requests' && (
           <div className="space-y-3">
             <div className="flex items-center justify-between text-xs text-gray-500">
-              <span>Admin Queue for Out-of-Category Custom Work</span>
-              <span className="font-semibold text-gray-700">{specialRequests.length} total</span>
+              <span className="font-bold text-slate-800">Custom Work &amp; Gig Requests</span>
+              <span className="font-semibold text-gray-600">{specialRequests.length} total</span>
             </div>
 
-            {specialRequests.map((req) => (
-              <div key={req.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-3 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-gray-900">{req.requestNumber}</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full capitalize bg-amber-50 text-amber-800">
-                    {req.status.replace('_', ' ')}
-                  </span>
-                </div>
+            {/* Status Filter Tabs */}
+            <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold gap-1">
+              <button
+                type="button"
+                onClick={() => setSpecialReqFilter('pending')}
+                className={`flex-1 py-1.5 rounded-lg transition-all ${specialReqFilter === 'pending' ? 'bg-white text-purple-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'}`}
+              >
+                Pending Review ({pendingSpecialRequests.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSpecialReqFilter('accepted')}
+                className={`flex-1 py-1.5 rounded-lg transition-all ${specialReqFilter === 'accepted' ? 'bg-white text-emerald-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'}`}
+              >
+                Accepted ({acceptedSpecialRequests.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSpecialReqFilter('rejected')}
+                className={`flex-1 py-1.5 rounded-lg transition-all ${specialReqFilter === 'rejected' ? 'bg-white text-rose-900 shadow-xs' : 'text-slate-500 hover:text-slate-900'}`}
+              >
+                Rejected ({rejectedSpecialRequests.length})
+              </button>
+            </div>
 
-                <div>
-                  <h4 className="font-bold text-gray-900">{req.title}</h4>
-                  <p className="text-[11px] text-gray-600 mt-1">{req.description}</p>
-                  <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-500">
-                    <span>Customer: <strong className="text-gray-700">{req.customerName}</strong></span>
-                    <span>Target: <strong>{req.targetTimeline}</strong></span>
-                    <span>Budget: <strong>₹{req.estimatedBudget}</strong></span>
-                  </div>
-                </div>
+            {/* List based on active filter */}
+            {(() => {
+              const displayed = specialReqFilter === 'pending'
+                ? pendingSpecialRequests
+                : specialReqFilter === 'accepted'
+                ? acceptedSpecialRequests
+                : rejectedSpecialRequests;
 
-                {/* Admin Actions if pending */}
-                {(req.status === 'submitted' || req.status === 'under_review') && (
-                  <div className="pt-2 border-t border-gray-100 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <label className="text-[11px] font-bold text-gray-700 whitespace-nowrap">Admin Quotation (₹):</label>
-                      <input
-                        type="number"
-                        placeholder="e.g. 7800"
-                        value={adminQuoteInput[req.id] || req.estimatedBudget.toString()}
-                        onChange={(e) => setAdminQuoteInput({ ...adminQuoteInput, [req.id]: e.target.value })}
-                        className="p-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold w-28"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => handleAdminApproveSpecial(req.id)}
-                        className="py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-xl shadow-sm"
-                      >
-                        Approve & Send Quote
-                      </button>
-                      <button
-                        onClick={() => handleAdminDeclineSpecial(req.id)}
-                        className="py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold text-xs rounded-xl"
-                      >
-                        Decline Request
-                      </button>
-                    </div>
+              if (displayed.length === 0) {
+                return (
+                  <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center text-slate-400 space-y-1">
+                    <p className="text-xs font-bold text-slate-600">
+                      No {specialReqFilter} requests
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      {specialReqFilter === 'pending' ? 'All customer custom requests have been reviewed!' : 'No requests in this category.'}
+                    </p>
                   </div>
-                )}
-              </div>
-            ))}
+                );
+              }
+
+              return displayed.map((req) => (
+                <div key={req.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-3 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-black text-gray-900">{req.requestNumber}</span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${
+                      req.status === 'rejected' || req.status === 'declined'
+                        ? 'bg-rose-100 text-rose-800'
+                        : req.status === 'accepted' || req.status === 'quote_offered'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-900'
+                    }`}>
+                      {req.status.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h4 className="font-black text-gray-900 text-sm">{req.title}</h4>
+                    <span className="text-[10px] bg-slate-50 border border-slate-200 text-slate-700 px-2 py-0.5 rounded-md font-semibold inline-block mt-0.5">
+                      {req.customGigType || req.category}
+                    </span>
+                    <p className="text-[11px] text-gray-600 mt-1 leading-snug">{req.description}</p>
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2 pt-2 border-t border-slate-100 text-[11px] text-gray-600">
+                      <div>Customer: <strong className="text-gray-900">{req.customerName}</strong></div>
+                      {req.customerPhone && (
+                        <div>Phone (Admin): <strong className="text-purple-700 font-mono">{req.customerPhone}</strong></div>
+                      )}
+                      <div>Budget: <strong className="text-emerald-700 font-bold">₹{req.estimatedBudget}</strong></div>
+                      <div>Work / Wait: <strong className="text-gray-900">{req.workDays || 1}d / {req.confirmationWaitDays || 2}d</strong></div>
+                    </div>
+
+                    {req.adminNotes && (
+                      <div className="mt-2 p-2 bg-slate-50 border border-slate-200/60 rounded-xl text-[11px] text-slate-700">
+                        <span className="font-bold text-slate-900">Admin Notes / Reason:</span> {req.adminNotes}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions for Pending Requests */}
+                  {(req.status === 'pending' || req.status === 'submitted' || req.status === 'under_review') && (
+                    <div className="pt-2 border-t border-gray-100 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] font-bold text-gray-700 whitespace-nowrap">Quotation (₹):</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 5000"
+                          value={adminQuoteInput[req.id] || req.estimatedBudget.toString()}
+                          onChange={(e) => setAdminQuoteInput({ ...adminQuoteInput, [req.id]: e.target.value })}
+                          className="p-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold w-28"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleAdminApproveSpecial(req.id)}
+                          className="py-2 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                        >
+                          Accept Request
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAdminDeclineSpecial(req.id)}
+                          className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                        >
+                          Reject Request
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ));
+            })()}
           </div>
         )}
 

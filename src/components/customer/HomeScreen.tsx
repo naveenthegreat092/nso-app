@@ -20,6 +20,7 @@ import {
   Heart,
   Store,
   Compass,
+  Calendar,
   Headphones,
   Shirt,
   ShoppingBasket,
@@ -39,6 +40,7 @@ export const HomeScreen: React.FC<{
   const {
     products,
     services,
+    providers,
     setActiveTab,
     addToCart,
     updateCartQuantity,
@@ -146,6 +148,7 @@ export const HomeScreen: React.FC<{
   const approvedProducts = products.filter((p) => p.approvalStatus === 'approved');
   const displayedProducts = approvedProducts.filter((p) => currentMatcher(p.category || p.title || ''));
   const displayedServices = services.filter((s) => currentMatcher(s.category || s.title || ''));
+  const eligibleProviders = (providers || []).filter((p) => p && p.id);
 
   return (
     <div className="space-y-5 pb-24 px-4 pt-3 animate-fade-in-up">
@@ -480,9 +483,15 @@ export const HomeScreen: React.FC<{
                     {service.title}
                   </h4>
 
-                  <p className="text-[11px] text-slate-500 font-medium truncate">
-                    By {service.providerName}
-                  </p>
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    <span className="text-[11px] text-slate-700 font-bold">By {service.providerName}</span>
+                    <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-black px-1.5 py-0.2 rounded">
+                      ID: {service.issuedProviderId || service.providerId}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {service.providerPhoneMasked || '+91 98XXX X3210'}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="text-right flex flex-col items-end flex-shrink-0">
@@ -500,6 +509,105 @@ export const HomeScreen: React.FC<{
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Verified Service Specialists & Providers Directory */}
+      <div className="space-y-3 pt-1">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-black text-[15px] text-slate-900 tracking-tight flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+              <span>Verified Service Specialists</span>
+            </h3>
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">Approved &amp; active trade professionals</p>
+          </div>
+          <button
+            onClick={() => setActiveTab('explore')}
+            className="text-xs font-bold text-red-600 hover:text-red-700 flex items-center gap-0.5 cursor-pointer"
+          >
+            <span>All Providers</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {eligibleProviders.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-100 p-5 text-center text-slate-400 text-xs font-medium">
+            Approved specialists will appear here after verification.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {eligibleProviders.slice(0, 4).map((prov) => {
+              const matchedService = services.find(
+                (s) => s.providerId === prov.id || s.issuedProviderId === prov.issuedProviderId || s.providerId === prov.userId
+              );
+
+              return (
+                <div
+                  key={prov.id}
+                  className="bg-white rounded-2xl border border-slate-200/80 p-3.5 shadow-xs hover:shadow-md transition-all space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <img
+                        src={prov.avatar}
+                        alt={prov.name}
+                        className="w-11 h-11 rounded-2xl object-cover border border-slate-100 shadow-xs flex-shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="font-black text-xs text-slate-900 truncate">{prov.applicantName || prov.name}</h4>
+                          <span className="bg-emerald-50 text-emerald-800 text-[10px] font-mono font-black px-1.5 py-0.5 rounded border border-emerald-200">
+                            ID: {prov.issuedProviderId || prov.id}
+                          </span>
+                        </div>
+                        <p className="text-[11px] font-semibold text-slate-500 truncate mt-0.5">
+                          {prov.tradeTitle || prov.tradeCategory || 'Trade Specialist'}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 text-[10px]">
+                          <span className="inline-flex items-center gap-1 text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Available Today
+                          </span>
+                          <span className="text-slate-400 font-mono">{prov.phoneMasked || '+91 98XXX X3210'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-0.5 bg-amber-50 px-1.5 py-0.5 rounded-lg text-amber-700 font-black text-xs flex-shrink-0">
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                      <span>{prov.rating}</span>
+                    </div>
+                  </div>
+
+                  {/* Actions: View Profile & Book Directly */}
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => openProviderProfile(prov.issuedProviderId || prov.id)}
+                      className="py-1.5 px-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs transition-colors text-center cursor-pointer"
+                    >
+                      View Profile
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (matchedService) {
+                          onSelectService(matchedService);
+                        } else {
+                          openProviderProfile(prov.issuedProviderId || prov.id);
+                        }
+                      }}
+                      className="py-1.5 px-2 rounded-xl bg-red-600 hover:bg-red-700 active:scale-95 text-white font-black text-xs shadow-xs transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Calendar className="w-3 h-3" />
+                      <span>Book Direct</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

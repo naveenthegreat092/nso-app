@@ -9,6 +9,7 @@ import {
   Truck,
   Wrench,
   ShieldAlert,
+  HelpCircle,
   Trash2,
   ArrowRight
 } from 'lucide-react';
@@ -32,6 +33,15 @@ export const NotificationTrayModal: React.FC<{
   const { openTracking, openChat, showToast } = useApp();
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([
+    {
+      id: 'n_help',
+      title: '24/7 Help & Customer Support',
+      message: 'Need help with any order, booking, or seller question? Our support team is ready to assist you.',
+      time: 'Always Active',
+      type: 'help' as any,
+      isRead: false,
+      actionText: 'Contact Help'
+    },
     {
       id: 'n1',
       title: 'Technician Assigned',
@@ -84,7 +94,9 @@ export const NotificationTrayModal: React.FC<{
 
   const handleAction = (item: NotificationItem) => {
     onClose();
-    if (item.type === 'service') {
+    if (item.type === ('help' as any)) {
+      openChat('NSO Customer Support Team');
+    } else if (item.type === 'service') {
       openTracking('AC Deep Cleaning', 'Ramesh Kumar', 'technician');
     } else if (item.type === 'order') {
       onOpenOrders();
@@ -153,6 +165,8 @@ export const NotificationTrayModal: React.FC<{
                     return <Sparkles className="w-4 h-4 text-red-600" />;
                   case 'admin':
                     return <ShieldAlert className="w-4 h-4 text-purple-600" />;
+                  case ('help' as any):
+                    return <HelpCircle className="w-4 h-4 text-blue-600" />;
                 }
               };
 
@@ -171,14 +185,14 @@ export const NotificationTrayModal: React.FC<{
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1">
-                        <h4 className="text-xs font-black text-slate-900 truncate">
+                        <h4 className="text-xs font-black text-slate-950 font-black truncate">
                           {n.title}
                         </h4>
                         <span className="text-[10px] text-slate-400 font-semibold whitespace-nowrap">
                           {n.time}
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
+                      <p className="text-[11px] text-slate-900 font-semibold mt-0.5 leading-snug">
                         {n.message}
                       </p>
 

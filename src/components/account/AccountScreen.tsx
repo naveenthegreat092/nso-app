@@ -289,7 +289,7 @@ export const AccountScreen: React.FC<{
         <div className="bg-white rounded-3xl border border-slate-200/60 divide-y divide-slate-100 shadow-xs overflow-hidden">
           {/* WhatsApp Direct Help */}
           <a
-            href="https://wa.me/918310421121?text=Hello%20NSO%20Orbit%20Support%2C%20I%20need%20help%20with%20my%20order%2Fbooking."
+            href="https://api.whatsapp.com/send?text=Hello%20NSO%20Orbit%20Support%2C%20I%20need%20help%20with%20my%20order%2Fbooking."
             target="_blank"
             rel="noopener noreferrer"
             className="p-4 flex items-center justify-between cursor-pointer hover:bg-emerald-50/50 transition-colors"
@@ -303,7 +303,7 @@ export const AccountScreen: React.FC<{
                   WhatsApp Support
                   <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-bold">Fastest</span>
                 </span>
-                <span className="text-[11px] text-slate-400 font-medium">+91 8310421121 • Quick Help</span>
+                <span className="text-[11px] text-slate-400 font-medium">NSO Official Helpline • Quick Help</span>
               </div>
             </div>
             <ExternalLink className="w-4 h-4 text-emerald-600" />
@@ -341,23 +341,25 @@ export const AccountScreen: React.FC<{
             <ChevronRight className="w-4 h-4 text-slate-400" />
           </div>
 
-          <div
-            onClick={handleEnrollBiometrics}
-            className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
-          >
-            <div className="flex items-center gap-3 text-slate-800 font-bold text-xs">
-              <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-                <Fingerprint className="w-4 h-4" />
+          {(user.activeRole === 'admin' || user.isAdmin || user.adminVerified) && (
+            <div
+              onClick={handleEnrollBiometrics}
+              className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center gap-3 text-slate-800 font-bold text-xs">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <Fingerprint className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="block text-slate-900 font-black">Admin Biometrics (Fingerprint / Face)</span>
+                  <span className="text-[11px] text-purple-700 font-bold">
+                    {enrollingBio ? 'Enrolling sensor...' : 'Authorized Administrator Hardware Security'}
+                  </span>
+                </div>
               </div>
-              <div>
-                <span className="block text-slate-900 font-black">Fingerprint &amp; Face Unlock</span>
-                <span className="text-[11px] text-slate-400 font-medium">
-                  {enrollingBio ? 'Enrolling sensor...' : 'Enable fast biometric sign-in on this device'}
-                </span>
-              </div>
+              <ChevronRight className="w-4 h-4 text-slate-400" />
             </div>
-            <ChevronRight className="w-4 h-4 text-slate-400" />
-          </div>
+          )}
 
           <div
             onClick={() => setIsPolicyModalOpen(true)}
