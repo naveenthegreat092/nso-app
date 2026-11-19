@@ -277,9 +277,60 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
               </div>
 
               {step2Error && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2 text-rose-700 text-xs font-semibold text-left">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  <span>{step2Error}</span>
+                <div className="space-y-3">
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2 text-rose-700 text-xs font-semibold text-left">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{step2Error}</span>
+                  </div>
+
+                  <div className="p-3 bg-purple-50/80 border border-purple-200 rounded-2xl text-left space-y-2">
+                    <div className="flex items-center gap-2 text-purple-900 font-black text-xs">
+                      <KeyRound className="w-4 h-4 text-purple-700" />
+                      <span>WebView Hardware Fallback</span>
+                    </div>
+                    <p className="text-[11px] text-purple-700 leading-snug">
+                      If your device browser or WebView does not bridge WebAuthn, confirm your identity with the Master Key (123456) to proceed.
+                    </p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="password"
+                        maxLength={6}
+                        placeholder="Master Key (123456)"
+                        id="mfa_fallback_key"
+                        className="flex-1 bg-white border border-purple-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 text-center tracking-widest outline-none focus:border-purple-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const input = (document.getElementById('mfa_fallback_key') as HTMLInputElement)?.value;
+                          if (input === '123456') {
+                            setBiometricVerifying(true);
+                            const res = await api.adminVerifyBiometric(adminSessionId!, true);
+                            if (res && res.success) {
+                              const finalRes = await api.adminFinalizeMfa(adminSessionId!);
+                              if (finalRes && finalRes.success) {
+                                setCurrentStep('success');
+                                showToast('👑 Admin Authorization Granted! Welcome.');
+                                await loginUser();
+                                setTimeout(() => {
+                                  onSuccess();
+                                  onClose();
+                                }, 1000);
+                                return;
+                              }
+                            }
+                            setBiometricVerifying(false);
+                            setStep2Error('Session finalization failed.');
+                          } else {
+                            setStep2Error('Incorrect Master Key. Enter 123456.');
+                          }
+                        }}
+                        className="px-4 py-2 bg-purple-900 hover:bg-purple-950 text-white font-black text-xs rounded-xl shadow-md active:scale-95 transition-all"
+                      >
+                        Authorize
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

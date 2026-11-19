@@ -48,13 +48,19 @@ export const promptBiometricAuth = async (userName = 'NSO Superadmin'): Promise<
       const userId = new Uint8Array(16);
       window.crypto.getRandomValues(userId);
 
+      const rpConfig: any = { name: 'NSO Mobile Orbit' };
+      if (
+        window.location.hostname &&
+        window.location.hostname !== 'localhost' &&
+        !window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/)
+      ) {
+        rpConfig.id = window.location.hostname;
+      }
+
       const credential = (await navigator.credentials.create({
         publicKey: {
           challenge,
-          rp: {
-            name: 'NSO Mobile Orbit',
-            id: window.location.hostname || 'localhost'
-          },
+          rp: rpConfig,
           user: {
             id: userId,
             name: 'admin@nso.in',
@@ -92,7 +98,11 @@ export const promptBiometricAuth = async (userName = 'NSO Superadmin'): Promise<
           ],
           userVerification: 'required',
           timeout: 60000,
-          rpId: window.location.hostname || 'localhost'
+          ...(window.location.hostname &&
+          window.location.hostname !== 'localhost' &&
+          !window.location.hostname.match(/^\d+\.\d+\.\d+\.\d+$/)
+            ? { rpId: window.location.hostname }
+            : {})
         }
       });
 
