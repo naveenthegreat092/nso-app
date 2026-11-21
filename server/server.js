@@ -5676,22 +5676,8 @@ app.get('/api/health', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 17. GLOBAL ERROR HANDLER & SERVER START
+// 17. SERVER START & EXPORT
 // ─────────────────────────────────────────────────────────────────────────────
-
-app.use((err, req, res, next) => {
-  if (IS_PROD) {
-    console.error(`[ERROR] ${err.message}`);
-    res.status(err.status || 500).json({ error: err.message || 'Internal server error.' });
-  } else {
-    console.error(err);
-    res.status(err.status || 500).json({ error: err.message });
-  }
-});
-
-app.use((req, res) => {
-  res.status(404).json({ error: `Endpoint not found: ${req.method} ${req.path}` });
-});
 
 // Export app for test suites
 export { app, db };
@@ -6070,4 +6056,167 @@ app.post('/api/bookings/:id/review', requireAuth, (req, res) => {
   logAudit(req.session.userId, req.session.name, 'customer', 'SERVICE_REVIEWED', `Customer rated Booking ${booking.booking_number} with ${numRating}★: "${comment}"`, req.ip);
 
   res.status(201).json({ success: true, reviewId, rating: numRating, comment });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 18. DIRECT APK DOWNLOAD & WEB INSTALLER (LOCAL WI-FI DISTRIBUTION)
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.get('/download', (req, res) => {
+  const apkPath = path.join(__dirname, '..', 'NSO_Orbit_v4.5.apk');
+  if (fs.existsSync(apkPath)) {
+    res.download(apkPath, 'NSO_Orbit_v4.5.apk', (err) => {
+      if (err && !res.headersSent) {
+        res.status(500).send('Error downloading APK: ' + err.message);
+      }
+    });
+  } else {
+    res.status(404).send('APK file not found on server.');
+  }
+});
+
+app.get('/apk', (req, res) => res.redirect('/download'));
+
+app.get('/install', (req, res) => {
+  const host = req.get('host') || '192.168.1.9:5000';
+  const downloadUrl = `http://${host}/download`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(downloadUrl)}`;
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Download & Install NSO Orbit v4.5</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      text-align: center;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 24px;
+      padding: 2rem;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      font-weight: 800;
+      font-size: 12px;
+      letter-spacing: 1px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 900;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+    p.sub {
+      color: #94a3b8;
+      font-size: 14px;
+      margin-bottom: 1.5rem;
+      line-height: 1.4;
+    }
+    .qr-box {
+      background: #ffffff;
+      padding: 16px;
+      border-radius: 20px;
+      display: inline-block;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    .qr-box img {
+      display: block;
+      width: 220px;
+      height: 220px;
+    }
+    a.btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #000000;
+      font-weight: 900;
+      font-size: 16px;
+      text-decoration: none;
+      border-radius: 16px;
+      box-shadow: 0 8px 20px rgba(245, 158, 11, 0.35);
+      transition: transform 0.1s ease;
+    }
+    a.btn:active {
+      transform: scale(0.98);
+    }
+    .instructions {
+      margin-top: 1.5rem;
+      text-align: left;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 1.5;
+    }
+    .instructions b { color: #f59e0b; }
+    .instructions ol { padding-left: 18px; margin-top: 6px; }
+    .instructions li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">Local Wi-Fi Network Install</div>
+    <h1>NSO Orbit v4.5</h1>
+    <p class="sub">Production Test Build &bull; High-Contrast Black Helper Text</p>
+
+    <div class="qr-box">
+      <img src="${qrUrl}" alt="Scan QR Code to Download" />
+    </div>
+
+    <a href="${downloadUrl}" class="btn">🚀 Tap to Download APK</a>
+
+    <div class="instructions">
+      <b>3 Quick Steps to Install:</b>
+      <ol>
+        <li>Make sure phone is connected to the same Wi-Fi.</li>
+        <li>Tap Download above (or scan with camera).</li>
+        <li>Tap <i>Open &gt; Install</i> (allow install from this source if prompted).</li>
+      </ol>
+    </div>
+  </div>
+</body>
+</html>`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 19. GLOBAL ERROR HANDLER & 404 CATCH-ALL
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.use((err, req, res, next) => {
+  if (IS_PROD) {
+    console.error(`[ERROR] ${err.message}`);
+    res.status(err.status || 500).json({ error: err.message || 'Internal server error.' });
+  } else {
+    console.error(err);
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.use((req, res) => {
+  res.status(404).json({ error: `Endpoint not found: ${req.method} ${req.path}` });
 });
