@@ -14,8 +14,14 @@ import {
   Sparkles,
   Info,
   MessageSquare,
-  PhoneCall
+  PhoneCall,
+  Camera,
+  Plus,
+  Eye,
+  Trash2,
+  ImageIcon
 } from 'lucide-react';
+import { resizeImageFile } from '../../utils/imageUpload';
 
 export const ServiceBookingModal: React.FC<{
   service: Service;
@@ -44,9 +50,53 @@ export const ServiceBookingModal: React.FC<{
   const [gpsPinned, setGpsPinned] = useState<{ lat: number; lng: number } | null>(null);
   const [pinningGps, setPinningGps] = useState(false);
   const [problemDescription, setProblemDescription] = useState('');
+  const [jobPhotos, setJobPhotos] = useState<string[]>([]);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [hourlyLimit, setHourlyLimit] = useState(service.estimatedDurationHours || 2);
   const [isConfirmed, setIsConfirmed] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    if (jobPhotos.length >= 4) {
+      showToast('Maximum 4 photos allowed per booking.');
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    try {
+      const remainingSlots = 4 - jobPhotos.length;
+      const filesToProcess = Array.from(files).slice(0, remainingSlots);
+      const newPhotos: string[] = [];
+
+      for (const file of filesToProcess) {
+        if (!file.type.startsWith('image/')) {
+          showToast(`Skipped ${file.name}: Not an image file.`);
+          continue;
+        }
+        const resizedDataUrl = await resizeImageFile(file, 800, 800, 0.82);
+        newPhotos.push(resizedDataUrl);
+      }
+
+      if (newPhotos.length > 0) {
+        setJobPhotos((prev) => [...prev, ...newPhotos]);
+        showToast(`${newPhotos.length} job photo${newPhotos.length > 1 ? 's' : ''} attached!`);
+      }
+    } catch (err) {
+      console.error('Error processing photo:', err);
+      showToast('Could not process photo. Please try another image.');
+    } finally {
+      setIsUploadingPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemovePhoto = (idxToRemove: number) => {
+    setJobPhotos((prev) => prev.filter((_, idx) => idx !== idxToRemove));
+  };
 
   const matchingProvider = providers.find(
     (p) =>
@@ -107,9 +157,9 @@ export const ServiceBookingModal: React.FC<{
         serviceMode,
         finalAddress,
         problemDescription.trim() || undefined,
-        undefined,
+        jobPhotos[0] || undefined,
         service.pricingType === 'quotation_required' ? 'site_visit' : 'repair',
-        undefined,
+        jobPhotos.length > 0 ? jobPhotos : undefined,
         service.pricingType === 'hourly' ? hourlyLimit : undefined
       );
       if (booking) {
@@ -172,6 +222,24 @@ export const ServiceBookingModal: React.FC<{
                 <span>Standard Inspection Fee:</span>
                 <span className="font-black text-emerald-600 text-sm">₹{isConfirmed.totalPrice}</span>
               </div>
+              {isConfirmed.jobAttachments && isConfirmed.jobAttachments.length > 0 && (
+                <div className="pt-2 border-t border-slate-200">
+                  <span className="font-bold text-slate-900 block mb-1">
+                    Job Photos Shared with Specialist ({isConfirmed.jobAttachments.length}):
+                  </span>
+                  <div className="flex gap-2">
+                    {isConfirmed.jobAttachments.map((p: string, i: number) => (
+                      <img
+                        key={i}
+                        src={p}
+                        alt="Job site"
+                        onClick={() => setViewingPhoto(p)}
+                        className="w-12 h-12 rounded-xl object-cover border border-amber-300 cursor-pointer hover:scale-105 transition-transform"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="p-3 bg-blue-50 border border-blue-200/80 rounded-xl text-left text-[11px] text-blue-900 space-y-1">
@@ -439,14 +507,85 @@ export const ServiceBookingModal: React.FC<{
 
             {/* Describe Issue / Job Details */}
             <div className="space-y-1">
-              <span className="text-xs font-black text-slate-800">Job Description / Specifics (Optional)</span>
+              <span className="text-xs font-black text-slate-900">Job Description / Specialist Specifics (Optional)</span>
               <textarea
                 rows={2}
                 placeholder="e.g. Copper pipe leak under kitchen sink, switchboard sparking, deep clean 2 BHK..."
                 value={problemDescription}
                 onChange={(e) => setProblemDescription(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900"
               />
+            </div>
+
+            {/* Photo of the Job for Provider Review & Quotation */}
+            <div className="space-y-2 p-3 bg-amber-50/70 rounded-2xl border border-amber-300/80">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-950 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4 text-amber-600 stroke-[2.5]" />
+                  <span>Job Photo / Site Images (Optional)</span>
+                </span>
+                <span className="text-[10px] font-mono font-black text-slate-900 bg-amber-200/80 px-2 py-0.5 rounded-full border border-amber-400">
+                  {jobPhotos.length}/4
+                </span>
+              </div>
+              <p className="text-[11px] font-bold text-slate-950 leading-tight">
+                Upload clear photos of the job or issue so the specialist can review requirements, calculate parts &amp; labor, and send an accurate quotation.
+              </p>
+
+              {/* Photos Grid & Add Button */}
+              <div className="flex flex-wrap gap-2 pt-1 items-center">
+                {jobPhotos.map((photo, idx) => (
+                  <div
+                    key={idx}
+                    className="relative w-18 h-18 rounded-2xl overflow-hidden border-2 border-amber-400 shadow-xs bg-slate-950 group"
+                  >
+                    <img
+                      src={photo}
+                      alt={`Job photo ${idx + 1}`}
+                      className="w-full h-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                      onClick={() => setViewingPhoto(photo)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePhoto(idx)}
+                      className="absolute top-1 right-1 w-5 h-5 bg-black/80 hover:bg-rose-600 text-white rounded-full flex items-center justify-center transition-colors shadow-sm cursor-pointer"
+                      title="Remove photo"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewingPhoto(photo)}
+                      className="absolute bottom-1 left-1 bg-black/70 text-amber-300 text-[9px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5"
+                    >
+                      <Eye className="w-2.5 h-2.5" /> #{idx + 1}
+                    </button>
+                  </div>
+                ))}
+
+                {jobPhotos.length < 4 && (
+                  <label className="w-18 h-18 rounded-2xl border-2 border-dashed border-amber-400 hover:border-amber-600 bg-white hover:bg-amber-100/50 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all active:scale-95 group text-amber-950 shadow-2xs">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handlePhotoUpload}
+                      disabled={isUploadingPhoto}
+                    />
+                    {isUploadingPhoto ? (
+                      <span className="text-[10px] font-black text-amber-800 animate-pulse">Adding…</span>
+                    ) : (
+                      <>
+                        <div className="w-6 h-6 rounded-lg bg-amber-100 group-hover:bg-amber-200 flex items-center justify-center">
+                          <Plus className="w-4 h-4 text-amber-900" />
+                        </div>
+                        <span className="text-[10px] font-black text-slate-950">Add Photo</span>
+                      </>
+                    )}
+                  </label>
+                )}
+              </div>
             </div>
 
             {/* Address / Location Mode View */}
@@ -548,6 +687,45 @@ export const ServiceBookingModal: React.FC<{
           </div>
         )}
       </div>
+
+      {/* Lightbox / Zoom Preview for Customer Job Photo */}
+      {viewingPhoto && (
+        <div
+          className="fixed inset-0 z-60 bg-black/90 flex flex-col items-center justify-center p-4"
+          onClick={() => setViewingPhoto(null)}
+        >
+          <div
+            className="relative max-w-sm w-full bg-slate-900 rounded-3xl overflow-hidden p-3 shadow-2xl space-y-2 border border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center text-white px-2">
+              <span className="text-xs font-black flex items-center gap-1.5 text-amber-400">
+                <Camera className="w-4 h-4" />
+                Job Photo Preview
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewingPhoto(null)}
+                className="p-1 rounded-full bg-white/20 hover:bg-white/30 text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="bg-black rounded-2xl overflow-hidden max-h-[70vh] flex items-center justify-center">
+              <img src={viewingPhoto} alt="Job site" className="max-w-full max-h-[70vh] object-contain" />
+            </div>
+            <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => setViewingPhoto(null)}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-md cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

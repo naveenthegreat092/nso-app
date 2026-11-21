@@ -3705,6 +3705,7 @@ app.get('/api/bookings', requireAuth, (req, res) => {
       pricingType: b.pricing_type || 'fixed',
       jobDescription: b.job_description || '',
       jobAttachments: b.job_attachments_json ? JSON.parse(b.job_attachments_json) : [],
+      problemPhoto: b.problem_photo || (b.job_attachments_json && JSON.parse(b.job_attachments_json).length > 0 ? JSON.parse(b.job_attachments_json)[0] : undefined),
       providerAssigned: Boolean(b.provider_assigned ?? 1),
       quotation: b.quotation_json ? JSON.parse(b.quotation_json) : undefined,
       hourlyDetails: b.hourly_details_json ? JSON.parse(b.hourly_details_json) : undefined,
@@ -3867,7 +3868,9 @@ app.post('/api/bookings', requireAuth, (req, res) => {
       JSON.stringify(jobAttachments || []),
       hourlyDetailsJson,
       nowIso,
-      nowIso
+      nowIso,
+      service.provider_id,
+      stableProviderId
     );
 
     db.exec('COMMIT');

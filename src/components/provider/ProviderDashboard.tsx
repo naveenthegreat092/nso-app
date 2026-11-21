@@ -29,7 +29,9 @@ import {
   Tag,
   Trash2,
   Star,
-  Key
+  Key,
+  Camera,
+  Eye
 } from 'lucide-react';
 import { api } from '../../api/client';
 import { Booking } from '../../types';
@@ -87,6 +89,7 @@ export const ProviderDashboard: React.FC = () => {
   const [cancelWorkCharge, setCancelWorkCharge] = useState(0);
   const [cancelMaterialCharge, setCancelMaterialCharge] = useState(0);
   const [cancelReason, setCancelReason] = useState('');
+  const [viewingJobPhoto, setViewingJobPhoto] = useState<string | null>(null);
 
   // Rate update modal state
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
@@ -599,6 +602,45 @@ export const ProviderDashboard: React.FC = () => {
                     )}
                   </div>
 
+                  {/* Display Customer Job Description & Uploaded Job Photos */}
+                  {(b.jobDescription || (b.jobAttachments && b.jobAttachments.length > 0) || b.problemPhoto) && (
+                    <div className="p-2.5 bg-amber-50/90 rounded-xl border border-amber-300 text-xs text-slate-900 space-y-2">
+                      {b.jobDescription && (
+                        <div>
+                          <span className="font-black text-slate-950 block text-[11px]">Customer Issue / Specifics:</span>
+                          <p className="text-[11px] text-slate-800 mt-0.5 leading-snug">{b.jobDescription}</p>
+                        </div>
+                      )}
+
+                      {((b.jobAttachments && b.jobAttachments.length > 0) || b.problemPhoto) && (
+                        <div className="pt-1.5 border-t border-amber-200/80">
+                          <span className="font-black text-slate-950 block text-[11px] flex items-center gap-1">
+                            <Camera className="w-3.5 h-3.5 text-amber-700 stroke-[2.5]" />
+                            Job Photo(s) Attached by Customer ({(b.jobAttachments?.length || 1)}):
+                          </span>
+                          <div className="flex gap-2 mt-1.5 overflow-x-auto no-scrollbar py-0.5">
+                            {(b.jobAttachments && b.jobAttachments.length > 0 ? b.jobAttachments : [b.problemPhoto!]).map((imgUrl, pIdx) => (
+                              <div
+                                key={pIdx}
+                                onClick={() => setViewingJobPhoto(imgUrl)}
+                                className="relative w-16 h-16 rounded-xl overflow-hidden border-2 border-amber-400 shrink-0 cursor-pointer hover:scale-105 transition-transform shadow-xs bg-slate-950"
+                                title="Click to view full photo"
+                              >
+                                <img src={imgUrl} alt="Job site" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/25 hover:bg-transparent flex items-center justify-center">
+                                  <Eye className="w-4 h-4 text-white drop-shadow" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <span className="text-[10px] text-amber-950 font-bold block mt-1">
+                            🔍 Tap any photo to review site damage/requirements before sending quotation.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Incoming / Assessing Action Buttons */}
                   {['confirmed', 'assessing', 'quotation_pending'].includes(b.status) && (
                     <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200/60 space-y-2">
@@ -610,14 +652,6 @@ export const ProviderDashboard: React.FC = () => {
                           {b.pricingType || 'fixed'}
                         </span>
                       </div>
-
-                      {/* Display Customer Job Description if provided */}
-                      {b.jobDescription && (
-                        <div className="p-2 bg-white rounded-lg border border-amber-200 text-[11px] text-gray-700">
-                          <span className="font-bold text-gray-900 block">Customer Issue Description:</span>
-                          <p>{b.jobDescription}</p>
-                        </div>
-                      )}
 
                       <div className="grid grid-cols-2 gap-2">
                         {b.status === 'confirmed' && (
@@ -1396,6 +1430,51 @@ export const ProviderDashboard: React.FC = () => {
               NSO Transparency Policy: Quotation will be reviewed by Admin, then sent to Customer for approval before work starts.
             </p>
 
+            {(() => {
+              const activeBooking = bookings.find((bk) => bk.id === selectedBookingForJobQuote);
+              if (!activeBooking) return null;
+              const hasPhotos = (activeBooking.jobAttachments && activeBooking.jobAttachments.length > 0) || activeBooking.problemPhoto;
+              return (
+                <div className="bg-purple-50/80 border border-purple-200/90 rounded-2xl p-3 space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-[11px] font-black text-purple-950 border-b border-purple-200/60 pb-1">
+                    <span>Job Site Details for Quotation</span>
+                    <span className="font-mono">{activeBooking.bookingNumber}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-800 space-y-0.5">
+                    <p>Customer: <strong className="text-slate-950">{activeBooking.customerName}</strong></p>
+                    <p>Service: <strong className="text-slate-950">{activeBooking.serviceTitle}</strong></p>
+                    {activeBooking.jobDescription && (
+                      <p className="mt-1 pt-1 border-t border-purple-200/60">
+                        Customer Specifics: <span className="font-bold text-slate-950">{activeBooking.jobDescription}</span>
+                      </p>
+                    )}
+                  </div>
+                  {hasPhotos && (
+                    <div className="pt-1.5 border-t border-purple-200/60">
+                      <span className="text-[11px] font-black text-purple-950 flex items-center gap-1 mb-1">
+                        <Camera className="w-3.5 h-3.5 text-purple-700 stroke-[2.5]" />
+                        Uploaded Job Photos (Tap to enlarge):
+                      </span>
+                      <div className="flex gap-2 overflow-x-auto no-scrollbar py-0.5">
+                        {(activeBooking.jobAttachments && activeBooking.jobAttachments.length > 0 ? activeBooking.jobAttachments : [activeBooking.problemPhoto!]).map((pic, pIdx) => (
+                          <div
+                            key={pIdx}
+                            onClick={() => setViewingJobPhoto(pic)}
+                            className="relative w-18 h-18 rounded-xl overflow-hidden border-2 border-purple-400 shrink-0 cursor-pointer hover:scale-105 transition-transform shadow-xs bg-slate-950"
+                          >
+                            <img src={pic} alt="Job site" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                              <Eye className="w-4 h-4 text-white drop-shadow" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
@@ -2042,6 +2121,44 @@ export const ProviderDashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Zoom / Lightbox Modal for Customer Job Photos */}
+      {viewingJobPhoto && (
+        <div
+          className="fixed inset-0 z-60 bg-black/90 flex flex-col items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setViewingJobPhoto(null)}
+        >
+          <div
+            className="relative max-w-md w-full bg-slate-900 rounded-3xl overflow-hidden p-3 shadow-2xl space-y-2 border border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center text-white px-2">
+              <span className="text-xs font-black flex items-center gap-1.5 text-amber-400">
+                <Camera className="w-4 h-4" />
+                Customer Job Site Photo
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewingJobPhoto(null)}
+                className="p-1 rounded-full bg-white/20 hover:bg-white/30 text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="bg-black rounded-2xl overflow-hidden max-h-[75vh] flex items-center justify-center">
+              <img src={viewingJobPhoto} alt="Customer Job site" className="max-w-full max-h-[75vh] object-contain" />
+            </div>
+            <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => setViewingJobPhoto(null)}
+                className="px-6 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-md cursor-pointer"
+              >
+                Close Full Photo
+              </button>
+            </div>
           </div>
         </div>
       )}

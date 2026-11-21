@@ -50,7 +50,9 @@ import {
   ExternalLink,
   Building2,
   Filter,
-  ArrowUpRight
+  ArrowUpRight,
+  Camera,
+  Eye
 } from 'lucide-react';
 
 interface Application {
@@ -148,6 +150,7 @@ export const AdminDashboard: React.FC = () => {
   const [adminChats, setAdminChats] = useState<any[]>([]);
   const [adminCalls, setAdminCalls] = useState<any[]>([]);
   const [selectedWorkSampleImg, setSelectedWorkSampleImg] = useState<{ url: string; title: string } | null>(null);
+  const [viewingAdminJobPhoto, setViewingAdminJobPhoto] = useState<string | null>(null);
 
   // New admin interaction states
   const [quoteFeedbackInputs, setQuoteFeedbackInputs] = useState<{ [bookingId: string]: string }>({});
@@ -1159,6 +1162,37 @@ export const AdminDashboard: React.FC = () => {
                   <h4 className="font-extrabold text-sm text-gray-900">{b.serviceTitle}</h4>
                   <p className="text-[11px] text-gray-500">Provider: <strong>{b.providerName}</strong> • Customer: <strong>{b.customerName}</strong></p>
                 </div>
+
+                {/* Customer Job Description & Uploaded Photos */}
+                {(b.jobDescription || (b.jobAttachments && b.jobAttachments.length > 0) || b.problemPhoto) && (
+                  <div className="bg-amber-50/80 border border-amber-200/90 rounded-xl p-2.5 space-y-1.5">
+                    {b.jobDescription && (
+                      <div>
+                        <span className="font-black text-slate-900 block text-[10px]">Customer Specifics / Description:</span>
+                        <p className="text-[11px] text-slate-800 leading-snug">{b.jobDescription}</p>
+                      </div>
+                    )}
+                    {((b.jobAttachments && b.jobAttachments.length > 0) || b.problemPhoto) && (
+                      <div className="pt-1 border-t border-amber-200/70">
+                        <span className="font-black text-slate-900 block text-[10px] mb-1 flex items-center gap-1">
+                          <Camera className="w-3 h-3 text-amber-700" />
+                          Customer Job Photos ({(b.jobAttachments?.length || 1)}):
+                        </span>
+                        <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                          {(b.jobAttachments && b.jobAttachments.length > 0 ? b.jobAttachments : [b.problemPhoto!]).map((pUrl, pIdx) => (
+                            <img
+                              key={pIdx}
+                              src={pUrl}
+                              alt="Job site"
+                              onClick={() => setViewingAdminJobPhoto(pUrl)}
+                              className="w-12 h-12 rounded-lg object-cover border border-amber-300 cursor-pointer hover:scale-105 transition-transform bg-slate-950"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {b.quotation && (
                   <div className="bg-purple-50/70 border border-purple-200/80 rounded-xl p-3 space-y-2">
@@ -2181,6 +2215,48 @@ export const AdminDashboard: React.FC = () => {
                   alt={selectedWorkSampleImg.title}
                   className="max-w-full max-h-[70vh] object-contain"
                 />
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Zoom / Lightbox Modal for Admin Vetting Customer Job Photos */}
+        {viewingAdminJobPhoto && (
+          <div
+            className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+            onClick={() => setViewingAdminJobPhoto(null)}
+          >
+            <div
+              className="bg-slate-900 border border-slate-700 rounded-3xl p-4 max-w-md w-full space-y-3 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-white">
+                <span className="font-black text-sm text-amber-400 flex items-center gap-1.5">
+                  <Camera className="w-4 h-4" />
+                  Customer Job Photo Vetting
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setViewingAdminJobPhoto(null)}
+                  className="p-1 rounded-full bg-white/20 hover:bg-white/30 text-white cursor-pointer"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="rounded-2xl overflow-hidden bg-black flex items-center justify-center max-h-[70vh]">
+                <img
+                  src={viewingAdminJobPhoto}
+                  alt="Customer job site"
+                  className="max-w-full max-h-[70vh] object-contain"
+                />
+              </div>
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => setViewingAdminJobPhoto(null)}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-md cursor-pointer"
+                >
+                  Close Preview
+                </button>
               </div>
             </div>
           </div>

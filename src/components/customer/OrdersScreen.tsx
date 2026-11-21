@@ -27,7 +27,9 @@ import {
   ShieldCheck,
   Key,
   QrCode,
-  PhoneCall
+  PhoneCall,
+  Camera,
+  Eye
 } from 'lucide-react';
 
 export const OrdersScreen: React.FC = () => {
@@ -64,6 +66,7 @@ export const OrdersScreen: React.FC = () => {
   const [showProblemModalForBookingId, setShowProblemModalForBookingId] = useState<string | null>(null);
   const [problemType, setProblemType] = useState<'poor_quality' | 'incomplete_work' | 'damage' | 'other'>('poor_quality');
   const [problemDescription, setProblemDescription] = useState('');
+  const [viewingCustomerJobPhoto, setViewingCustomerJobPhoto] = useState<string | null>(null);
 
   const customerBookings = bookings.filter((b) => {
     if (!user || !user.id) return true;
@@ -528,6 +531,37 @@ export const OrdersScreen: React.FC = () => {
                         Mode: <span className="font-semibold text-gray-800 capitalize">{booking.serviceMode.replace('_', ' ')}</span>
                       </p>
                     </div>
+
+                    {/* Customer Job Notes & Photos */}
+                    {(booking.jobDescription || (booking.jobAttachments && booking.jobAttachments.length > 0) || booking.problemPhoto) && (
+                      <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3 space-y-1.5 text-xs">
+                        {booking.jobDescription && (
+                          <div>
+                            <span className="font-black text-slate-950 block text-[11px]">Your Job Notes / Specifics:</span>
+                            <p className="text-[11px] text-slate-800 leading-snug">{booking.jobDescription}</p>
+                          </div>
+                        )}
+                        {((booking.jobAttachments && booking.jobAttachments.length > 0) || booking.problemPhoto) && (
+                          <div className="pt-1 border-t border-amber-200/60">
+                            <span className="font-black text-slate-950 block text-[11px] mb-1 flex items-center gap-1">
+                              <Camera className="w-3.5 h-3.5 text-amber-700 stroke-[2.5]" />
+                              Your Uploaded Photos ({(booking.jobAttachments?.length || 1)}):
+                            </span>
+                            <div className="flex gap-2 overflow-x-auto no-scrollbar py-0.5">
+                              {(booking.jobAttachments && booking.jobAttachments.length > 0 ? booking.jobAttachments : [booking.problemPhoto!]).map((pic, pIdx) => (
+                                <img
+                                  key={pIdx}
+                                  src={pic}
+                                  alt="Job photo"
+                                  onClick={() => setViewingCustomerJobPhoto(pic)}
+                                  className="w-12 h-12 rounded-xl object-cover border border-amber-300 cursor-pointer hover:scale-105 transition-transform bg-slate-950"
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="flex items-center justify-between pt-2 border-t border-gray-50 text-xs">
                       <span className="text-gray-500">Agreed Price:</span>
@@ -1028,6 +1062,44 @@ export const OrdersScreen: React.FC = () => {
           orderData={selectedInvoice}
           onClose={() => setSelectedInvoice(null)}
         />
+      )}
+      {/* Zoom / Lightbox Modal for Customer Job Photos */}
+      {viewingCustomerJobPhoto && (
+        <div
+          className="fixed inset-0 z-60 bg-black/90 flex flex-col items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setViewingCustomerJobPhoto(null)}
+        >
+          <div
+            className="relative max-w-sm w-full bg-slate-900 rounded-3xl overflow-hidden p-3 shadow-2xl space-y-2 border border-slate-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center text-white px-2">
+              <span className="text-xs font-black flex items-center gap-1.5 text-amber-400">
+                <Camera className="w-4 h-4" />
+                Job Photo Preview
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewingCustomerJobPhoto(null)}
+                className="p-1 rounded-full bg-white/20 hover:bg-white/30 text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="bg-black rounded-2xl overflow-hidden max-h-[75vh] flex items-center justify-center">
+              <img src={viewingCustomerJobPhoto} alt="Job site" className="max-w-full max-h-[75vh] object-contain" />
+            </div>
+            <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => setViewingCustomerJobPhoto(null)}
+                className="px-6 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-md cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
