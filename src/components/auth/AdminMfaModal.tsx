@@ -222,14 +222,14 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
             <form onSubmit={handlePasswordSubmit} className="space-y-4">
               <div className="space-y-1">
                 <h4 className="text-base font-black text-slate-900">Step 1: Admin Master Password</h4>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className="text-xs text-slate-900 font-bold leading-relaxed">
                   Enter your admin password to initialize the privileged security session.
                 </p>
               </div>
 
               {step1Error && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2 text-rose-700 text-xs font-semibold">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <div className="p-3.5 bg-rose-100 border-2 border-rose-400 rounded-2xl flex items-center gap-2 text-slate-950 text-xs font-black">
+                  <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
                   <span>{step1Error}</span>
                 </div>
               )}
@@ -237,13 +237,13 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
               <div className="space-y-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
+                    <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block">
                       Superadmin Phone
                     </label>
                     <button
                       type="button"
                       onClick={() => setAdminPhone('8310421121')}
-                      className="text-[10px] text-purple-700 font-bold hover:underline"
+                      className="text-[10px] text-purple-900 font-black hover:underline"
                     >
                       Set 8310421121
                     </button>
@@ -253,27 +253,27 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
                     value={adminPhone}
                     onChange={(e) => setAdminPhone(e.target.value)}
                     placeholder="8310421121"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-purple-600 focus:bg-white"
+                    className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-300 text-sm font-bold text-slate-900 bg-slate-50 outline-none focus:border-purple-600 focus:bg-white"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Authorized Administrator: <span className="font-mono font-bold text-purple-900">8310421121</span>
+                  <p className="text-xs text-slate-950 font-black mt-1">
+                    Authorized Administrator: <span className="font-mono font-black text-purple-950 bg-purple-100 px-1.5 py-0.5 rounded border border-purple-200">8310421121</span>
                   </p>
                 </div>
 
                 <div>
-                  <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block mb-1">
+                  <label className="text-[11px] font-black text-slate-900 uppercase tracking-wider block mb-1">
                     Admin Password
                   </label>
                   <input
                     type="password"
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 bg-white outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
+                    className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-300 text-sm font-bold text-slate-900 bg-white outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100"
                     placeholder="Enter Admin Password"
                     autoFocus
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Default initialization password: <span className="font-mono font-bold text-slate-600">Admin@NSO#2026</span>
+                  <p className="text-xs text-slate-950 font-black mt-1.5">
+                    Default initialization password: <span className="font-mono font-black text-slate-950 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">Admin@NSO#2026</span>
                   </p>
                 </div>
               </div>
@@ -313,8 +313,8 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
 
               {step2Error && (
                 <div className="space-y-3">
-                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2 text-rose-700 text-xs font-semibold text-left">
-                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <div className="p-3.5 bg-rose-100 border-2 border-rose-400 rounded-2xl flex items-center gap-2 text-slate-950 text-xs font-black text-left">
+                    <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
                     <span>{step2Error}</span>
                   </div>
 
@@ -323,7 +323,7 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
                       <KeyRound className="w-4 h-4 text-purple-700" />
                       <span>WebView Hardware Fallback</span>
                     </div>
-                    <p className="text-[11px] text-purple-700 leading-snug">
+                    <p className="text-xs text-slate-950 font-bold leading-snug">
                       If your device browser or WebView does not bridge WebAuthn, confirm your identity with the Master Key (123456) to proceed.
                     </p>
                     <div className="flex items-center gap-2 pt-1">
@@ -370,7 +370,7 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
               )}
 
               {biometricSupported === false && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-amber-800 text-xs font-semibold text-left">
+                <div className="p-3.5 bg-amber-100 border-2 border-amber-300 rounded-2xl text-slate-950 text-xs font-black text-left">
                   ⚠️ Hardware Biometrics is not detected on this browser/environment. In accordance with security requirements, ensure fingerprint or face unlock is enrolled in your OS.
                 </div>
               )}
@@ -401,11 +401,11 @@ export const AdminMfaModal: React.FC<AdminMfaModalProps> = ({ isOpen, onClose, o
                       <KeyRound className="w-3.5 h-3.5 text-purple-700" />
                       <span>Instant Master Security Key</span>
                     </div>
-                    <span className="text-[10px] text-purple-700 font-bold bg-white px-2 py-0.5 rounded-full border border-purple-200 shadow-xs">
+                    <span className="text-[10px] text-purple-950 font-black bg-white px-2 py-0.5 rounded-full border border-purple-200 shadow-xs">
                       Master Key: 123456
                     </span>
                   </div>
-                  <p className="text-[11px] text-purple-800 leading-snug">
+                  <p className="text-xs text-slate-950 font-bold leading-snug">
                     Sensor taking time or unavailable in your browser? Tap below to authorize instantly using your Master Key.
                   </p>
                   <button

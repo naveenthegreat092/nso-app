@@ -343,7 +343,7 @@ export const BrandHeader: React.FC<{
               </button>
             )}
 
-            <p className="text-center text-[11px] text-slate-400 font-medium pt-1">
+            <p className="text-center text-xs text-slate-950 font-black pt-1">
               Tap a role to switch your active workspace
             </p>
           </div>

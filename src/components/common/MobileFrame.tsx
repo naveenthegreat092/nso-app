@@ -35,15 +35,15 @@ export const MobileFrame: React.FC<{
           {children}
         </main>
 
-        {/* Global Native Toast Notification — Obsidian & Gold */}
+        {/* Global Native Toast Notification — High-Contrast Black Font Edition */}
         {notification && (
           <div
-            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] max-w-sm w-[90%] px-2 pointer-events-none animate-fade-in-up"
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] max-w-sm w-[92%] px-2 pointer-events-none animate-fade-in-up"
             style={{ maxWidth: '28rem' }}
           >
-            <div className="bg-slate-950/98 backdrop-blur-xl text-white text-xs font-semibold py-3.5 px-4 rounded-2xl shadow-2xl flex items-center gap-3 border-2 border-amber-400/50 shadow-slate-950/40">
-              <span className="w-2.5 h-2.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-400 flex-shrink-0 animate-pulse shadow-sm shadow-amber-400/50" />
-              <p className="font-bold flex-1 leading-snug text-white tracking-normal">{notification}</p>
+            <div className="bg-white/98 backdrop-blur-2xl text-slate-950 py-3.5 px-4 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.3)] flex items-center gap-3 border-2 border-slate-900 ring-2 ring-amber-400/60">
+              <span className="w-3 h-3 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 flex-shrink-0 animate-pulse shadow-xs border border-amber-600" />
+              <p className="font-black flex-1 leading-snug text-slate-950 text-xs min-[360px]:text-sm tracking-normal">{notification}</p>
             </div>
           </div>
         )}

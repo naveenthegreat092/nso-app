@@ -393,8 +393,8 @@ export const AuthModal: React.FC = () => {
               </div>
 
               {forgotError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-700 text-xs font-semibold">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <div className="p-3.5 bg-rose-100 border-2 border-rose-400 rounded-xl flex items-center gap-2 text-slate-950 text-xs font-black">
+                  <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
                   <span>{forgotError}</span>
                 </div>
               )}
